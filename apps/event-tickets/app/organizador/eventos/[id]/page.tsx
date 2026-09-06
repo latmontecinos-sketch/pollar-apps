@@ -159,6 +159,12 @@ export default function OrganizerEventPage({
             >
               Ver página pública →
             </a>
+            <a
+              href={`/organizador/eventos/${state.event.id}/puerta`}
+              className="text-sm font-medium text-primary underline"
+            >
+              Modo puerta →
+            </a>
           </Card>
 
           <Card>

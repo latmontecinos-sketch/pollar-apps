@@ -111,26 +111,30 @@ export type DoorResult =
  * ticket from a different event neither validates nor gets consumed — it
  * just reads back as UNKNOWN, indistinguishable from a code that doesn't
  * exist at all (never leaks "this code is real, just for another event").
+ *
+ * `input` is matched against both `code` (the QR payload, camera-scanned)
+ * and `door_code` (the short one typed by hand) — the door doesn't need to
+ * know which kind it got.
  */
 export async function validateAtDoor(
   eventId: string,
-  code: string,
+  input: string,
   usedBy: string
 ): Promise<DoorResult> {
   return withTransaction(async (tx) => {
     const updated = await tx.execute({
       sql: `UPDATE tickets SET used_at = datetime('now'), used_by = ?
-            WHERE code = ? AND event_id = ? AND used_at IS NULL
+            WHERE (code = ? OR door_code = ?) AND event_id = ? AND used_at IS NULL
             RETURNING id, sale_id, event_id, code, door_code, used_at, used_by, created_at`,
-      args: [usedBy, code, eventId],
+      args: [usedBy, input, input, eventId],
     });
     if (updated.rows.length > 0) {
       return { result: "VALID", ticket: rowToTicket(updated.rows[0]) };
     }
 
     const existing = await tx.execute({
-      sql: "SELECT used_at FROM tickets WHERE code = ? AND event_id = ?",
-      args: [code, eventId],
+      sql: "SELECT used_at FROM tickets WHERE (code = ? OR door_code = ?) AND event_id = ?",
+      args: [input, input, eventId],
     });
     if (existing.rows.length > 0) {
       return { result: "USED", usedAt: String(existing.rows[0].used_at) };

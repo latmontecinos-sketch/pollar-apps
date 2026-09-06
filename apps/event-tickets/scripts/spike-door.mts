@@ -25,6 +25,7 @@ function check(name: string, ok: boolean, detail = ""): void {
 async function createPaidSaleWithTicket(eventId: string): Promise<{
   saleId: string;
   code: string;
+  doorCode: string;
 }> {
   const saleId = randomUUID();
   await db.execute({
@@ -34,7 +35,7 @@ async function createPaidSaleWithTicket(eventId: string): Promise<{
     args: [saleId, eventId, `ref_door_${randomUUID()}`, `idem_door_${randomUUID()}`],
   });
   const ticket = await issueTicket(saleId, eventId);
-  return { saleId, code: ticket.code };
+  return { saleId, code: ticket.code, doorCode: ticket.doorCode };
 }
 
 async function createEvent(): Promise<string> {
@@ -99,7 +100,19 @@ async function testWrongEventIsUnknown(): Promise<void> {
   );
 }
 
-/** 4. Un código que directamente no existe también da UNKNOWN. */
+/** 4b. El door_code corto (tipeado a mano) valida el mismo ticket que el code largo. */
+async function testDoorCodeAlsoValidates(): Promise<void> {
+  const eventId = await createEvent();
+  const { doorCode } = await createPaidSaleWithTicket(eventId);
+
+  const scan = await validateAtDoor(eventId, doorCode, "GORGANIZER_DOOR");
+  check("door_code corto: VALID", scan.result === "VALID", `result=${scan.result}`);
+
+  const second = await validateAtDoor(eventId, doorCode, "GORGANIZER_DOOR");
+  check("mismo door_code de nuevo: USED", second.result === "USED", `result=${second.result}`);
+}
+
+/** 4c. Un código que directamente no existe también da UNKNOWN. */
 async function testNonexistentCodeIsUnknown(): Promise<void> {
   const eventId = await createEvent();
   const result = await validateAtDoor(eventId, "DOESNOTEXIST00000000000000", "GORGANIZER_DOOR");
@@ -112,6 +125,7 @@ async function main() {
   await testFirstAcceptsSecondRejects();
   await testConcurrentSameCode();
   await testWrongEventIsUnknown();
+  await testDoorCodeAlsoValidates();
   await testNonexistentCodeIsUnknown();
   console.log(`\n${passed} pass, ${failed} fail\n`);
   process.exit(failed === 0 ? 0 : 1);
