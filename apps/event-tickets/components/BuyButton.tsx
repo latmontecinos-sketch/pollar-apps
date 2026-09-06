@@ -88,7 +88,10 @@ export function BuyButton({ eventId, disabled }: { eventId: string; disabled?: b
         client,
         user.address,
         `/api/sales/${created.id}/confirm`,
-        { method: "POST", body: JSON.stringify({ hash: payResult.hash }) }
+        {
+          method: "POST",
+          body: JSON.stringify({ hash: payResult.hash, email: user.profile?.mail }),
+        }
       );
       const confirmed = (await confirmRes.json()) as { ticket?: Ticket; error?: string };
       if (!confirmRes.ok || !confirmed.ticket) {
@@ -119,6 +122,9 @@ export function BuyButton({ eventId, disabled }: { eventId: string; disabled?: b
         <span className="text-sm font-semibold text-success">✓ Pase comprado</span>
         <span className="font-mono text-xs text-muted">Código: {state.ticket.code}</span>
         <span className="font-mono text-xs text-muted">Código de puerta: {state.ticket.doorCode}</span>
+        {user.profile?.mail && (
+          <span className="text-xs text-muted">También te lo mandamos a {user.profile.mail}</span>
+        )}
       </div>
     );
   }

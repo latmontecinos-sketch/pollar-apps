@@ -4,6 +4,7 @@ import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { verifyPaymentOnHorizon } from "@/lib/horizon";
 import { settlePayment } from "@/lib/sales";
+import { sendTicketEmail } from "@/lib/mail";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,6 +16,7 @@ type SaleRow = {
   amount_stroops: string;
   status: string;
   organizer_pollar_id: string;
+  event_name: string;
 };
 
 /**
@@ -31,7 +33,7 @@ export async function POST(request: Request, ctx: Ctx) {
 
   await dbReady();
   const result = await db.execute({
-    sql: `SELECT sales.*, events.organizer_pollar_id
+    sql: `SELECT sales.*, events.organizer_pollar_id, events.name AS event_name
           FROM sales JOIN events ON events.id = sales.event_id
           WHERE sales.id = ?`,
     args: [id],
@@ -44,13 +46,14 @@ export async function POST(request: Request, ctx: Ctx) {
     return NextResponse.json({ error: "No tenés acceso a esta venta" }, { status: 403 });
   }
 
-  let body: { hash?: string };
+  let body: { hash?: string; email?: string };
   try {
-    body = (await request.json()) as { hash?: string };
+    body = (await request.json()) as { hash?: string; email?: string };
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
   const hash = body.hash?.trim() ?? "";
+  const email = body.email?.trim() ?? "";
   if (!hash) return NextResponse.json({ error: "Falta el hash de la transacción" }, { status: 400 });
 
   const check = await verifyPaymentOnHorizon({
@@ -67,11 +70,25 @@ export async function POST(request: Request, ctx: Ctx) {
   const settled = await settlePayment(sale.id, sale.event_id, hash);
   switch (settled.outcome) {
     case "paid":
-    case "already_paid":
+    case "already_paid": {
+      if (email) {
+        // Best-effort: the ticket already lives in the buyer's own account
+        // either way, so a failed send doesn't get retried or block anything.
+        const mailResult = await sendTicketEmail({
+          to: email,
+          eventName: sale.event_name,
+          ticketCode: settled.ticket.code,
+          doorCode: settled.ticket.doorCode,
+        });
+        if (!mailResult.sent) {
+          console.error(`[mail] ticket email to ${email} failed: ${mailResult.error}`);
+        }
+      }
       return NextResponse.json({
         status: "paid",
         ticket: { code: settled.ticket.code, doorCode: settled.ticket.doorCode },
       });
+    }
     case "unclaimed":
       return NextResponse.json(
         {
