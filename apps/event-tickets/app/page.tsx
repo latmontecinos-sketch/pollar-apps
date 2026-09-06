@@ -1,24 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import manifest from "@/pollar.manifest.json";
 import { BalanceCard } from "@/components/BalanceCard";
 import { LoginButton } from "@/components/LoginButton";
-import { ReceiveModal } from "@/components/ReceiveModal";
-import { SendModal } from "@/components/SendModal";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 
 const APP_NAME = manifest.name || "My Pollar App";
 
-/**
- * Wallet-style demo of everything the template ships with: auth, balance,
- * and the send/receive flows. Replace this page with your app's screens.
- */
 export default function Home() {
   const { user } = usePollarAuth();
-  const [sendOpen, setSendOpen] = useState(false);
-  const [receiveOpen, setReceiveOpen] = useState(false);
 
   if (!user) {
     return (
@@ -55,33 +47,19 @@ export default function Home() {
       <BalanceCard />
 
       <div className="grid grid-cols-2 gap-3">
-        <button
-          onClick={() => setSendOpen(true)}
+        <Link
+          href="/mis-pases"
           className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary-hover active:scale-[0.97]"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 19V5m0 0l-6 6m6-6l6 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Send
-        </button>
-        <button
-          onClick={() => setReceiveOpen(true)}
+          Mis pases
+        </Link>
+        <Link
+          href="/organizador/nuevo"
           className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-background text-base font-semibold text-primary shadow-sm transition-all duration-150 hover:border-primary/50 hover:bg-primary-light active:scale-[0.97]"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 5v14m0 0l6-6m-6 6l-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Receive
-        </button>
+          Crear evento
+        </Link>
       </div>
-
-      <SendModal open={sendOpen} onClose={() => setSendOpen(false)} />
-      <ReceiveModal open={receiveOpen} onClose={() => setReceiveOpen(false)} />
-
-      <p className="mt-auto pt-4 text-center text-xs text-muted-light">
-        Demo page. Build your app starting from{" "}
-        <code className="font-mono">app/page.tsx</code>
-      </p>
     </main>
   );
 }
