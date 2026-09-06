@@ -4,6 +4,7 @@ import { stroopsToDecimal } from "@/lib/money";
 import { formatEventDateTime } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { PollarLogo } from "@/components/ui/PollarLogo";
+import { BuyButton } from "@/components/BuyButton";
 
 type EventRow = {
   id: string;
@@ -79,6 +80,8 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
         >
           {soldOut ? "Agotado" : `${remaining} de ${event.capacity} cupos disponibles`}
         </div>
+
+        {!soldOut && <BuyButton eventId={event.id} />}
       </Card>
     </main>
   );

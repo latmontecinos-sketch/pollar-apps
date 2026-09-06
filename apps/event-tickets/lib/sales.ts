@@ -1,6 +1,17 @@
+import { randomBytes } from "node:crypto";
 import type { Transaction } from "@libsql/client";
 import { withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
+import { issueTicket, type Ticket } from "./tickets.ts";
+
+/**
+ * Goes in the Stellar payment memo (28-byte text memo limit), so it has to
+ * be short — this is a correlation key, not a secret, so plain hex is fine.
+ * `sales.reference` is UNIQUE; `reserveAndCreateSale` retries on collision.
+ */
+export function generateReference(): string {
+  return `p${randomBytes(5).toString("hex")}`;
+}
 
 export type SaleStatus = "pending" | "paid" | "expired" | "unclaimed";
 
@@ -129,5 +140,55 @@ export async function markPaid(
       args: [txHash, saleId],
     });
     return { paid: updated.rows.length > 0 };
+  });
+}
+
+export type SettleResult =
+  | { outcome: "paid"; ticket: Ticket }
+  | { outcome: "already_paid"; ticket: Ticket }
+  | { outcome: "unclaimed" }
+  | { outcome: "no_match" };
+
+/**
+ * Verified payment meets the sale record. `pending` -> `paid` and ticket
+ * issuance happen in the same transaction (design: never a `paid` sale
+ * without a ticket). If the sale already flipped to `expired` before this
+ * payment landed (lost the race with `expireSale`), the seat is already
+ * released — possibly resold — so this does NOT issue a ticket; it moves
+ * the sale to `unclaimed` for manual handling instead of overselling.
+ * Replays of an already-`paid` sale are idempotent (same ticket back).
+ */
+export async function settlePayment(
+  saleId: string,
+  eventId: string,
+  txHash: string
+): Promise<SettleResult> {
+  return withTransaction(async (tx: Transaction) => {
+    const paid = await tx.execute({
+      sql: "UPDATE sales SET status = 'paid', tx_hash = ? WHERE id = ? AND status = 'pending' RETURNING id",
+      args: [txHash, saleId],
+    });
+    if (paid.rows.length > 0) {
+      const ticket = await issueTicket(saleId, eventId, tx);
+      return { outcome: "paid", ticket };
+    }
+
+    const current = await tx.execute({
+      sql: "SELECT status FROM sales WHERE id = ?",
+      args: [saleId],
+    });
+    const status = current.rows[0]?.status;
+    if (status === "paid") {
+      const ticket = await issueTicket(saleId, eventId, tx);
+      return { outcome: "already_paid", ticket };
+    }
+    if (status === "expired") {
+      await tx.execute({
+        sql: "UPDATE sales SET status = 'unclaimed', tx_hash = ? WHERE id = ? AND status = 'expired'",
+        args: [txHash, saleId],
+      });
+      return { outcome: "unclaimed" };
+    }
+    return { outcome: "no_match" };
   });
 }
