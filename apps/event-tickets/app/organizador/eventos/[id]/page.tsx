@@ -165,6 +165,12 @@ export default function OrganizerEventPage({
             >
               Modo puerta →
             </a>
+            <a
+              href={`/organizador/eventos/${state.event.id}/ventas`}
+              className="text-sm font-medium text-primary underline"
+            >
+              Ventas →
+            </a>
           </Card>
 
           <Card>
