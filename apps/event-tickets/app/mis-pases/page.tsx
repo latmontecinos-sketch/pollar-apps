@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { Spinner } from "@/components/ui/Spinner";
+import { TicketQr } from "@/components/TicketQr";
 
 type Sale = {
   id: string;
@@ -107,14 +108,15 @@ export default function MisPasesPage() {
             </div>
 
             {sale.ticket ? (
-              <div className="flex flex-col gap-1 rounded-xl border border-border bg-surface px-3 py-2">
-                <span className="font-mono text-xs">Código: {sale.ticket.code}</span>
-                <span className="font-mono text-xs">Código de puerta: {sale.ticket.doorCode}</span>
-                {sale.ticket.usedAt && (
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface px-3 py-3">
+                {sale.ticket.usedAt ? (
                   <span className="text-xs text-muted">
                     Usado el {new Date(sale.ticket.usedAt).toLocaleString("es-BO")}
                   </span>
+                ) : (
+                  <TicketQr value={sale.ticket.code} size={160} />
                 )}
+                <span className="font-mono text-xs">Código de puerta: {sale.ticket.doorCode}</span>
               </div>
             ) : (
               <span

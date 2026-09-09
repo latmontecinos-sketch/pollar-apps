@@ -8,6 +8,7 @@ import { pollarFetch } from "@/lib/auth-client";
 import { paymentAssetFrom } from "@/lib/payments";
 import { Button } from "@/components/ui/Button";
 import { LoginButton } from "@/components/LoginButton";
+import { TicketQr } from "@/components/TicketQr";
 
 type Sale = {
   id: string;
@@ -118,9 +119,9 @@ export function BuyButton({ eventId, disabled }: { eventId: string; disabled?: b
 
   if (state.step === "done") {
     return (
-      <div className="flex flex-col gap-2 rounded-xl border border-success-border bg-success-light px-4 py-3 text-center">
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-success-border bg-success-light px-4 py-3 text-center">
         <span className="text-sm font-semibold text-success">✓ Pase comprado</span>
-        <span className="font-mono text-xs text-muted">Código: {state.ticket.code}</span>
+        <TicketQr value={state.ticket.code} size={180} />
         <span className="font-mono text-xs text-muted">Código de puerta: {state.ticket.doorCode}</span>
         {user.profile?.mail && (
           <span className="text-xs text-muted">También te lo mandamos a {user.profile.mail}</span>
