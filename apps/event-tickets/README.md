@@ -81,5 +81,5 @@ Door validation trusts the *organizer's own session* — there's no delegation t
 - [x] Door check-in is atomic: a ticket can't be used twice, even under concurrent scans
 - [x] Organizer sees their sales (revenue, status, per-sale detail)
 - [x] Runs from a fresh clone with `pnpm install && pnpm dev` plus only the Pollar API key in `.env`
-- [ ] Deployed to Vercel
+- [x] Deployed to Vercel — https://pollarpass.vercel.app
 - [ ] Demo video with real Bolivian testers
