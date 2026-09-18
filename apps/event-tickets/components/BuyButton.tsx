@@ -6,6 +6,7 @@ import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useBalance } from "@/hooks/useBalance";
 import { pollarFetch } from "@/lib/auth-client";
 import { paymentAssetFrom } from "@/lib/payments";
+import { formatAmount } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { LoginButton } from "@/components/LoginButton";
 import { TicketQr } from "@/components/TicketQr";
@@ -21,6 +22,7 @@ type Ticket = { code: string; doorCode: string };
 
 type State =
   | { step: "idle" }
+  | { step: "confirm" }
   | { step: "creating_sale" }
   | { step: "paying"; sale: Sale }
   | { step: "confirming"; sale: Sale }
@@ -28,12 +30,22 @@ type State =
   | { step: "error"; message: string };
 
 /**
- * Buy flow for the public event page: create a pending sale, pay it with a
- * unique memo (`runTx('payment', …)`, the same SDK method `SendModal` uses —
- * `PayButton` can't carry a memo), then hand the hash to our own server to
- * verify against Horizon before it ever issues a ticket.
+ * Buy flow for the public event page: a review step first (a single tap
+ * would otherwise send a real payment with no way to back out), then create
+ * a pending sale and pay it with a unique memo (`runTx('payment', …)`, the
+ * same SDK method `SendModal` uses — `PayButton` can't carry a memo), then
+ * hand the hash to our own server to verify against Horizon before it ever
+ * issues a ticket.
  */
-export function BuyButton({ eventId, disabled }: { eventId: string; disabled?: boolean }) {
+export function BuyButton({
+  eventId,
+  priceDecimal,
+  disabled,
+}: {
+  eventId: string;
+  priceDecimal: string;
+  disabled?: boolean;
+}) {
   const { user, verified } = usePollarAuth();
   const pollar = usePollar();
   const pollarRef = useRef(pollar);
@@ -130,8 +142,26 @@ export function BuyButton({ eventId, disabled }: { eventId: string; disabled?: b
     );
   }
 
+  if (state.step === "confirm") {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-center">
+        <p className="text-sm">
+          ¿Pagar <span className="font-mono font-semibold">{formatAmount(priceDecimal)} USDC</span> por
+          este pase?
+        </p>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setState({ step: "idle" })}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void buy()}>Confirmar compra</Button>
+        </div>
+      </div>
+    );
+  }
+
   const labels: Record<State["step"], string> = {
     idle: usdcAsset ? "Comprar pase" : "Cargando saldo USDC…",
+    confirm: "",
     creating_sale: "Reservando…",
     paying: "Confirmá el pago en tu wallet…",
     confirming: "Verificando el pago…",
@@ -143,7 +173,7 @@ export function BuyButton({ eventId, disabled }: { eventId: string; disabled?: b
   return (
     <div className="flex flex-col items-center gap-2">
       <Button
-        onClick={() => void buy()}
+        onClick={() => (state.step === "error" ? void buy() : setState({ step: "confirm" }))}
         disabled={disabled || busy || !verified || !usdcAsset}
         loading={busy}
       >

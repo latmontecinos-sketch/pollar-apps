@@ -4,7 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
-import { shortAddress } from "@/lib/format";
+import { formatAmount, shortAddress } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
@@ -123,7 +123,7 @@ export default function SalesPage({
             <div className="flex justify-between">
               <span className="text-muted">Recaudado</span>
               <span className="font-mono text-lg font-semibold">
-                {state.paidTotalDecimal} USDC
+                {formatAmount(state.paidTotalDecimal)} USDC
               </span>
             </div>
             <div className="flex justify-between text-xs text-muted">
@@ -164,7 +164,7 @@ export default function SalesPage({
                 )}
               </div>
               <div className="flex flex-col items-end gap-1">
-                <span className="font-mono font-semibold">{sale.amountDecimal} USDC</span>
+                <span className="font-mono font-semibold">{formatAmount(sale.amountDecimal)} USDC</span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[sale.status]}`}
                 >

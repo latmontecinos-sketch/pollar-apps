@@ -19,6 +19,8 @@ Required in `.env`: `NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY` (dashboard.pollar.xyz �
 - **Production**: `DATABASE_URL` + `DATABASE_AUTH_TOKEN` (libSQL/Turso) are required; the app refuses to start on the local file DB in production rather than silently losing writes on a serverless filesystem.
 - **`RESEND_API_KEY`**: optional, best-effort email of the ticket after purchase (see below).
 
+Deploying to a new domain (Vercel or otherwise) also needs that domain added on the Pollar side, or every login fails with "Could not load sign-in options": dashboard.pollar.xyz → your app → Build → Domains → add the deploy URL (e.g. `https://your-app.vercel.app`) to both **Allowed origins** and **Allowed redirect URIs** (the latter is only checked for OAuth logins like Google — email/wallet login only needs the former). `localhost:3000` for local dev is separate and unaffected.
+
 ## Screens
 
 | Path | Who | What |

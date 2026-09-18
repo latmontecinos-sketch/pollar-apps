@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
-import { formatEventDateTime } from "@/lib/format";
+import { formatAmount, formatEventDateTime } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { BuyButton } from "@/components/BuyButton";
@@ -66,7 +66,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
           <div className="flex justify-between gap-4">
             <dt className="text-muted">Precio</dt>
             <dd className="font-mono font-semibold">
-              {stroopsToDecimal(BigInt(event.price_stroops))} USDC
+              {formatAmount(stroopsToDecimal(BigInt(event.price_stroops)))} USDC
             </dd>
           </div>
         </dl>
@@ -81,7 +81,12 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
           {soldOut ? "Agotado" : `${remaining} de ${event.capacity} cupos disponibles`}
         </div>
 
-        {!soldOut && <BuyButton eventId={event.id} />}
+        {!soldOut && (
+          <BuyButton
+            eventId={event.id}
+            priceDecimal={stroopsToDecimal(BigInt(event.price_stroops))}
+          />
+        )}
       </Card>
     </main>
   );

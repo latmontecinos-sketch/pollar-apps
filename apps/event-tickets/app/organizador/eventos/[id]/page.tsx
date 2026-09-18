@@ -4,6 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
+import { formatAmount } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -150,7 +151,7 @@ export default function OrganizerEventPage({
             <div className="flex justify-between">
               <span className="text-muted">Precio</span>
               <span className="font-mono font-semibold">
-                {state.event.priceDecimal} USDC
+                {formatAmount(state.event.priceDecimal)} USDC
               </span>
             </div>
             <a

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
-import { formatEventDateTime } from "@/lib/format";
+import { formatAmount, formatEventDateTime } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
@@ -103,7 +103,7 @@ export default function MisPasesPage() {
                 </p>
               </div>
               <span className="whitespace-nowrap font-mono text-xs font-semibold text-muted">
-                {sale.amountDecimal} USDC
+                {formatAmount(sale.amountDecimal)} USDC
               </span>
             </div>
 
@@ -119,13 +119,23 @@ export default function MisPasesPage() {
                 <span className="font-mono text-xs">Código de puerta: {sale.ticket.doorCode}</span>
               </div>
             ) : (
-              <span
-                className={`text-sm font-medium ${
-                  sale.status === "unclaimed" ? "text-error" : "text-muted"
-                }`}
-              >
-                {STATUS_LABEL[sale.status]}
-              </span>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className={`text-sm font-medium ${
+                    sale.status === "unclaimed" ? "text-error" : "text-muted"
+                  }`}
+                >
+                  {STATUS_LABEL[sale.status]}
+                </span>
+                {sale.status === "pending" && (
+                  <a
+                    href={`/e/${sale.event.id}`}
+                    className="text-sm font-medium text-primary underline"
+                  >
+                    Reintentar pago →
+                  </a>
+                )}
+              </div>
             )}
           </Card>
         ))}
