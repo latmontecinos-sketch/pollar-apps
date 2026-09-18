@@ -28,6 +28,7 @@ Deploying to a new domain (Vercel or otherwise) also needs that domain added on 
 | `/organizador/nuevo` | organizer | Create an event (name, place, date, price, capacity) |
 | `/e/[id]` | anyone, no login | Public event page — buy a ticket |
 | `/mis-pases` | buyer | Every ticket they've ever bought, with its QR |
+| `/mis-eventos` | organizer | Every event they organize, linking to its panel |
 | `/organizador/eventos/[id]` | owning organizer | Edit event, links to door mode and sales |
 | `/organizador/eventos/[id]/puerta` | owning organizer | Door check-in: camera scan or typed short code |
 | `/organizador/eventos/[id]/ventas` | owning organizer | Revenue, status counts, per-sale detail |
