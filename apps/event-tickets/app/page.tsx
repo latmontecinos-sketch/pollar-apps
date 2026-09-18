@@ -46,12 +46,19 @@ export default function Home() {
 
       <BalanceCard />
 
+      <Link
+        href="/mis-pases"
+        className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary-hover active:scale-[0.97]"
+      >
+        Mis pases
+      </Link>
+
       <div className="grid grid-cols-2 gap-3">
         <Link
-          href="/mis-pases"
-          className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-primary text-base font-semibold text-primary-foreground shadow-sm transition-all duration-150 hover:bg-primary-hover active:scale-[0.97]"
+          href="/mis-eventos"
+          className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-background text-base font-semibold text-primary shadow-sm transition-all duration-150 hover:border-primary/50 hover:bg-primary-light active:scale-[0.97]"
         >
-          Mis pases
+          Mis eventos
         </Link>
         <Link
           href="/organizador/nuevo"
