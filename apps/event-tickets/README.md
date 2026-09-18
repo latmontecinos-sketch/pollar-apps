@@ -4,6 +4,8 @@ Ticket pre-sale and door check-in for small events in Bolivia (issue [#13](https
 
 The organizer creates an event and gets a public link. A buyer opens that link, logs in with Pollar, and pays for a ticket in **USDC on Stellar testnet**, in-app — no external wallet, no QR to scan to buy. The ticket that comes back *is* a QR: the buyer shows it at the door, the organizer scans it (or types the short code by hand) to check them in, once, atomically.
 
+📊 **[Documentación visual](docs/ARQUITECTURA.md)** — arquitectura, flujo de compra, check-in en la puerta y capturas reales, con [tablero editable en Figma](https://www.figma.com/board/OwFBSZmDTqxdJ1jHZfe4Km).
+
 ## Run from a fresh clone
 
 ```bash
