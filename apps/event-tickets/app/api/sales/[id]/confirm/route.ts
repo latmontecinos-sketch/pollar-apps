@@ -17,6 +17,8 @@ type SaleRow = {
   status: string;
   organizer_pollar_id: string;
   event_name: string;
+  event_datetime_utc: string;
+  event_place: string;
 };
 
 /**
@@ -33,7 +35,8 @@ export async function POST(request: Request, ctx: Ctx) {
 
   await dbReady();
   const result = await db.execute({
-    sql: `SELECT sales.*, events.organizer_pollar_id, events.name AS event_name
+    sql: `SELECT sales.*, events.organizer_pollar_id, events.name AS event_name,
+                 events.datetime_utc AS event_datetime_utc, events.place AS event_place
           FROM sales JOIN events ON events.id = sales.event_id
           WHERE sales.id = ?`,
     args: [id],
@@ -77,6 +80,8 @@ export async function POST(request: Request, ctx: Ctx) {
         const mailResult = await sendTicketEmail({
           to: email,
           eventName: sale.event_name,
+          eventDateTime: sale.event_datetime_utc,
+          eventPlace: sale.event_place,
           ticketCode: settled.ticket.code,
           doorCode: settled.ticket.doorCode,
         });

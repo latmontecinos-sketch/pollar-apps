@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import QrScanner from "qr-scanner";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
@@ -135,7 +136,9 @@ export default function DoorModePage({
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
       <header className="flex items-center gap-2.5 py-2">
-        <PollarLogo size={28} />
+        <Link href="/" aria-label="Ir al inicio">
+          <PollarLogo size={28} />
+        </Link>
         <h1 className="text-xl font-bold tracking-tight">Modo puerta</h1>
       </header>
 
