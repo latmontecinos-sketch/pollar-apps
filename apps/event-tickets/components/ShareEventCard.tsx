@@ -1,0 +1,112 @@
+"use client";
+
+import { useState, useSyncExternalStore } from "react";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Icon } from "@/components/ui/Icon";
+import { TicketQr } from "@/components/TicketQr";
+import { formatEventDateTime } from "@/lib/format";
+
+const noopSubscribe = () => () => {};
+
+/**
+ * The organizer's main job after creating an event: getting the public link
+ * out. Copy, WhatsApp (how events actually spread in Bolivia), the native
+ * share sheet when the phone has one, and a printable QR for posters.
+ */
+export function ShareEventCard({
+  eventId,
+  eventName,
+  datetimeUtc,
+}: {
+  eventId: string;
+  eventName: string;
+  datetimeUtc: string;
+}) {
+  // Browser-only values: empty/false during SSR, real after hydration.
+  const origin = useSyncExternalStore(noopSubscribe, () => window.location.origin, () => "");
+  const canShare = useSyncExternalStore(
+    noopSubscribe,
+    () => typeof navigator.share === "function",
+    () => false
+  );
+  const url = origin ? `${origin}/e/${eventId}` : "";
+  const [copied, setCopied] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+
+  const message = `🎟️ ${eventName} — ${formatEventDateTime(datetimeUtc)}. Compra tu entrada aquí: ${url}`;
+
+  async function copy() {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <Card className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h2 className="flex items-center gap-2 font-bold">
+          <Icon name="share" size={18} className="text-primary" />
+          Comparte tu evento
+        </h2>
+        <p className="text-sm text-muted">Quien abra este link puede ver el evento y comprar su entrada.</p>
+      </div>
+
+      <button
+        onClick={() => void copy()}
+        className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left transition-colors hover:bg-surface-hover"
+      >
+        <span className="min-w-0 truncate font-mono text-sm">{url || "…"}</span>
+        <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
+          <Icon name={copied ? "check" : "copy"} size={16} />
+          {copied ? "Copiado" : "Copiar"}
+        </span>
+      </button>
+
+      <div className="grid grid-cols-2 gap-2">
+        <a
+          href={`https://wa.me/?text=${encodeURIComponent(message)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
+        >
+          <Icon name="message" size={17} />
+          WhatsApp
+        </a>
+        {canShare ? (
+          <Button
+            variant="secondary"
+            onClick={() => void navigator.share({ title: eventName, text: message, url }).catch(() => {})}
+          >
+            <Icon name="share" size={17} />
+            Compartir
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={() => setShowQr((v) => !v)}>
+            <Icon name="qr" size={17} />
+            {showQr ? "Ocultar QR" : "QR del evento"}
+          </Button>
+        )}
+      </div>
+
+      {canShare && (
+        <button
+          onClick={() => setShowQr((v) => !v)}
+          className="flex items-center justify-center gap-1.5 text-sm font-semibold text-primary"
+        >
+          <Icon name="qr" size={16} />
+          {showQr ? "Ocultar QR del evento" : "Mostrar QR del evento (para afiches)"}
+        </button>
+      )}
+
+      {showQr && url && (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background p-4">
+          <TicketQr value={url} size={200} alt={`QR del link de ${eventName}`} />
+          <p className="text-center text-xs text-muted">
+            Imprímelo o muéstralo: al escanearlo se abre la página para comprar. (No es una entrada.)
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+}

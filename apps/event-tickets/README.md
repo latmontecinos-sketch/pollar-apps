@@ -17,7 +17,7 @@ pnpm dev
 
 Required in `.env`: `NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY` (dashboard.pollar.xyz → Build → API Keys → publishable). Everything else is optional:
 
-- **Local dev**: no database setup needed — falls back to `file:./dev.db`.
+- **Local dev**: no database setup needed — falls back to `file:./dev.db`. If your `.env` also holds the production `DATABASE_URL` (e.g. copied from Vercel), add a `.env.development.local` with `DATABASE_URL=file:./dev.db` so `pnpm dev` never writes test data into production.
 - **Production**: `DATABASE_URL` + `DATABASE_AUTH_TOKEN` (libSQL/Turso) are required; the app refuses to start on the local file DB in production rather than silently losing writes on a serverless filesystem.
 - **`RESEND_API_KEY`**: optional, best-effort email of the ticket after purchase (see below).
 
@@ -27,13 +27,15 @@ Deploying to a new domain (Vercel or otherwise) also needs that domain added on 
 
 | Path | Who | What |
 |---|---|---|
-| `/organizador/nuevo` | organizer | Create an event (name, place, date, price, capacity) |
-| `/e/[id]` | anyone, no login | Public event page — buy a ticket |
-| `/mis-pases` | buyer | Every ticket they've ever bought, with its QR |
-| `/mis-eventos` | organizer | Every event they organize, linking to its panel |
-| `/organizador/eventos/[id]` | owning organizer | Edit event, links to door mode and sales |
-| `/organizador/eventos/[id]/puerta` | owning organizer | Door check-in: camera scan or typed short code |
-| `/organizador/eventos/[id]/ventas` | owning organizer | Revenue, status counts, per-sale detail |
+| `/` | anyone | Logged out: what Pollar Pass is + how buying works. Logged in: balance, "get test USDC", and the three main actions |
+| `/como-funciona` | anyone, no login | In-app guide: buyer steps, organizer steps, FAQ (test USDC faucet, "I paid but got no ticket", refunds, privacy). Deep-linkable (`#usdc`, `#organizador`…) and reachable from the **Ayuda** button in every header |
+| `/organizador/nuevo` | organizer | Create an event (name, place, date in Bolivia time, price, capacity) |
+| `/e/[id]` | anyone, no login | Public event page — buy a ticket. Link previews (WhatsApp etc.) show the event's name, date and price |
+| `/mis-pases` | buyer | "Mis entradas": every ticket with its QR; unconfirmed purchases get **"Ya pagué, verificar"** |
+| `/mis-eventos` | organizer | Every event they organize, with sold count, linking to its panel |
+| `/organizador/eventos/[id]` | owning organizer | Share the link (copy / WhatsApp / QR for posters), sold vs. in-progress vs. checked-in, edit event |
+| `/organizador/eventos/[id]/puerta` | owning organizer | Door check-in: camera scan or typed short code, big green/red result that clears itself, live check-in counter |
+| `/organizador/eventos/[id]/ventas` | owning organizer | Revenue, per-sale detail with Stellar receipt, who already got in |
 
 ## How payment correlation works (no client webhooks)
 
@@ -42,7 +44,9 @@ There's no merchant "charge" API in Pollar — an in-app purchase is a user-to-u
 1. `POST /api/sales` reserves a seat (atomic `UPDATE ... WHERE reserved < capacity`) and creates a `pending` sale with a unique `reference`.
 2. The buyer pays the organizer's address with that reference in the memo — `PayButton` doesn't expose a memo, so this calls `runTx('payment', …)` directly, the same SDK method `SendModal` uses.
 3. `POST /api/sales/[id]/confirm` takes the resulting hash and verifies it against **Horizon** (destination, amount, asset, memo) before ever trusting it. Marking the sale `paid` and issuing the ticket happen in one DB transaction. A hash that doesn't match, or a Horizon outage, never gets treated as "payment failed" — the sale just stays `pending` and the buyer can retry.
-4. A sale that expires before payment lands releases its seat (`sweep`, run opportunistically from the organizer panel). A payment that arrives *after* expiry moves the sale to `unclaimed` instead of overselling a seat that may have been resold.
+4. A sale that expires before payment lands releases its seat (`sweepExpiredSales`, run on the public page, before every new sale and in the organizer views — so an abandoned checkout can't make an event look sold out). A payment that arrives *after* expiry moves the sale to `unclaimed` instead of overselling a seat that may have been resold.
+
+**Never charging twice.** Once a sale exists the buyer's browser remembers it, and once a payment may have been sent the only action offered is *verify* — never *buy* again. Confirmation retries with backoff (Horizon can lag a few seconds behind a fresh payment), resumes after a reload, and `confirm` also works **without a hash**: the server finds the payment on Horizon by the sale's unique memo. That's what "Mis entradas → Ya pagué, verificar" uses when the tab was closed mid-payment.
 
 ## Identity, without a Bearer token
 

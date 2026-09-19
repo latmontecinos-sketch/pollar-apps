@@ -31,14 +31,14 @@ export function BalanceCard() {
 
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-primary-foreground/75">
-          Balance
+          Tu saldo
         </span>
         <button
           onClick={() => void refresh()}
           disabled={isLoading}
           className="text-sm font-semibold text-primary-foreground/75 transition-colors hover:text-primary-foreground disabled:opacity-50"
         >
-          Refresh
+          Actualizar
         </button>
       </div>
 

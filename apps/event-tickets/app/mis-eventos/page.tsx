@@ -5,8 +5,11 @@ import Link from "next/link";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
-import { formatAmount, formatEventDateTime } from "@/lib/format";
+import { formatAmount, formatEventDateTime, salesClosed } from "@/lib/format";
+import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Icon } from "@/components/ui/Icon";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { Spinner } from "@/components/ui/Spinner";
@@ -19,9 +22,22 @@ type EventRow = {
   priceDecimal: string;
   capacity: number;
   reserved: number;
+  paid: number;
 };
 
 type LoadState = { step: "loading" } | { step: "loaded"; events: EventRow[] } | { step: "error" };
+
+function CreateButton() {
+  return (
+    <Link
+      href="/organizador/nuevo"
+      className="flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
+    >
+      <Icon name="plus" size={18} />
+      Crear evento
+    </Link>
+  );
+}
 
 export default function MisEventosPage() {
   const { user, isLoading: authLoading } = usePollarAuth();
@@ -54,22 +70,20 @@ export default function MisEventosPage() {
 
   if (!user) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-12 text-center">
-        <PollarLogo size={72} />
-        <p className="max-w-sm text-muted">Iniciá sesión para ver los eventos que organizás.</p>
-        <LoginButton />
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
+        <AppHeader title="Mis eventos" back={{ href: "/", label: "Inicio" }} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
+          <PollarLogo size={64} />
+          <p className="max-w-sm text-muted">Ingresa para ver los eventos que organizas.</p>
+          <LoginButton />
+        </div>
       </main>
     );
   }
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <header className="flex items-center gap-2.5 py-2">
-        <Link href="/" aria-label="Ir al inicio">
-          <PollarLogo size={28} />
-        </Link>
-        <h1 className="text-xl font-bold tracking-tight">Mis eventos</h1>
-      </header>
+      <AppHeader title="Mis eventos" back={{ href: "/", label: "Inicio" }} />
 
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
@@ -79,32 +93,61 @@ export default function MisEventosPage() {
 
       {state.step === "error" && (
         <Card>
-          <p className="text-center text-sm text-error">No se pudieron cargar tus eventos.</p>
+          <p className="text-center text-sm text-error">No se pudieron cargar tus eventos. Recarga la página.</p>
         </Card>
       )}
 
       {state.step === "loaded" && state.events.length === 0 && (
         <Card>
-          <p className="text-center text-sm text-muted">Todavía no organizaste ningún evento.</p>
+          <EmptyState
+            title="Todavía no organizas eventos"
+            description="Crea uno en un minuto: pones nombre, lugar, fecha, precio y cupo, y te damos un link para vender entradas."
+            action={<CreateButton />}
+          />
         </Card>
       )}
 
-      {state.step === "loaded" &&
-        state.events.map((event) => (
-          <Link key={event.id} href={`/organizador/eventos/${event.id}`}>
-            <Card className="flex items-center justify-between gap-3 transition-colors hover:bg-surface-hover">
-              <div>
-                <h2 className="font-semibold">{event.name}</h2>
-                <p className="text-sm text-muted">
-                  {formatEventDateTime(event.datetimeUtc)} · {event.place}
-                </p>
-                <p className="mt-0.5 font-mono text-xs text-muted">
-                  {event.reserved} / {event.capacity} vendidos · {formatAmount(event.priceDecimal)} USDC
-                </p>
-              </div>
-            </Card>
-          </Link>
-        ))}
+      {state.step === "loaded" && state.events.length > 0 && (
+        <>
+          <CreateButton />
+          {state.events.map((event) => {
+            const closed = salesClosed(event.datetimeUtc);
+            const soldPct = Math.min(100, Math.round((event.paid / event.capacity) * 100));
+            return (
+              <Link key={event.id} href={`/organizador/eventos/${event.id}`}>
+                <Card className="flex flex-col gap-3 p-5 transition-colors hover:border-primary/40 hover:bg-surface-hover">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="font-semibold">{event.name}</h2>
+                      <p className="text-sm text-muted first-letter:uppercase">
+                        {formatEventDateTime(event.datetimeUtc)} · {event.place}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        closed ? "bg-surface text-muted" : "bg-success-light text-success"
+                      }`}
+                    >
+                      {closed ? "Finalizado" : "En venta"}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between text-xs text-muted">
+                      <span>
+                        <span className="font-semibold text-foreground">{event.paid}</span> de {event.capacity} vendidas
+                      </span>
+                      <span className="font-mono">{formatAmount(event.priceDecimal)} USDC c/u</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${soldPct}%` }} />
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+            );
+          })}
+        </>
+      )}
     </main>
   );
 }

@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
-import { formatAmount, formatEventDateTime } from "@/lib/format";
+import { formatAmount, formatEventDateTime, formatTimestamp, salesClosed } from "@/lib/format";
+import { AppHeader } from "@/components/AppHeader";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Icon } from "@/components/ui/Icon";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { Spinner } from "@/components/ui/Spinner";
@@ -16,18 +20,14 @@ type Sale = {
   id: string;
   status: "pending" | "paid" | "expired" | "unclaimed";
   amountDecimal: string;
+  expiresAtUtc: string;
   event: { id: string; name: string; datetimeUtc: string; place: string };
   ticket: { code: string; doorCode: string | null; usedAt: string | null } | null;
 };
 
 type LoadState = { step: "loading" } | { step: "loaded"; sales: Sale[] } | { step: "error" };
 
-const STATUS_LABEL: Record<Sale["status"], string> = {
-  pending: "Pendiente de pago",
-  paid: "Pagado",
-  expired: "Expirado",
-  unclaimed: "Pago sin reclamar — contactá al organizador",
-};
+type VerifyState = { busy: boolean; message?: string; tone?: "info" | "error" };
 
 export default function MisPasesPage() {
   const { user, isLoading: authLoading } = usePollarAuth();
@@ -38,44 +38,75 @@ export default function MisPasesPage() {
   });
 
   const [state, setState] = useState<LoadState>({ step: "loading" });
+  const [verifying, setVerifying] = useState<Record<string, VerifyState>>({});
   const address = user?.address;
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!address) return;
-    let cancelled = false;
-    (async () => {
-      const client = pollarRef.current.getClient();
-      const res = await pollarFetch(client, address, "/api/sales/mine");
-      if (cancelled) return;
-      if (!res.ok) return setState({ step: "error" });
-      const data = (await res.json()) as { sales: Sale[] };
-      setState({ step: "loaded", sales: data.sales });
-    })();
-    return () => {
-      cancelled = true;
-    };
+    const res = await pollarFetch(pollarRef.current.getClient(), address, "/api/sales/mine");
+    if (!res.ok) return setState({ step: "error" });
+    const data = (await res.json()) as { sales: Sale[] };
+    setState({ step: "loaded", sales: data.sales });
   }, [address]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  /** "Ya pagué": the server looks the payment up on Stellar by this sale's memo. Never pays again. */
+  async function verify(sale: Sale) {
+    if (!address) return;
+    setVerifying((v) => ({ ...v, [sale.id]: { busy: true } }));
+    try {
+      const res = await pollarFetch(
+        pollarRef.current.getClient(),
+        address,
+        `/api/sales/${sale.id}/confirm`,
+        { method: "POST", body: JSON.stringify({ email: user?.profile?.mail }) }
+      );
+      const data = (await res.json()) as { ticket?: unknown; error?: string; code?: string };
+      if (res.ok && data.ticket) {
+        setVerifying((v) => ({ ...v, [sale.id]: { busy: false } }));
+        await load();
+        return;
+      }
+      const message =
+        data.code === "no_payment"
+          ? sale.status === "pending"
+            ? `No encontramos un pago para esta reserva. Si no pagaste, no hagas nada: se libera sola a las ${formatTimestamp(sale.expiresAtUtc)}.`
+            : "No encontramos ningún pago para esta reserva, así que no se te cobró nada."
+          : (data.error ?? "No pudimos verificar ahora. Intenta en unos segundos.");
+      setVerifying((v) => ({
+        ...v,
+        [sale.id]: { busy: false, message, tone: data.code === "no_payment" ? "info" : "error" },
+      }));
+      if (res.status === 409) await load();
+    } catch {
+      setVerifying((v) => ({
+        ...v,
+        [sale.id]: { busy: false, message: "Sin conexión. Intenta de nuevo.", tone: "error" },
+      }));
+    }
+  }
 
   if (authLoading) return null;
 
   if (!user) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-12 text-center">
-        <PollarLogo size={72} />
-        <p className="max-w-sm text-muted">Iniciá sesión para ver tus pases.</p>
-        <LoginButton />
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
+        <AppHeader title="Mis entradas" back={{ href: "/", label: "Inicio" }} />
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
+          <PollarLogo size={64} />
+          <p className="max-w-sm text-muted">Ingresa para ver las entradas que compraste.</p>
+          <LoginButton />
+        </div>
       </main>
     );
   }
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <header className="flex items-center gap-2.5 py-2">
-        <Link href="/" aria-label="Ir al inicio">
-          <PollarLogo size={28} />
-        </Link>
-        <h1 className="text-xl font-bold tracking-tight">Mis pases</h1>
-      </header>
+      <AppHeader title="Mis entradas" back={{ href: "/", label: "Inicio" }} />
 
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
@@ -85,63 +116,123 @@ export default function MisPasesPage() {
 
       {state.step === "error" && (
         <Card>
-          <p className="text-center text-sm text-error">No se pudieron cargar tus pases.</p>
+          <p className="text-center text-sm text-error">No se pudieron cargar tus entradas. Recarga la página.</p>
         </Card>
       )}
 
       {state.step === "loaded" && state.sales.length === 0 && (
         <Card>
-          <p className="text-center text-sm text-muted">Todavía no compraste ningún pase.</p>
+          <EmptyState
+            title="Todavía no tienes entradas"
+            description="Las entradas se compran desde el link que comparte cada organizador. Cuando compres una, aparecerá aquí con su QR."
+            action={
+              <Link href="/como-funciona" className="text-sm font-semibold text-primary underline">
+                Ver cómo comprar una entrada →
+              </Link>
+            }
+          />
         </Card>
       )}
 
       {state.step === "loaded" &&
-        state.sales.map((sale) => (
-          <Card key={sale.id} className="flex flex-col gap-2">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="font-semibold">{sale.event.name}</h2>
-                <p className="text-sm text-muted">
-                  {formatEventDateTime(sale.event.datetimeUtc)} · {sale.event.place}
-                </p>
-              </div>
-              <span className="whitespace-nowrap font-mono text-xs font-semibold text-muted">
-                {formatAmount(sale.amountDecimal)} USDC
-              </span>
-            </div>
-
-            {sale.ticket ? (
-              <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface px-3 py-3">
-                {sale.ticket.usedAt ? (
-                  <span className="text-xs text-muted">
-                    Usado el {new Date(sale.ticket.usedAt).toLocaleString("es-BO")}
-                  </span>
-                ) : (
-                  <TicketQr value={sale.ticket.code} size={160} />
-                )}
-                <span className="font-mono text-xs">Código de puerta: {sale.ticket.doorCode}</span>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-3">
-                <span
-                  className={`text-sm font-medium ${
-                    sale.status === "unclaimed" ? "text-error" : "text-muted"
-                  }`}
-                >
-                  {STATUS_LABEL[sale.status]}
+        state.sales.map((sale) => {
+          const check = verifying[sale.id];
+          const past = salesClosed(sale.event.datetimeUtc);
+          return (
+            <Card key={sale.id} className="flex flex-col gap-4 overflow-hidden p-0">
+              <div className="flex items-start justify-between gap-3 px-5 pt-5">
+                <div className="min-w-0">
+                  <Link href={`/e/${sale.event.id}`} className="font-semibold hover:text-primary">
+                    {sale.event.name}
+                  </Link>
+                  <p className="text-sm text-muted first-letter:uppercase">
+                    {formatEventDateTime(sale.event.datetimeUtc)} · {sale.event.place}
+                  </p>
+                </div>
+                <span className="whitespace-nowrap font-mono text-xs font-semibold text-muted">
+                  {formatAmount(sale.amountDecimal)} USDC
                 </span>
-                {sale.status === "pending" && (
-                  <a
-                    href={`/e/${sale.event.id}`}
-                    className="text-sm font-medium text-primary underline"
-                  >
-                    Reintentar pago →
-                  </a>
-                )}
               </div>
-            )}
-          </Card>
-        ))}
+
+              {sale.ticket ? (
+                <div className="flex flex-col items-center gap-3 border-t border-dashed border-border bg-surface px-5 py-5">
+                  {sale.ticket.usedAt ? (
+                    <span className="flex items-center gap-2 rounded-full bg-success-light px-3 py-1 text-sm font-semibold text-success">
+                      <Icon name="check" size={16} /> Usada el {formatTimestamp(sale.ticket.usedAt)}
+                    </span>
+                  ) : past ? (
+                    <span className="text-sm text-muted">Este evento ya pasó.</span>
+                  ) : (
+                    <>
+                      <div className="rounded-xl bg-background p-2 shadow-sm">
+                        <TicketQr value={sale.ticket.code} size={180} />
+                      </div>
+                      <p className="text-center text-xs text-muted">
+                        Muestra este QR en la puerta. Si no se puede escanear, dicta tu código:
+                      </p>
+                    </>
+                  )}
+                  <div className="flex flex-col items-center">
+                    <span className="text-[11px] uppercase tracking-wide text-muted">Código de puerta</span>
+                    <span className="font-mono text-lg font-bold tracking-[0.2em]">{sale.ticket.doorCode}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 border-t border-border bg-surface px-5 py-4 text-sm">
+                  {sale.status === "pending" && (
+                    <p className="flex items-start gap-2">
+                      <Icon name="clock" size={17} className="mt-0.5 text-primary" />
+                      <span>
+                        <span className="font-semibold">Compra sin confirmar.</span>{" "}
+                        <span className="text-muted">
+                          Tu cupo está reservado hasta las {formatTimestamp(sale.expiresAtUtc)}. Si ya
+                          pagaste, verifícalo aquí — no vuelvas a pagar.
+                        </span>
+                      </span>
+                    </p>
+                  )}
+                  {sale.status === "expired" && (
+                    <p className="flex items-start gap-2 text-muted">
+                      <Icon name="x" size={17} className="mt-0.5" />
+                      <span>Reserva vencida: no se completó el pago y no se te cobró nada.</span>
+                    </p>
+                  )}
+                  {sale.status === "unclaimed" && (
+                    <p className="flex items-start gap-2 text-error">
+                      <Icon name="alert" size={17} className="mt-0.5" />
+                      <span>
+                        Tu pago llegó después de que venciera la reserva, así que no se emitió
+                        entrada. Contacta al organizador para que te lo devuelva.
+                      </span>
+                    </p>
+                  )}
+
+                  {(sale.status === "pending" || sale.status === "expired") && (
+                    <Button
+                      variant={sale.status === "pending" ? "primary" : "ghost"}
+                      loading={check?.busy}
+                      onClick={() => void verify(sale)}
+                      className={sale.status === "pending" ? "w-full" : "w-fit px-0 underline"}
+                    >
+                      {sale.status === "pending" ? "Ya pagué, verificar" : "¿Pagaste igual? Verificar"}
+                    </Button>
+                  )}
+                  {check?.message && (
+                    <p
+                      className={`rounded-xl border px-3 py-2 text-xs leading-5 ${
+                        check.tone === "error"
+                          ? "border-error-border bg-error-light text-error"
+                          : "border-border bg-background text-muted"
+                      }`}
+                    >
+                      {check.message}
+                    </p>
+                  )}
+                </div>
+              )}
+            </Card>
+          );
+        })}
     </main>
   );
 }
