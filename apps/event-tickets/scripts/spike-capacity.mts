@@ -193,6 +193,66 @@ async function testPayVsExpireRace(): Promise<void> {
   );
 }
 
+/** 5. Un mismo comprador no puede acaparar cupos: repetir "comprar" reusa su reserva viva. */
+async function testOneLiveReservationPerBuyer(): Promise<void> {
+  const eventId = await createEvent(5);
+  const buyer = `GBUYER_HOARDER_${randomUUID()}`;
+
+  const attempt = () =>
+    reserveAndCreateSale({
+      eventId,
+      buyerPollarId: buyer,
+      reference: `ref_hoard_${randomUUID()}`,
+      amountStroops: 10_000_000n,
+      idempotencyKey: `idem_hoard_${randomUUID()}`,
+      ttlMs: 15 * 60 * 1000,
+    });
+
+  const first = await attempt();
+  const repeats = [await attempt(), await attempt(), await attempt()];
+  const reserved = await eventReserved(eventId);
+
+  check(
+    "5 intentos del mismo comprador ocupan un solo cupo",
+    reserved === 1,
+    `reserved = ${reserved}`
+  );
+  check(
+    "los intentos repetidos devuelven la misma venta",
+    first.ok && repeats.every((r) => r.ok && r.sale.id === first.sale.id)
+  );
+  check(
+    "la reserva reusada renueva su ventana de pago",
+    first.ok &&
+      repeats[2].ok &&
+      new Date(repeats[2].sale.expiresAtUtc) >= new Date(first.sale.expiresAtUtc)
+  );
+
+  // Otro comprador sí toma un cupo distinto.
+  const other = await reserveAndCreateSale({
+    eventId,
+    buyerPollarId: `GBUYER_OTHER_${randomUUID()}`,
+    reference: `ref_other_${randomUUID()}`,
+    amountStroops: 10_000_000n,
+    idempotencyKey: `idem_other_${randomUUID()}`,
+    ttlMs: 15 * 60 * 1000,
+  });
+  const reservedAfter = await eventReserved(eventId);
+  check(
+    "otro comprador sí ocupa su propio cupo",
+    other.ok && reservedAfter === 2,
+    `reserved = ${reservedAfter}`
+  );
+
+  // Tras expirar la suya, el mismo comprador puede volver a reservar.
+  if (first.ok) await expireSale(first.sale.id);
+  const afterExpiry = await attempt();
+  check(
+    "tras expirar, el mismo comprador puede reservar de nuevo",
+    afterExpiry.ok && first.ok && afterExpiry.sale.id !== first.sale.id
+  );
+}
+
 async function main() {
   await dbReady();
   console.log("\nFase 3 — SPIKE B: cupo atómico\n");
@@ -200,6 +260,7 @@ async function main() {
   await testNoPhantomSeat();
   await testDoubleExpire();
   await testPayVsExpireRace();
+  await testOneLiveReservationPerBuyer();
   console.log(`\n${passed} pass, ${failed} fail\n`);
   process.exit(failed === 0 ? 0 : 1);
 }

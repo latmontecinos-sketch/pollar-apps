@@ -78,7 +78,8 @@ export type ReserveParams = {
 };
 
 export type ReserveResult =
-  | { ok: true; sale: Sale }
+  /** `reused`: the buyer's existing live reservation, not a newly held seat. */
+  | { ok: true; sale: Sale; reused?: boolean }
   | { ok: false; reason: "sold_out" };
 
 /**
@@ -86,6 +87,12 @@ export type ReserveResult =
  * fails for any reason, the `reserved` increment rolls back with it — no
  * phantom seat. Idempotent: a resend of the same `idempotencyKey` returns
  * the existing sale instead of reserving a second seat.
+ *
+ * One live reservation per buyer per event: a buyer who already holds an
+ * unexpired `pending` sale here gets that same sale back (with a fresh
+ * window) instead of a second held seat. Without this, one logged-in
+ * account could tap "comprar" over and over and hold every seat of an
+ * event hostage for 15 minutes at a time without paying a cent.
  */
 export async function reserveAndCreateSale(
   params: ReserveParams
@@ -97,6 +104,24 @@ export async function reserveAndCreateSale(
     });
     if (existing.rows.length > 0) {
       return { ok: true, sale: rowToSale(existing.rows[0]) };
+    }
+
+    const live = await tx.execute({
+      sql: `SELECT * FROM sales
+            WHERE event_id = ? AND buyer_pollar_id = ? AND status = 'pending'
+              AND datetime(expires_at_utc) >= datetime('now')
+            ORDER BY created_at DESC LIMIT 1`,
+      args: [params.eventId, params.buyerPollarId],
+    });
+    if (live.rows.length > 0) {
+      const renewed = await tx.execute({
+        sql: "UPDATE sales SET expires_at_utc = ? WHERE id = ? RETURNING *",
+        args: [
+          new Date(Date.now() + params.ttlMs).toISOString(),
+          String(live.rows[0].id),
+        ],
+      });
+      return { ok: true, sale: rowToSale(renewed.rows[0]), reused: true };
     }
 
     const reserved = await tx.execute({
