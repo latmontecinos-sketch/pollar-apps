@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Transaction } from "@libsql/client";
-import { withTransaction } from "./db.ts";
+import { db, dbReady, withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
 import { issueTicket, type Ticket } from "./tickets.ts";
 
@@ -122,6 +122,44 @@ export async function expireSale(saleId: string): Promise<{ expired: boolean }> 
     });
     return { expired: true };
   });
+}
+
+/**
+ * Expires every `pending` sale whose payment window closed, releasing its
+ * seat. Idempotent and cheap, so it runs wherever seat counts are read or
+ * spent (public page, new sale, organizer views) instead of only when the
+ * organizer happens to open their panel — otherwise an abandoned checkout
+ * could keep an event looking sold out indefinitely.
+ *
+ * `expires_at_utc` is an ISO string ("…T…Z") while `datetime('now')` is
+ * "YYYY-MM-DD HH:MM:SS": compared as raw text, 'T' > ' ' means a sale never
+ * reads as expired until the UTC date rolls over. `datetime()` normalizes
+ * both sides first.
+ */
+export async function sweepExpiredSales(
+  scope: { eventId: string } | { organizerPollarId: string }
+): Promise<number> {
+  await dbReady();
+  const stale =
+    "eventId" in scope
+      ? await db.execute({
+          sql: `SELECT id FROM sales
+                WHERE event_id = ? AND status = 'pending'
+                  AND datetime(expires_at_utc) < datetime('now')`,
+          args: [scope.eventId],
+        })
+      : await db.execute({
+          sql: `SELECT sales.id FROM sales JOIN events ON events.id = sales.event_id
+                WHERE events.organizer_pollar_id = ? AND sales.status = 'pending'
+                  AND datetime(sales.expires_at_utc) < datetime('now')`,
+          args: [scope.organizerPollarId],
+        });
+
+  let expired = 0;
+  for (const row of stale.rows) {
+    if ((await expireSale(String(row.id))).expired) expired++;
+  }
+  return expired;
 }
 
 /**

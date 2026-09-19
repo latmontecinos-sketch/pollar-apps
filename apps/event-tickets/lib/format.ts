@@ -3,7 +3,8 @@ export function formatAmount(value: string | null): string {
   if (value === null) return "—";
   const n = Number(value);
   if (Number.isNaN(n)) return value;
-  return n.toLocaleString(undefined, {
+  // Fixed locale: server and browser must render the same string (hydration).
+  return n.toLocaleString("es-BO", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -20,6 +21,61 @@ export function shortAddress(address: string) {
 }
 
 const BUSINESS_TIMEZONE = "America/La_Paz";
+
+/**
+ * SQLite's `datetime('now')` stores UTC as "YYYY-MM-DD HH:MM:SS" with no
+ * zone marker, and `new Date()` reads that shape as *local* time — 4 hours
+ * off in Bolivia. Normalizes it to real ISO UTC; anything else passes through.
+ */
+export function sqlUtcToIso(value: string): string;
+export function sqlUtcToIso(value: string | null): string | null;
+export function sqlUtcToIso(value: string | null): string | null {
+  if (value === null) return null;
+  return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? `${value.replace(" ", "T")}Z` : value;
+}
+
+/** "18 sep, 14:05" in America/La_Paz — for timestamps like a sale or a check-in. */
+export function formatTimestamp(isoUtc: string): string {
+  const date = new Date(isoUtc);
+  if (Number.isNaN(date.getTime())) return isoUtc;
+  return new Intl.DateTimeFormat("es-BO", {
+    timeZone: BUSINESS_TIMEZONE,
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+/** Bolivia is UTC-4 all year (no DST), so a wall-clock time there maps to UTC with a fixed offset. */
+const LA_PAZ_OFFSET = "-04:00";
+
+/** `<input type="datetime-local">` value, read as La Paz time (not the device's zone) -> UTC ISO. */
+export function laPazLocalToUtcIso(local: string): string {
+  const withSeconds = /T\d{2}:\d{2}$/.test(local) ? `${local}:00` : local;
+  return new Date(`${withSeconds}${LA_PAZ_OFFSET}`).toISOString();
+}
+
+/** UTC ISO -> `<input type="datetime-local">` value in La Paz time. */
+export function utcIsoToLaPazLocal(isoUtc: string): string {
+  const date = new Date(isoUtc);
+  if (Number.isNaN(date.getTime())) return "";
+  const shifted = new Date(date.getTime() - 4 * 60 * 60 * 1000);
+  return shifted.toISOString().slice(0, 16);
+}
+
+/** Buyers may type "2,50" (comma decimal, as usual in Bolivia); the API wants "2.50". */
+export function normalizeDecimalInput(value: string): string {
+  return value.trim().replace(",", ".");
+}
+
+/** How long after an event's start tickets stay on sale (late arrivals still buy at the door). */
+export const SALES_GRACE_MS = 3 * 60 * 60 * 1000;
+
+export function salesClosed(eventIsoUtc: string, now = Date.now()): boolean {
+  const start = new Date(eventIsoUtc).getTime();
+  return !Number.isNaN(start) && now > start + SALES_GRACE_MS;
+}
 
 /** Stored as UTC always; only the view converts. E.g. "vie 12 sep, 19:00" in America/La_Paz. */
 export function formatEventDateTime(isoUtc: string): string {

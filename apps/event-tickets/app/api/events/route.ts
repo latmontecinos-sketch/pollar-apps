@@ -40,6 +40,9 @@ export async function POST(request: Request) {
   if (!datetimeUtc || Number.isNaN(new Date(datetimeUtc).getTime())) {
     return badRequest("La fecha no es válida");
   }
+  if (new Date(datetimeUtc).getTime() < Date.now()) {
+    return badRequest("La fecha del evento ya pasó — elige una fecha futura");
+  }
   if (!Number.isInteger(capacity) || capacity < 1) {
     return badRequest("El cupo debe ser un entero mayor a 0");
   }

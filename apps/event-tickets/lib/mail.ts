@@ -28,15 +28,15 @@ function ticketEmailHtml(opts: {
       Pollar Pass
     </p>
     <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:20px;padding:28px 24px;text-align:center;">
-      <p style="margin:0;font-size:13px;color:#6b7280;">Tu pase para</p>
+      <p style="margin:0;font-size:13px;color:#6b7280;">Tu entrada para</p>
       <h1 style="margin:4px 0 14px;font-size:21px;line-height:1.3;color:#111827;">${name}</h1>
       <p style="margin:0 0 20px;font-size:13px;color:#6b7280;">${when} · ${place}</p>
-      <img src="${opts.qrDataUrl}" width="200" height="200" alt="QR del pase" style="display:block;margin:0 auto;border-radius:12px;" />
+      <img src="${opts.qrDataUrl}" width="200" height="200" alt="QR de la entrada" style="display:block;margin:0 auto;border-radius:12px;" />
       <p style="margin:20px 0 2px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.6px;">Código de puerta</p>
       <p style="margin:0;font-size:24px;font-weight:700;letter-spacing:3px;font-family:'SFMono-Regular',Consolas,Menlo,monospace;color:#111827;">${escapeHtml(opts.doorCode)}</p>
     </div>
     <p style="text-align:center;margin:18px 0 0;font-size:12px;color:#9ca3af;">
-      Mostrá el código QR (o decí el código de puerta) en la entrada del evento.
+      Muestra este QR en la puerta del evento. Si no se puede escanear, dicta tu código de puerta.
     </p>
   </div>
 </div>`.trim();
@@ -77,9 +77,9 @@ export async function sendTicketEmail(opts: {
       body: JSON.stringify({
         from: "Pollar Pass <onboarding@resend.dev>",
         to: [opts.to],
-        subject: `Tu pase para ${opts.eventName}`,
+        subject: `Tu entrada para ${opts.eventName}`,
         html,
-        text: `Tu pase para "${opts.eventName}" está confirmado.\n\n${formatEventDateTime(opts.eventDateTime)} · ${opts.eventPlace}\n\nCódigo del pase (QR): ${opts.ticketCode}\nCódigo de puerta: ${opts.doorCode}\n\nMostrá el código del pase en la entrada del evento.`,
+        text: `Tu entrada para "${opts.eventName}" está confirmada.\n\n${formatEventDateTime(opts.eventDateTime)} · ${opts.eventPlace}\n\nCódigo de la entrada (QR): ${opts.ticketCode}\nCódigo de puerta: ${opts.doorCode}\n\nMuestra tu QR (o dicta tu código de puerta) en la puerta del evento.`,
       }),
     });
     if (!res.ok) {

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
-import { generateReference, reserveAndCreateSale } from "@/lib/sales";
+import { salesClosed } from "@/lib/format";
+import { generateReference, reserveAndCreateSale, sweepExpiredSales } from "@/lib/sales";
 
 const SALE_TTL_MS = 15 * 60 * 1000;
 const MAX_REFERENCE_ATTEMPTS = 5;
@@ -12,6 +13,7 @@ type CreateSaleBody = { eventId?: string; idempotencyKey?: string };
 type EventRow = {
   organizer_pollar_id: string;
   price_stroops: string;
+  datetime_utc: string;
 };
 
 /**
@@ -40,14 +42,20 @@ export async function POST(request: Request) {
 
   await dbReady();
   const eventResult = await db.execute({
-    sql: "SELECT organizer_pollar_id, price_stroops FROM events WHERE id = ?",
+    sql: "SELECT organizer_pollar_id, price_stroops, datetime_utc FROM events WHERE id = ?",
     args: [eventId],
   });
   if (eventResult.rows.length === 0) {
     return NextResponse.json({ error: "Evento no encontrado" }, { status: 404 });
   }
   const event = eventResult.rows[0] as unknown as EventRow;
+  if (salesClosed(event.datetime_utc)) {
+    return NextResponse.json({ error: "La venta de este evento ya cerró" }, { status: 409 });
+  }
   const amountStroops = BigInt(event.price_stroops);
+
+  // Free up seats held by abandoned checkouts before deciding it's sold out.
+  await sweepExpiredSales({ eventId });
 
   let result: Awaited<ReturnType<typeof reserveAndCreateSale>> | null = null;
   for (let attempt = 0; attempt < MAX_REFERENCE_ATTEMPTS; attempt++) {

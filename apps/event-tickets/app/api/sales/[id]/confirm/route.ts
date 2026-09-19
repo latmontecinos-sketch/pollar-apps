@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
-import { verifyPaymentOnHorizon } from "@/lib/horizon";
+import { findPaymentHashByMemo, verifyPaymentOnHorizon } from "@/lib/horizon";
 import { settlePayment } from "@/lib/sales";
 import { sendTicketEmail } from "@/lib/mail";
 
@@ -22,11 +22,13 @@ type SaleRow = {
 };
 
 /**
- * The buyer submits the hash of the payment they just sent. We verify it
- * against Horizon (real testnet chain state, not anything the client
- * asserts) before ever marking the sale paid or issuing a ticket. A Horizon
- * failure (network, not-yet-indexed) is a 503 the client should retry —
- * never a "payment rejected".
+ * The buyer submits the hash of the payment they just sent — or no hash at
+ * all ("Ya pagué, verificar"), in which case we look the payment up on
+ * Horizon by this sale's unique memo. Either way it's verified against
+ * Horizon (real testnet chain state, not anything the client asserts)
+ * before ever marking the sale paid or issuing a ticket. A Horizon failure
+ * (network, not-yet-indexed) is a 503 the client should retry — never a
+ * "payment rejected".
  */
 export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -46,7 +48,7 @@ export async function POST(request: Request, ctx: Ctx) {
   }
   const sale = result.rows[0] as unknown as SaleRow;
   if (auth.address !== sale.buyer_pollar_id) {
-    return NextResponse.json({ error: "No tenés acceso a esta venta" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes acceso a esta venta" }, { status: 403 });
   }
 
   let body: { hash?: string; email?: string };
@@ -55,9 +57,28 @@ export async function POST(request: Request, ctx: Ctx) {
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-  const hash = body.hash?.trim() ?? "";
   const email = body.email?.trim() ?? "";
-  if (!hash) return NextResponse.json({ error: "Falta el hash de la transacción" }, { status: 400 });
+  let hash = body.hash?.trim() ?? "";
+
+  if (!hash) {
+    const found = await findPaymentHashByMemo({
+      organizerAddress: sale.organizer_pollar_id,
+      reference: sale.reference,
+    });
+    if (found === undefined) {
+      return NextResponse.json(
+        { error: "No pudimos consultar la red de Stellar. Intenta de nuevo en un momento." },
+        { status: 503 }
+      );
+    }
+    if (found === null) {
+      return NextResponse.json(
+        { error: "Todavía no vemos ningún pago para esta reserva.", code: "no_payment" },
+        { status: 404 }
+      );
+    }
+    hash = found;
+  }
 
   const check = await verifyPaymentOnHorizon({
     hash,
@@ -66,6 +87,16 @@ export async function POST(request: Request, ctx: Ctx) {
     reference: sale.reference,
   });
   if (!check.ok) {
+    if (check.code === "failed") {
+      // A failed Stellar tx applies no operations: the buyer wasn't charged.
+      return NextResponse.json(
+        {
+          error: "La red de Stellar rechazó la transacción, así que no se te cobró. Puedes intentar de nuevo.",
+          code: "tx_failed",
+        },
+        { status: 422 }
+      );
+    }
     const status = check.code === "mismatch" ? 400 : 503;
     return NextResponse.json({ error: check.error }, { status });
   }
@@ -74,7 +105,9 @@ export async function POST(request: Request, ctx: Ctx) {
   switch (settled.outcome) {
     case "paid":
     case "already_paid": {
-      if (email) {
+      // Only on the first settlement: a replay (retry, "verificar" again)
+      // must not send the buyer a second copy of the same ticket.
+      if (email && settled.outcome === "paid") {
         // Best-effort: the ticket already lives in the buyer's own account
         // either way, so a failed send doesn't get retried or block anything.
         const mailResult = await sendTicketEmail({
@@ -99,7 +132,7 @@ export async function POST(request: Request, ctx: Ctx) {
         {
           status: "unclaimed",
           error:
-            "El pago llegó, pero la reserva ya había expirado. Contactá al organizador con el hash de la transacción.",
+            "El pago llegó, pero la reserva ya había expirado. Contacta al organizador con el comprobante de la transacción.",
         },
         { status: 409 }
       );

@@ -86,7 +86,7 @@ export function requireSignedAddress(request: Request): AuthOutcome {
 
   const now = Date.now();
   if (exp < now || exp > now + MAX_TTL_MS) {
-    return fail(401, "La sesión expiró. Recargá e intentá de nuevo.");
+    return fail(401, "La sesión expiró. Recarga la página e intenta de nuevo.");
   }
 
   const message = authMessage(address, exp);

@@ -46,6 +46,45 @@ async function horizonGet<T>(path: string): Promise<T | null> {
   return (await res.json()) as T;
 }
 
+type PaymentsPage = {
+  _embedded?: {
+    records?: Array<{
+      type?: string;
+      transaction_hash?: string;
+      transaction?: { memo?: string | null; memo_type?: string | null };
+    }>;
+  };
+};
+
+/**
+ * Recovery path for a buyer who paid but whose client never delivered the
+ * hash (closed the tab, lost signal, Horizon hadn't indexed it yet): scans
+ * the organizer's most recent incoming payments for this sale's unique memo.
+ * Returns the hash to feed into `verifyPaymentOnHorizon` — the full check
+ * (amount, asset, destination) still runs there, this only finds the tx.
+ * `undefined` = Horizon unreachable (retry later), `null` = no such payment.
+ */
+export async function findPaymentHashByMemo(opts: {
+  organizerAddress: string;
+  reference: string;
+}): Promise<string | null | undefined> {
+  let page: PaymentsPage | null;
+  try {
+    page = await horizonGet<PaymentsPage>(
+      `/accounts/${encodeURIComponent(opts.organizerAddress)}/payments?order=desc&limit=200&join=transactions`
+    );
+  } catch {
+    return undefined;
+  }
+  const match = page?._embedded?.records?.find(
+    (record) =>
+      record.type === "payment" &&
+      record.transaction?.memo_type === "text" &&
+      (record.transaction.memo ?? "").trim() === opts.reference
+  );
+  return match?.transaction_hash ?? null;
+}
+
 /**
  * Confirms `hash` is a successful USDC payment to `organizerAddress` for
  * exactly `amountDecimal`, memo'd with this sale's unique `reference`

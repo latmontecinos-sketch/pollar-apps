@@ -26,8 +26,20 @@ async function loadEvent(id: string): Promise<EventRow | null> {
   return result.rows.length > 0 ? (result.rows[0] as unknown as EventRow) : null;
 }
 
-function toJson(row: EventRow) {
+/** Paid sales and door check-ins: `reserved` alone also counts unpaid, in-progress checkouts. */
+async function loadCounts(id: string): Promise<{ paid: number; checkedIn: number }> {
+  const result = await db.execute({
+    sql: `SELECT
+            (SELECT count(*) FROM sales WHERE event_id = ? AND status = 'paid') AS paid,
+            (SELECT count(*) FROM tickets WHERE event_id = ? AND used_at IS NOT NULL) AS checked_in`,
+    args: [id, id],
+  });
+  return { paid: Number(result.rows[0].paid), checkedIn: Number(result.rows[0].checked_in) };
+}
+
+function toJson(row: EventRow, counts: { paid: number; checkedIn: number }) {
   return {
+    ...counts,
     id: row.id,
     organizerPollarId: row.organizer_pollar_id,
     name: row.name,
@@ -51,7 +63,7 @@ export async function GET(request: Request, ctx: Ctx) {
   const auth = requireAddress(request, event.organizer_pollar_id);
   if (!auth.ok) return auth.response;
 
-  return NextResponse.json(toJson(event));
+  return NextResponse.json(toJson(event, await loadCounts(id)));
 }
 
 type PatchBody = {
@@ -96,5 +108,5 @@ export async function PATCH(request: Request, ctx: Ctx) {
   });
 
   const updated = await loadEvent(id);
-  return NextResponse.json(toJson(updated!));
+  return NextResponse.json(toJson(updated!, await loadCounts(id)));
 }

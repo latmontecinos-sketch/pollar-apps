@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
+import { sqlUtcToIso } from "@/lib/format";
 
 type Row = {
   id: string;
   status: string;
   amount_stroops: string;
   created_at: string;
+  expires_at_utc: string;
   event_id: string;
   event_name: string;
   datetime_utc: string;
@@ -24,7 +26,7 @@ export async function GET(request: Request) {
 
   await dbReady();
   const result = await db.execute({
-    sql: `SELECT sales.id, sales.status, sales.amount_stroops, sales.created_at,
+    sql: `SELECT sales.id, sales.status, sales.amount_stroops, sales.created_at, sales.expires_at_utc,
                  events.id AS event_id, events.name AS event_name,
                  events.datetime_utc, events.place,
                  tickets.code AS ticket_code, tickets.door_code, tickets.used_at
@@ -40,7 +42,8 @@ export async function GET(request: Request) {
     id: row.id,
     status: row.status,
     amountDecimal: stroopsToDecimal(BigInt(row.amount_stroops)),
-    createdAt: row.created_at,
+    createdAt: sqlUtcToIso(row.created_at),
+    expiresAtUtc: row.expires_at_utc,
     event: {
       id: row.event_id,
       name: row.event_name,
@@ -48,7 +51,7 @@ export async function GET(request: Request) {
       place: row.place,
     },
     ticket: row.ticket_code
-      ? { code: row.ticket_code, doorCode: row.door_code, usedAt: row.used_at }
+      ? { code: row.ticket_code, doorCode: row.door_code, usedAt: sqlUtcToIso(row.used_at) }
       : null,
   }));
 
