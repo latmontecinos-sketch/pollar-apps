@@ -15,6 +15,7 @@ type SaleRow = {
   status: string;
   amount_stroops: string;
   tx_hash: string | null;
+  refund_tx_hash: string | null;
   created_at: string;
   used_at: string | null;
 };
@@ -40,7 +41,7 @@ export async function GET(request: Request, ctx: Ctx) {
 
   const result = await db.execute({
     sql: `SELECT sales.id, sales.buyer_pollar_id, sales.status, sales.amount_stroops,
-                 sales.tx_hash, sales.created_at, tickets.used_at
+                 sales.tx_hash, sales.refund_tx_hash, sales.created_at, tickets.used_at
           FROM sales LEFT JOIN tickets ON tickets.sale_id = sales.id
           WHERE sales.event_id = ? ORDER BY sales.created_at DESC`,
     args: [id],
@@ -53,6 +54,7 @@ export async function GET(request: Request, ctx: Ctx) {
     status: row.status,
     amountDecimal: stroopsToDecimal(BigInt(row.amount_stroops)),
     txHash: row.tx_hash,
+    refundTxHash: row.refund_tx_hash,
     createdAt: sqlUtcToIso(row.created_at),
     usedAt: sqlUtcToIso(row.used_at),
   }));

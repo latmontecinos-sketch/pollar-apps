@@ -14,6 +14,7 @@ import {
 } from "@/lib/format";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { AppHeader } from "@/components/AppHeader";
+import { DoorStaffCard } from "@/components/DoorStaffCard";
 import { ShareEventCard } from "@/components/ShareEventCard";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -35,6 +36,9 @@ type EventDetails = {
   reserved: number;
   paid: number;
   checkedIn: number;
+  organizerName: string;
+  organizerContact: string;
+  doorToken: string | null;
 };
 
 type LoadState =
@@ -99,7 +103,14 @@ export default function OrganizerEventPage({
   });
 
   const [state, setState] = useState<LoadState>({ step: "loading" });
-  const [form, setForm] = useState({ name: "", description: "", place: "", datetimeLocal: "" });
+  const [form, setForm] = useState({
+    name: "",
+    description: "",
+    place: "",
+    datetimeLocal: "",
+    organizerName: "",
+    organizerContact: "",
+  });
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -127,6 +138,8 @@ export default function OrganizerEventPage({
         description: event.description,
         place: event.place,
         datetimeLocal: utcIsoToLaPazLocal(event.datetimeUtc),
+        organizerName: event.organizerName,
+        organizerContact: event.organizerContact,
       });
       setState({ step: "loaded", event });
     })();
@@ -161,6 +174,8 @@ export default function OrganizerEventPage({
           name: form.name,
           description: form.description,
           place: form.place,
+          organizerName: form.organizerName,
+          organizerContact: form.organizerContact,
           datetimeUtc: form.datetimeLocal ? laPazLocalToUtcIso(form.datetimeLocal) : undefined,
         }),
       });
@@ -267,6 +282,13 @@ export default function OrganizerEventPage({
             title="Modo puerta"
             description="Escanea las entradas el día del evento"
           />
+          {!closed && (
+            <DoorStaffCard
+              eventId={event.id}
+              eventName={event.name}
+              initialToken={event.doorToken}
+            />
+          )}
           <ActionLink
             href={`/organizador/eventos/${event.id}/ventas`}
             icon="chart"
@@ -306,6 +328,17 @@ export default function OrganizerEventPage({
                   label="Lugar"
                   value={form.place}
                   onChange={(e) => setForm((f) => ({ ...f, place: e.target.value }))}
+                />
+                <Input
+                  label="Organiza (nombre visible)"
+                  value={form.organizerName}
+                  onChange={(e) => setForm((f) => ({ ...f, organizerName: e.target.value }))}
+                />
+                <Input
+                  label="Contacto para consultas"
+                  placeholder="WhatsApp (70012345) o @instagram"
+                  value={form.organizerContact}
+                  onChange={(e) => setForm((f) => ({ ...f, organizerContact: e.target.value }))}
                 />
                 <Input
                   label="Fecha y hora (hora de Bolivia)"

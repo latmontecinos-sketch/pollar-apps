@@ -80,9 +80,31 @@ const SCHEMA_STATEMENTS = [
    )`,
 ];
 
+/**
+ * Columns added after the first deploy. SQLite has no ADD COLUMN IF NOT
+ * EXISTS, so each one is attempted and a "duplicate column" error (already
+ * applied on an earlier boot) is the expected no-op.
+ */
+const ADDED_COLUMNS = [
+  // Shown to buyers on the public page, so they know who they're paying and how to reach them.
+  `ALTER TABLE events ADD COLUMN organizer_name TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE events ADD COLUMN organizer_contact TEXT NOT NULL DEFAULT ''`,
+  // Bearer secret for the staff door link (/puerta/[id]#t=…); NULL = no staff link.
+  `ALTER TABLE events ADD COLUMN door_token TEXT`,
+  // `unclaimed` -> `refunded`: the organizer's refund payment, verified on Horizon.
+  `ALTER TABLE sales ADD COLUMN refund_tx_hash TEXT`,
+];
+
 async function runMigrations(): Promise<void> {
   for (const statement of SCHEMA_STATEMENTS) {
     await db.execute(statement);
+  }
+  for (const statement of ADDED_COLUMNS) {
+    try {
+      await db.execute(statement);
+    } catch (err) {
+      if (!(err instanceof Error && /duplicate column/i.test(err.message))) throw err;
+    }
   }
 }
 

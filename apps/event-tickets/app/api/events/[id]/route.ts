@@ -16,6 +16,9 @@ type EventRow = {
   capacity: number;
   reserved: number;
   created_at: string;
+  organizer_name: string;
+  organizer_contact: string;
+  door_token: string | null;
 };
 
 async function loadEvent(id: string): Promise<EventRow | null> {
@@ -50,6 +53,10 @@ function toJson(row: EventRow, counts: { paid: number; checkedIn: number }) {
     capacity: row.capacity,
     reserved: row.reserved,
     createdAt: row.created_at,
+    organizerName: row.organizer_name,
+    organizerContact: row.organizer_contact,
+    // Owner-only route, so the staff door secret is shown to its owner only.
+    doorToken: row.door_token,
   };
 }
 
@@ -67,6 +74,8 @@ export async function GET(request: Request, ctx: Ctx) {
 }
 
 type PatchBody = {
+  organizerName?: string;
+  organizerContact?: string;
   name?: string;
   description?: string;
   place?: string;
@@ -93,6 +102,8 @@ export async function PATCH(request: Request, ctx: Ctx) {
   const name = body.name?.trim() || event.name;
   const description = body.description?.trim() ?? event.description;
   const place = body.place?.trim() || event.place;
+  const organizerName = (body.organizerName?.trim() ?? event.organizer_name).slice(0, 80);
+  const organizerContact = (body.organizerContact?.trim() ?? event.organizer_contact).slice(0, 120);
   let datetimeUtc = event.datetime_utc;
   if (body.datetimeUtc) {
     const parsed = new Date(body.datetimeUtc);
@@ -103,8 +114,9 @@ export async function PATCH(request: Request, ctx: Ctx) {
   }
 
   await db.execute({
-    sql: "UPDATE events SET name = ?, description = ?, place = ?, datetime_utc = ? WHERE id = ?",
-    args: [name, description, place, datetimeUtc, id],
+    sql: `UPDATE events SET name = ?, description = ?, place = ?, datetime_utc = ?,
+            organizer_name = ?, organizer_contact = ? WHERE id = ?`,
+    args: [name, description, place, datetimeUtc, organizerName, organizerContact, id],
   });
 
   const updated = await loadEvent(id);

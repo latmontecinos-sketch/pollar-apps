@@ -5,6 +5,8 @@ import { decimalToStroops } from "@/lib/money";
 import { newId } from "@/lib/ids";
 
 type CreateEventBody = {
+  organizerName?: string;
+  organizerContact?: string;
   name: string;
   description?: string;
   datetimeUtc: string;
@@ -32,6 +34,8 @@ export async function POST(request: Request) {
   const name = body.name?.trim() ?? "";
   const place = body.place?.trim() ?? "";
   const description = body.description?.trim() ?? "";
+  const organizerName = (body.organizerName?.trim() ?? "").slice(0, 80);
+  const organizerContact = (body.organizerContact?.trim() ?? "").slice(0, 120);
   const datetimeUtc = body.datetimeUtc ?? "";
   const capacity = Number(body.capacity);
 
@@ -58,8 +62,9 @@ export async function POST(request: Request) {
   await dbReady();
   const id = newId();
   await db.execute({
-    sql: `INSERT INTO events (id, organizer_pollar_id, name, description, datetime_utc, place, price_stroops, capacity)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO events (id, organizer_pollar_id, name, description, datetime_utc, place,
+                              price_stroops, capacity, organizer_name, organizer_contact)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       auth.address,
@@ -69,6 +74,8 @@ export async function POST(request: Request) {
       place,
       priceStroops.toString(),
       capacity,
+      organizerName,
+      organizerContact,
     ],
   });
 

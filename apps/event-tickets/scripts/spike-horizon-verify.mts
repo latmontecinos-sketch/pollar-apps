@@ -20,7 +20,7 @@ async function main() {
   // plain transfer with no memo) -> must reject as mismatch, not crash.
   const wrongMemo = await verifyPaymentOnHorizon({
     hash: REAL_HASH,
-    organizerAddress: REAL_RECIPIENT,
+    destination: REAL_RECIPIENT,
     amountDecimal: REAL_AMOUNT,
     reference: "p_does_not_exist",
   });
@@ -29,7 +29,7 @@ async function main() {
   // 2. Real tx, correct recipient, but wrong amount -> mismatch.
   const wrongAmount = await verifyPaymentOnHorizon({
     hash: REAL_HASH,
-    organizerAddress: REAL_RECIPIENT,
+    destination: REAL_RECIPIENT,
     amountDecimal: "0.1000000",
     reference: "p_does_not_exist",
   });
@@ -38,7 +38,7 @@ async function main() {
   // 3. Real tx, wrong recipient -> mismatch (never matches someone else's payment).
   const wrongRecipient = await verifyPaymentOnHorizon({
     hash: REAL_HASH,
-    organizerAddress: "GBVBN3PX3R6DJTVJE5C65LAGFECSDHGNYEUZY6KOQWXP7G5PIMD35IOS",
+    destination: "GBVBN3PX3R6DJTVJE5C65LAGFECSDHGNYEUZY6KOQWXP7G5PIMD35IOS",
     amountDecimal: REAL_AMOUNT,
     reference: "p_does_not_exist",
   });
@@ -47,7 +47,7 @@ async function main() {
   // 4. Nonexistent hash -> not_found, never treated as "invalid" outright.
   const notFound = await verifyPaymentOnHorizon({
     hash: "00".repeat(32),
-    organizerAddress: REAL_RECIPIENT,
+    destination: REAL_RECIPIENT,
     amountDecimal: REAL_AMOUNT,
     reference: "p_does_not_exist",
   });
@@ -56,7 +56,7 @@ async function main() {
   // 5. Malformed hash -> rejected before ever calling Horizon.
   const malformed = await verifyPaymentOnHorizon({
     hash: "not-a-hash",
-    organizerAddress: REAL_RECIPIENT,
+    destination: REAL_RECIPIENT,
     amountDecimal: REAL_AMOUNT,
     reference: "p_does_not_exist",
   });

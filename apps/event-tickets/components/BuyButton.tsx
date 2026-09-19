@@ -174,6 +174,28 @@ export function BuyButton({
   useEffect(() => {
     verifyRef.current = verify;
   });
+  // Someone who already bought and lands on the link again (shared twice,
+  // back button) gets told so, instead of quietly buying a second ticket.
+  const [alreadyOwned, setAlreadyOwned] = useState(0);
+  useEffect(() => {
+    if (!address || !verified) return;
+    let cancelled = false;
+    (async () => {
+      const res = await pollarFetch(pollarRef.current.getClient(), address, "/api/sales/mine");
+      if (cancelled || !res.ok) return;
+      const data = (await res.json()) as {
+        sales: { status: string; event: { id: string } }[];
+      };
+      if (cancelled) return;
+      setAlreadyOwned(
+        data.sales.filter((sale) => sale.event.id === eventId && sale.status === "paid").length
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, verified, eventId]);
+
   const resumed = useRef(false);
   useEffect(() => {
     if (!address || !verified || resumed.current) return;
@@ -370,6 +392,19 @@ export function BuyButton({
 
   return (
     <div className="flex flex-col gap-3">
+      {alreadyOwned > 0 && (
+        <div className="flex items-start gap-2 rounded-xl border border-success-border bg-success-light p-3 text-sm leading-6">
+          <Icon name="check" size={17} className="mt-0.5 text-success" />
+          <span>
+            Ya tienes {alreadyOwned === 1 ? "una entrada" : `${alreadyOwned} entradas`} para este
+            evento.{" "}
+            <Link href="/mis-pases" className="font-semibold text-primary underline">
+              Verla en Mis entradas
+            </Link>
+            . Si compras otra, se cobra de nuevo.
+          </span>
+        </div>
+      )}
       {short ? (
         <div className="flex flex-col gap-2 rounded-2xl border border-warning-border bg-warning-light p-4 text-sm leading-6">
           <p className="flex items-start gap-2">

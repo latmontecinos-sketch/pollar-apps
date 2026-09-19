@@ -35,6 +35,8 @@ export default function CreateEventPage() {
   const [datetimeLocal, setDatetimeLocal] = useState("");
   const [price, setPrice] = useState("");
   const [capacity, setCapacity] = useState("");
+  const [organizerName, setOrganizerName] = useState("");
+  const [organizerContact, setOrganizerContact] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -87,6 +89,8 @@ export default function CreateEventPage() {
           datetimeUtc,
           priceDecimal: normalizedPrice,
           capacity: capacityNumber,
+          organizerName,
+          organizerContact,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -147,6 +151,31 @@ export default function CreateEventPage() {
               required
             />
             <Hint>Hora de Bolivia, aunque tu celular esté en otra zona horaria.</Hint>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-4 border-t border-border pt-5">
+            <legend className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
+              Quién organiza
+            </legend>
+            <Input
+              label="Tu nombre u organización"
+              value={organizerName}
+              onChange={(e) => setOrganizerName(e.target.value)}
+              placeholder="Ej: Colectivo Jazz La Paz"
+              maxLength={80}
+              required
+            />
+            <Input
+              label="Contacto para consultas (opcional)"
+              value={organizerContact}
+              onChange={(e) => setOrganizerContact(e.target.value)}
+              placeholder="WhatsApp (70012345) o @instagram"
+              maxLength={120}
+            />
+            <Hint>
+              Se muestra en la página del evento: los compradores te pagan directo, así que
+              necesitan saber quién eres y cómo escribirte.
+            </Hint>
           </fieldset>
 
           <fieldset className="flex flex-col gap-4 border-t border-border pt-5">

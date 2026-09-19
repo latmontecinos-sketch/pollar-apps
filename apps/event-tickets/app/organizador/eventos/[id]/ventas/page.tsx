@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, formatTimestamp, shortAddress } from "@/lib/format";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/Card";
+import { RefundButton } from "@/components/RefundButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { LoginButton } from "@/components/LoginButton";
@@ -16,9 +17,10 @@ import { Spinner } from "@/components/ui/Spinner";
 type Sale = {
   id: string;
   buyerPollarId: string;
-  status: "pending" | "paid" | "expired" | "unclaimed";
+  status: "pending" | "paid" | "expired" | "unclaimed" | "refunded";
   amountDecimal: string;
   txHash: string | null;
+  refundTxHash: string | null;
   createdAt: string;
   usedAt: string | null;
 };
@@ -34,6 +36,7 @@ const STATUS_STYLE: Record<Sale["status"], string> = {
   pending: "bg-primary-light text-primary",
   expired: "bg-surface text-muted",
   unclaimed: "bg-error-light text-error",
+  refunded: "bg-surface text-muted",
 };
 
 const STATUS_LABEL: Record<Sale["status"], string> = {
@@ -41,6 +44,7 @@ const STATUS_LABEL: Record<Sale["status"], string> = {
   pending: "Pagando…",
   expired: "Expirada",
   unclaimed: "Pago tardío",
+  refunded: "Devuelto",
 };
 
 export default function SalesPage({
@@ -57,22 +61,19 @@ export default function SalesPage({
   const [state, setState] = useState<LoadState>({ step: "loading" });
   const address = user?.address;
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!address) return;
-    let cancelled = false;
-    (async () => {
-      const client = pollarRef.current.getClient();
-      const res = await pollarFetch(client, address, `/api/events/${id}/sales`);
-      if (cancelled) return;
-      if (res.status === 404) return setState({ step: "not_found" });
-      if (res.status === 403 || res.status === 401) return setState({ step: "forbidden" });
-      const data = (await res.json()) as { sales: Sale[]; paidTotalDecimal: string; checkedIn: number };
-      setState({ step: "loaded", ...data });
-    })();
-    return () => {
-      cancelled = true;
-    };
+    const client = pollarRef.current.getClient();
+    const res = await pollarFetch(client, address, `/api/events/${id}/sales`);
+    if (res.status === 404) return setState({ step: "not_found" });
+    if (res.status === 403 || res.status === 401) return setState({ step: "forbidden" });
+    const data = (await res.json()) as { sales: Sale[]; paidTotalDecimal: string; checkedIn: number };
+    setState({ step: "loaded", ...data });
   }, [address, id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   if (authLoading) return null;
 
@@ -95,7 +96,7 @@ export default function SalesPage({
     state.step === "loaded"
       ? state.sales.reduce<Record<Sale["status"], number>>(
           (acc, s) => ({ ...acc, [s.status]: acc[s.status] + 1 }),
-          { paid: 0, pending: 0, expired: 0, unclaimed: 0 }
+          { paid: 0, pending: 0, expired: 0, unclaimed: 0, refunded: 0 }
         )
       : null;
 
@@ -144,7 +145,7 @@ export default function SalesPage({
                   {counts.unclaimed} {counts.unclaimed === 1 ? "pago tardío" : "pagos tardíos"}.
                 </span>{" "}
                 Alguien pagó después de que su reserva expiró, así que no recibió entrada. Tienes su
-                pago: devuélveselo o contáctalo.
+                pago: devuélveselo con el botón “Devolver pago” de la venta.
               </p>
             </div>
           )}
@@ -184,6 +185,9 @@ export default function SalesPage({
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[sale.status]}`}>
                       {STATUS_LABEL[sale.status]}
                     </span>
+                    {sale.status === "unclaimed" && (
+                      <RefundButton saleId={sale.id} onRefunded={() => void load()} />
+                    )}
                     {sale.usedAt && (
                       <span className="flex items-center gap-1 text-xs text-success">
                         <Icon name="check" size={12} /> Ingresó

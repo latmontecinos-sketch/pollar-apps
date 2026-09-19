@@ -62,8 +62,8 @@ export async function POST(request: Request, ctx: Ctx) {
 
   if (!hash) {
     const found = await findPaymentHashByMemo({
-      organizerAddress: sale.organizer_pollar_id,
-      reference: sale.reference,
+      account: sale.organizer_pollar_id,
+      memo: sale.reference,
     });
     if (found === undefined) {
       return NextResponse.json(
@@ -82,7 +82,7 @@ export async function POST(request: Request, ctx: Ctx) {
 
   const check = await verifyPaymentOnHorizon({
     hash,
-    organizerAddress: sale.organizer_pollar_id,
+    destination: sale.organizer_pollar_id,
     amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
     reference: sale.reference,
   });

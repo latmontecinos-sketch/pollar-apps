@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Keypair } from "@stellar/stellar-base";
 import { NextResponse } from "next/server";
 import { authMessage, POLLAR_PROOF_HEADER } from "./auth-message.ts";
@@ -95,6 +95,46 @@ export function requireSignedAddress(request: Request): AuthOutcome {
   }
 
   return { ok: true, address };
+}
+
+export const DOOR_TOKEN_HEADER = "x-door-token";
+
+/** 144-bit bearer secret for the staff door link. */
+export function newDoorToken(): string {
+  return randomBytes(18).toString("base64url");
+}
+
+function sameSecret(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+/**
+ * Door check-in access: either the organizer's own signed session, or the
+ * event's staff door token (what the organizer hands to whoever runs the
+ * entrance). The token only ever unlocks check-in for *this* event — never
+ * the panel, the sales list or edits — and the organizer can revoke it.
+ */
+export function requireDoorAccess(
+  request: Request,
+  event: { organizer_pollar_id: string; door_token: string | null }
+): { ok: true; actor: string } | { ok: false; response: NextResponse } {
+  const token = request.headers.get(DOOR_TOKEN_HEADER)?.trim();
+  if (token) {
+    if (event.door_token && sameSecret(token, event.door_token)) {
+      return { ok: true, actor: "staff" };
+    }
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Este link de puerta ya no es válido. Pide uno nuevo al organizador." },
+        { status: 403 }
+      ),
+    };
+  }
+  const got = requireAddress(request, event.organizer_pollar_id);
+  return got.ok ? { ok: true, actor: got.address } : got;
 }
 
 /** Like {@link requireSignedAddress}, but also enforces the signer matches `expected` (ownership checks). */

@@ -3,6 +3,7 @@ import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { sqlUtcToIso } from "@/lib/format";
+import { sweepExpiredSales } from "@/lib/sales";
 
 type Row = {
   id: string;
@@ -10,6 +11,8 @@ type Row = {
   amount_stroops: string;
   created_at: string;
   expires_at_utc: string;
+  tx_hash: string | null;
+  refund_tx_hash: string | null;
   event_id: string;
   event_name: string;
   datetime_utc: string;
@@ -25,8 +28,10 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.response;
 
   await dbReady();
+  await sweepExpiredSales({ buyerPollarId: auth.address });
   const result = await db.execute({
     sql: `SELECT sales.id, sales.status, sales.amount_stroops, sales.created_at, sales.expires_at_utc,
+                 sales.tx_hash, sales.refund_tx_hash,
                  events.id AS event_id, events.name AS event_name,
                  events.datetime_utc, events.place,
                  tickets.code AS ticket_code, tickets.door_code, tickets.used_at
@@ -44,6 +49,8 @@ export async function GET(request: Request) {
     amountDecimal: stroopsToDecimal(BigInt(row.amount_stroops)),
     createdAt: sqlUtcToIso(row.created_at),
     expiresAtUtc: row.expires_at_utc,
+    txHash: row.tx_hash,
+    refundTxHash: row.refund_tx_hash,
     event: {
       id: row.event_id,
       name: row.event_name,

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
-import { formatAmount, formatEventDateTime, salesClosed } from "@/lib/format";
+import { contactHref, formatAmount, formatEventDateTime, salesClosed } from "@/lib/format";
 import { sweepExpiredSales } from "@/lib/sales";
 import { AppHeader } from "@/components/AppHeader";
 import { BuyButton } from "@/components/BuyButton";
@@ -20,6 +20,8 @@ type EventRow = {
   price_stroops: string;
   capacity: number;
   reserved: number;
+  organizer_name: string;
+  organizer_contact: string;
 };
 
 /** Shared by generateMetadata and the page (one DB read per request). */
@@ -28,7 +30,9 @@ const loadPublicEvent = cache(async (id: string): Promise<EventRow | null> => {
   // Release seats held by abandoned checkouts, so "cupos disponibles" is honest.
   await sweepExpiredSales({ eventId: id });
   const result = await db.execute({
-    sql: "SELECT id, name, description, datetime_utc, place, price_stroops, capacity, reserved FROM events WHERE id = ?",
+    sql: `SELECT id, name, description, datetime_utc, place, price_stroops, capacity, reserved,
+                 organizer_name, organizer_contact
+          FROM events WHERE id = ?`,
     args: [id],
   });
   return result.rows.length > 0 ? (result.rows[0] as unknown as EventRow) : null;
@@ -48,10 +52,25 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
   };
 }
 
+function OrganizerContact({ contact }: { contact: string }) {
+  const href = contactHref(contact);
+  if (!href) return <span className="truncate text-xs text-muted">Contacto: {contact}</span>;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex w-fit items-center gap-1 truncate text-xs font-semibold text-primary underline"
+    >
+      Contactar: {contact} <Icon name="external" size={11} />
+    </a>
+  );
+}
+
 /**
  * Public event page: no login, link-only. Anyone with the URL sees name,
- * date, place, price and remaining seats — never the organizer's identity
- * beyond what's already public on-chain.
+ * date, place, price, remaining seats and whatever name/contact the
+ * organizer chose to publish — never their wallet or email.
  */
 export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) {
   const { id } = await params;
@@ -94,6 +113,21 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
             </span>
             <span className="font-medium">{event.place}</span>
           </li>
+          {(event.organizer_name || event.organizer_contact) && (
+            <li className="flex items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface text-primary">
+                <Icon name="users" size={18} />
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="font-medium">
+                  Organiza: {event.organizer_name || "el organizador"}
+                </span>
+                {event.organizer_contact && (
+                  <OrganizerContact contact={event.organizer_contact} />
+                )}
+              </span>
+            </li>
+          )}
         </ul>
 
         {closed ? (

@@ -22,6 +22,7 @@ type HorizonTx = {
 type HorizonOp = {
   type?: string;
   to?: string;
+  from?: string;
   amount?: string;
   asset_type?: string;
   asset_code?: string;
@@ -57,21 +58,21 @@ type PaymentsPage = {
 };
 
 /**
- * Recovery path for a buyer who paid but whose client never delivered the
- * hash (closed the tab, lost signal, Horizon hadn't indexed it yet): scans
- * the organizer's most recent incoming payments for this sale's unique memo.
- * Returns the hash to feed into `verifyPaymentOnHorizon` — the full check
- * (amount, asset, destination) still runs there, this only finds the tx.
- * `undefined` = Horizon unreachable (retry later), `null` = no such payment.
+ * Recovery path when the client never delivered a hash (closed the tab,
+ * lost signal, Horizon hadn't indexed it yet): scans `account`'s most recent
+ * payments (the organizer's for a sale, the buyer's for a refund) for the
+ * unique `memo`. Returns the hash to feed into `verifyPaymentOnHorizon` —
+ * the full check (amount, asset, parties) still runs there, this only finds
+ * the tx. `undefined` = Horizon unreachable (retry later), `null` = none.
  */
 export async function findPaymentHashByMemo(opts: {
-  organizerAddress: string;
-  reference: string;
+  account: string;
+  memo: string;
 }): Promise<string | null | undefined> {
   let page: PaymentsPage | null;
   try {
     page = await horizonGet<PaymentsPage>(
-      `/accounts/${encodeURIComponent(opts.organizerAddress)}/payments?order=desc&limit=200&join=transactions`
+      `/accounts/${encodeURIComponent(opts.account)}/payments?order=desc&limit=200&join=transactions`
     );
   } catch {
     return undefined;
@@ -80,14 +81,14 @@ export async function findPaymentHashByMemo(opts: {
     (record) =>
       record.type === "payment" &&
       record.transaction?.memo_type === "text" &&
-      (record.transaction.memo ?? "").trim() === opts.reference
+      (record.transaction.memo ?? "").trim() === opts.memo
   );
   return match?.transaction_hash ?? null;
 }
 
 /**
- * Confirms `hash` is a successful USDC payment to `organizerAddress` for
- * exactly `amountDecimal`, memo'd with this sale's unique `reference`
+ * Confirms `hash` is a successful USDC payment to `destination` (and, when
+ * given, from `source`) for exactly `amountDecimal`, memo'd with `reference`
  * (Plan A: reference in memo, cross-checked here against the on-chain
  * operation — Plan C). Network/Horizon failures come back as "not_found",
  * never as a silent false — the caller must keep the sale pending, not
@@ -95,7 +96,8 @@ export async function findPaymentHashByMemo(opts: {
  */
 export async function verifyPaymentOnHorizon(opts: {
   hash: string;
-  organizerAddress: string;
+  destination: string;
+  source?: string;
   amountDecimal: string;
   reference: string;
 }): Promise<HorizonCheck> {
@@ -137,7 +139,8 @@ export async function verifyPaymentOnHorizon(opts: {
   const records = ops?._embedded?.records ?? [];
   const payment = records.find((op) => {
     if (op.type !== "payment") return false;
-    if (op.to !== opts.organizerAddress) return false;
+    if (op.to !== opts.destination) return false;
+    if (opts.source && op.from !== opts.source) return false;
     if (!isUsdcPayment(op)) return false;
     if (normalizeAmount(op.amount ?? "") !== normalizeAmount(opts.amountDecimal)) {
       return false;
@@ -148,7 +151,7 @@ export async function verifyPaymentOnHorizon(opts: {
   if (!payment) {
     return {
       ok: false,
-      error: "El pago en Horizon no coincide (USDC al organizador, monto y memo)",
+      error: "El pago en Horizon no coincide (destinatario, USDC, monto y memo)",
       code: "mismatch",
     };
   }

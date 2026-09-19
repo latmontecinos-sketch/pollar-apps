@@ -15,6 +15,11 @@ Tablero completo (arquitectura, flujos y capturas), editable en Figma/FigJam:
 | Estados de una venta | Ciclo de vida de una venta: `pending` → `paid` / `expired` / `unclaimed` |
 | Capturas reales de la app | Pantallas reales de producción |
 
+> Nota: el tablero refleja los tres flujos centrales (compra, verificación y
+> puerta). Lo agregado después — guía "Cómo funciona", link de puerta para el
+> personal, devolución de pagos tardíos y verificación por memo — está descrito
+> en el [README](../README.md) y todavía no en el tablero.
+
 ## Capturas reales (producción)
 
 ![Home](screenshots/home.png)

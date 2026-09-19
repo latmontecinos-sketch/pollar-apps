@@ -13,7 +13,32 @@ export function generateReference(): string {
   return `p${randomBytes(5).toString("hex")}`;
 }
 
-export type SaleStatus = "pending" | "paid" | "expired" | "unclaimed";
+export type SaleStatus = "pending" | "paid" | "expired" | "unclaimed" | "refunded";
+
+/**
+ * Memo of the organizer's refund payment for an `unclaimed` sale. Distinct
+ * from the sale's own memo, so a refund can never be mistaken for (or
+ * replayed as) the purchase payment. 15 chars, well under the 28-byte limit.
+ */
+export function refundMemo(reference: string): string {
+  return `dev-${reference}`;
+}
+
+/**
+ * `unclaimed` -> `refunded`, once the refund payment is verified on Horizon.
+ * Only from `unclaimed`: a paid ticket is never silently cancelled here.
+ */
+export async function markRefunded(
+  saleId: string,
+  refundTxHash: string
+): Promise<{ refunded: boolean }> {
+  await dbReady();
+  const updated = await db.execute({
+    sql: "UPDATE sales SET status = 'refunded', refund_tx_hash = ? WHERE id = ? AND status = 'unclaimed' RETURNING id",
+    args: [refundTxHash, saleId],
+  });
+  return { refunded: updated.rows.length > 0 };
+}
 
 export type Sale = {
   id: string;
@@ -137,23 +162,21 @@ export async function expireSale(saleId: string): Promise<{ expired: boolean }> 
  * both sides first.
  */
 export async function sweepExpiredSales(
-  scope: { eventId: string } | { organizerPollarId: string }
+  scope: { eventId: string } | { organizerPollarId: string } | { buyerPollarId: string }
 ): Promise<number> {
   await dbReady();
-  const stale =
+  const [filter, value] =
     "eventId" in scope
-      ? await db.execute({
-          sql: `SELECT id FROM sales
-                WHERE event_id = ? AND status = 'pending'
-                  AND datetime(expires_at_utc) < datetime('now')`,
-          args: [scope.eventId],
-        })
-      : await db.execute({
-          sql: `SELECT sales.id FROM sales JOIN events ON events.id = sales.event_id
-                WHERE events.organizer_pollar_id = ? AND sales.status = 'pending'
-                  AND datetime(sales.expires_at_utc) < datetime('now')`,
-          args: [scope.organizerPollarId],
-        });
+      ? ["sales.event_id = ?", scope.eventId]
+      : "buyerPollarId" in scope
+        ? ["sales.buyer_pollar_id = ?", scope.buyerPollarId]
+        : ["events.organizer_pollar_id = ?", scope.organizerPollarId];
+  const stale = await db.execute({
+    sql: `SELECT sales.id FROM sales JOIN events ON events.id = sales.event_id
+          WHERE ${filter} AND sales.status = 'pending'
+            AND datetime(sales.expires_at_utc) < datetime('now')`,
+    args: [value],
+  });
 
   let expired = 0;
   for (const row of stale.rows) {

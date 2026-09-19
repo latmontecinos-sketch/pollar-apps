@@ -69,6 +69,23 @@ export function normalizeDecimalInput(value: string): string {
   return value.trim().replace(",", ".");
 }
 
+/**
+ * Organizer contact as typed ("+591 70012345", "@mi_evento", a URL) -> a
+ * link buyers can tap: WhatsApp for phone numbers (how people reach an
+ * organizer in Bolivia), Instagram for @handles. Null when it's neither.
+ */
+export function contactHref(contact: string): string | null {
+  const value = contact.trim();
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^@[\w.]{2,30}$/.test(value)) return `https://instagram.com/${value.slice(1)}`;
+  const digits = value.replace(/[\s()+-]/g, "");
+  if (/^\d{7,15}$/.test(digits)) {
+    // Bare 8-digit Bolivian mobile numbers get the country code WhatsApp needs.
+    return `https://wa.me/${digits.length === 8 ? `591${digits}` : digits}`;
+  }
+  return null;
+}
+
 /** How long after an event's start tickets stay on sale (late arrivals still buy at the door). */
 export const SALES_GRACE_MS = 3 * 60 * 60 * 1000;
 

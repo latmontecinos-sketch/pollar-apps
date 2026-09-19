@@ -35,6 +35,7 @@ Deploying to a new domain (Vercel or otherwise) also needs that domain added on 
 | `/mis-eventos` | organizer | Every event they organize, with sold count, linking to its panel |
 | `/organizador/eventos/[id]` | owning organizer | Share the link (copy / WhatsApp / QR for posters), sold vs. in-progress vs. checked-in, edit event |
 | `/organizador/eventos/[id]/puerta` | owning organizer | Door check-in: camera scan or typed short code, big green/red result that clears itself, live check-in counter |
+| `/puerta/[id]` | door staff, no login | The same check-in screen, opened from the staff link the organizer shares (`#t=<token>`) |
 | `/organizador/eventos/[id]/ventas` | owning organizer | Revenue, per-sale detail with Stellar receipt, who already got in |
 
 ## How payment correlation works (no client webhooks)
@@ -68,9 +69,17 @@ pnpm spike:door        # atomic door check-in, both code kinds — 8/8
 pnpm spike:horizon-verify  # payment verification against a real existing tx — 5/5
 ```
 
+## Door staff, without sharing an account
+
+The organizer can hand the entrance to someone else: the panel mints a 144-bit token (`POST /api/events/[id]/door-link`) and hands out `/puerta/[id]#t=<token>`. The token travels in the URL **fragment**, so it never reaches server logs or a `Referer`; it unlocks check-in for that one event and nothing else (no panel, no sales, no edits), and the organizer can replace or revoke it at any time. Server-side it's a constant-time comparison against the event's stored token.
+
+## Refunding a late payment
+
+A payment that lands after its reservation expired becomes `unclaimed`: no ticket, and the organizer is holding money that isn't theirs. From **Ventas** they send it back from their own Pollar wallet with the sale's refund memo; `POST /api/sales/[id]/refund` verifies that payment on Horizon (organizer → buyer, same amount, that memo) before moving the sale to `refunded`, and — like the purchase — it can be recovered by memo if the hash is lost, never paid twice.
+
 ## Known limitation
 
-Door validation trusts the *organizer's own session* — there's no delegation to third-party door staff. For a small event this is usually one phone anyway; multi-staff delegation would need its own access model and is out of scope here.
+There's no automatic refund of a *paid* ticket (a cancelled event, a buyer who can't come): the organizer has to return it by hand. Only the late-payment case above is wired into the app.
 
 ## Stack
 
@@ -91,4 +100,4 @@ Door validation trusts the *organizer's own session* — there's no delegation t
 - [x] Organizer sees their sales (revenue, status, per-sale detail)
 - [x] Runs from a fresh clone with `pnpm install && pnpm dev` plus only the Pollar API key in `.env`
 - [x] Deployed to Vercel — https://pollarpass.vercel.app
-- [ ] Demo video with real Bolivian testers
+- [ ] Demo video with real Bolivian testers — shooting script ready in [docs/GUION-DEMO.md](docs/GUION-DEMO.md)

@@ -14,13 +14,15 @@ import { Icon } from "@/components/ui/Icon";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { Spinner } from "@/components/ui/Spinner";
+import { SaveTicketButton } from "@/components/SaveTicketButton";
 import { TicketQr } from "@/components/TicketQr";
 
 type Sale = {
   id: string;
-  status: "pending" | "paid" | "expired" | "unclaimed";
+  status: "pending" | "paid" | "expired" | "unclaimed" | "refunded";
   amountDecimal: string;
   expiresAtUtc: string;
+  refundTxHash: string | null;
   event: { id: string; name: string; datetimeUtc: string; place: string };
   ticket: { code: string; doorCode: string | null; usedAt: string | null } | null;
 };
@@ -172,9 +174,18 @@ export default function MisPasesPage() {
                       </p>
                     </>
                   )}
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center gap-2">
                     <span className="text-[11px] uppercase tracking-wide text-muted">Código de puerta</span>
                     <span className="font-mono text-lg font-bold tracking-[0.2em]">{sale.ticket.doorCode}</span>
+                    {!sale.ticket.usedAt && !past && sale.ticket.doorCode && (
+                      <SaveTicketButton
+                        code={sale.ticket.code}
+                        doorCode={sale.ticket.doorCode}
+                        eventName={sale.event.name}
+                        eventDateTime={sale.event.datetimeUtc}
+                        eventPlace={sale.event.place}
+                      />
+                    )}
                   </div>
                 </div>
               ) : (
@@ -195,6 +206,27 @@ export default function MisPasesPage() {
                     <p className="flex items-start gap-2 text-muted">
                       <Icon name="x" size={17} className="mt-0.5" />
                       <span>Reserva vencida: no se completó el pago y no se te cobró nada.</span>
+                    </p>
+                  )}
+                  {sale.status === "refunded" && (
+                    <p className="flex items-start gap-2 text-muted">
+                      <Icon name="check" size={17} className="mt-0.5 text-success" />
+                      <span>
+                        El organizador te devolvió el pago.
+                        {sale.refundTxHash && (
+                          <>
+                            {" "}
+                            <a
+                              href={`https://stellar.expert/explorer/testnet/tx/${sale.refundTxHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-semibold text-primary underline"
+                            >
+                              Ver comprobante
+                            </a>
+                          </>
+                        )}
+                      </span>
                     </p>
                   )}
                   {sale.status === "unclaimed" && (
