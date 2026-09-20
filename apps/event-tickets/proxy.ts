@@ -25,6 +25,12 @@ function newNonce(): string {
 
 /** Where the Pollar SDK and the Stellar network live — everything else is same-origin. */
 const POLLAR_API = "https://sdk.api.pollar.xyz";
+/**
+ * The SDK's login modal pulls its logo from the marketing site, and that
+ * URL 301s from the apex to www — CSP checks the redirect target too, so
+ * both have to be here or the modal shows a broken image.
+ */
+const POLLAR_ASSETS = "https://pollar.xyz https://*.pollar.xyz";
 const HORIZON = "https://horizon-testnet.stellar.org https://horizon.stellar.org";
 const ALBEDO = "https://albedo.link";
 
@@ -45,7 +51,7 @@ function policy(nonce: string): string {
     // neither can be nonced, and a style injection can't sign or exfiltrate.
     "style-src 'self' 'unsafe-inline'",
     // data: for the QR the buyer sees in-app, blob: for the camera frames.
-    "img-src 'self' data: blob:",
+    `img-src 'self' data: blob: ${POLLAR_ASSETS}`,
     "font-src 'self'",
     `connect-src 'self' ${POLLAR_API} ${HORIZON} ${ALBEDO}`,
     // qr-scanner runs its decoder in a worker built from a blob.
