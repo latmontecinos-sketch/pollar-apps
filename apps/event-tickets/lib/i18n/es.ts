@@ -237,6 +237,9 @@ export const es = {
       privacyQ: "¿Qué datos míos ve el organizador?",
       privacyA:
         "Solo tu dirección de Pollar (una cadena que empieza con G…) y el comprobante del pago. Tu correo no se muestra; solo se usa para mandarte tu entrada.",
+      dataQ: "¿Qué guarda la app y por cuánto tiempo?",
+      dataA:
+        "El evento, la venta y el código de tu entrada quedan mientras exista el evento. Tu correo es lo único personal que guardamos, y se borra solo 30 días después del evento: para entonces ya cumplió sus dos únicas funciones, mandarte la entrada y avisarte que te dejaron entrar.",
       feesQ: "¿Quién paga las comisiones de red?",
       feesA:
         "Las comisiones de Stellar son fracciones de centavo y salen de tu propia cuenta, en XLM. Una cuenta recién creada en la red de prueba puede no tener XLM todavía: si tu pago falla por eso, pide XLM de prueba gratis en friendbot.stellar.org con tu dirección y vuelve a intentar.",

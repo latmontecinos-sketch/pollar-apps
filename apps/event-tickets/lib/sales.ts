@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Transaction } from "@libsql/client";
 import { db, dbReady, withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
+import { purgeStaleBuyerEmails } from "./retention.ts";
 import { issueTicket, type Ticket } from "./tickets.ts";
 
 /**
@@ -229,6 +230,15 @@ export async function sweepExpiredSales(
   for (const row of stale.rows) {
     if ((await expireSale(String(row.id))).expired) expired++;
   }
+
+  // Housekeeping rides along with housekeeping. This is the one function
+  // every path already calls, and forgetting old buyers' emails needs a
+  // heartbeat, not a cron we'd have to remember to set up. One in a
+  // hundred sweeps is often enough for a 30-day window.
+  if (Math.floor(Math.random() * 100) === 0) {
+    await purgeStaleBuyerEmails().catch(() => {});
+  }
+
   return expired;
 }
 

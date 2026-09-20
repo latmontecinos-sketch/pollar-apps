@@ -233,6 +233,9 @@ export const fr: Dict = {
       privacyQ: "Quelles données l'organisateur voit-il sur moi ?",
       privacyA:
         "Uniquement votre adresse Pollar (une suite de caractères qui commence par G…) et le justificatif du paiement. Votre e-mail n'est jamais affiché ; il sert seulement à vous envoyer votre billet.",
+      dataQ: "Que conserve l'application, et pendant combien de temps ?",
+      dataA:
+        "L'événement, la vente et le code de votre billet restent tant que l'événement existe. Votre e-mail est la seule donnée personnelle que nous gardons, et il s'efface tout seul 30 jours après l'événement : il a alors rempli ses deux seules fonctions, vous envoyer votre billet et vous confirmer votre entrée.",
       feesQ: "Qui paie les frais de réseau ?",
       feesA:
         "Les frais Stellar représentent des fractions de centime et sortent de votre propre compte, en XLM. Un compte tout neuf sur le réseau de test peut n'avoir aucun XLM : si un paiement échoue pour cette raison, demandez des XLM de test gratuits sur friendbot.stellar.org avec votre adresse, puis réessayez.",

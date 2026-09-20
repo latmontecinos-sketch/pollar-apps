@@ -26,6 +26,7 @@ const FAQ_IDS = [
   "dos-veces",
   "reembolso",
   "privacidad",
+  "datos",
   "comisiones",
   "puerta-staff",
 ] as const;
@@ -114,6 +115,7 @@ function faqEntries(t: Dict): { id: FaqId; q: string; a: React.ReactNode }[] {
     { id: "dos-veces", q: faq.screenshotQ, a: faq.screenshotA },
     { id: "reembolso", q: faq.refundQ, a: faq.refundA },
     { id: "privacidad", q: faq.privacyQ, a: faq.privacyA },
+    { id: "datos", q: faq.dataQ, a: faq.dataA },
     {
       id: "comisiones",
       q: faq.feesQ,

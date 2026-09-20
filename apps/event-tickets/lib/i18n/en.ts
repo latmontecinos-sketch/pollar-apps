@@ -233,6 +233,9 @@ export const en: Dict = {
       privacyQ: "What does the organizer see about me?",
       privacyA:
         "Only your Pollar address (a string starting with G…) and the payment receipt. Your email is never shown; it's only used to send you your ticket.",
+      dataQ: "What does the app store, and for how long?",
+      dataA:
+        "The event, the sale and your ticket code stay for as long as the event does. Your email is the only personal thing we keep, and it deletes itself 30 days after the event — by then it has done the only two jobs it had: sending you your ticket and telling you the door let you in.",
       feesQ: "Who pays the network fees?",
       feesA:
         "Stellar fees are fractions of a cent and come out of your own account, in XLM. A brand-new account on the test network may hold no XLM yet: if a payment fails for that reason, get free test XLM at friendbot.stellar.org with your address and try again.",

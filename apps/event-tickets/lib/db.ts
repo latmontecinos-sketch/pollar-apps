@@ -181,7 +181,17 @@ export function dbReady(): Promise<void> {
       )
     );
   }
-  return (globalDb.__eventTicketsDbReady ??= runMigrations());
+  // A rejected promise cached here would be permanent: every later request
+  // in this process would re-await the same failure and serve 500s until
+  // someone redeployed. Dropping it on failure means the next request
+  // retries — a blip stays a blip.
+  if (!globalDb.__eventTicketsDbReady) {
+    globalDb.__eventTicketsDbReady = runMigrations().catch((err: unknown) => {
+      globalDb.__eventTicketsDbReady = undefined;
+      throw err;
+    });
+  }
+  return globalDb.__eventTicketsDbReady;
 }
 
 function isRetryable(err: unknown): boolean {
