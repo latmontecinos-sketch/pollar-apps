@@ -10,7 +10,8 @@
     "db:probe": "node --env-file-if-exists=.env scripts/db-probe.mjs",
     "spike:capacity": "node --env-file-if-exists=.env scripts/spike-capacity.mts",
     "spike:door": "node --env-file-if-exists=.env scripts/spike-door.mts",
-    "spike:horizon-verify": "node --env-file-if-exists=.env scripts/spike-horizon-verify.mts"
+    "spike:horizon-verify": "node --env-file-if-exists=.env scripts/spike-horizon-verify.mts",
+    "test": "node --test tests/*.test.mts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

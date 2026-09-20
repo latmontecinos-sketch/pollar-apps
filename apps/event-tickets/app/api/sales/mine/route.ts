@@ -17,6 +17,7 @@ type Row = {
   event_name: string;
   datetime_utc: string;
   place: string;
+  ticket_type_name: string | null;
   ticket_code: string | null;
   door_code: string | null;
   used_at: string | null;
@@ -33,10 +34,11 @@ export async function GET(request: Request) {
     sql: `SELECT sales.id, sales.status, sales.amount_stroops, sales.created_at, sales.expires_at_utc,
                  sales.tx_hash, sales.refund_tx_hash,
                  events.id AS event_id, events.name AS event_name,
-                 events.datetime_utc, events.place,
+                 events.datetime_utc, events.place, ticket_types.name AS ticket_type_name,
                  tickets.code AS ticket_code, tickets.door_code, tickets.used_at
           FROM sales
           JOIN events ON events.id = sales.event_id
+          LEFT JOIN ticket_types ON ticket_types.id = sales.ticket_type_id
           LEFT JOIN tickets ON tickets.sale_id = sales.id
           WHERE sales.buyer_pollar_id = ?
           ORDER BY sales.created_at DESC`,
@@ -57,6 +59,7 @@ export async function GET(request: Request) {
       datetimeUtc: row.datetime_utc,
       place: row.place,
     },
+    ticketTypeName: row.ticket_type_name,
     ticket: row.ticket_code
       ? { code: row.ticket_code, doorCode: row.door_code, usedAt: sqlUtcToIso(row.used_at) }
       : null,

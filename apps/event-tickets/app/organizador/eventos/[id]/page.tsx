@@ -40,6 +40,17 @@ type EventDetails = {
   organizerName: string;
   organizerContact: string;
   doorToken: string | null;
+  ticketTypes: TicketTypeView[];
+};
+
+type TicketTypeView = {
+  id: string;
+  name: string;
+  priceDecimal: string;
+  capacity: number;
+  reserved: number;
+  paid: number;
+  checkedIn: number;
   capacityIncreasesLeft: number;
 };
 
@@ -118,7 +129,8 @@ export default function OrganizerEventPage({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [newCapacity, setNewCapacity] = useState("");
+  /** Keyed by tier id: each tier extends its own capacity. */
+  const [newCapacity, setNewCapacity] = useState<Record<string, string>>({});
   const [capacityBusy, setCapacityBusy] = useState(false);
   const [capacityError, setCapacityError] = useState<string | null>(null);
 
@@ -160,7 +172,7 @@ export default function OrganizerEventPage({
   if (!user) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.panel.title} back={{ href: "/", label: t.common.home }} />
+        <AppHeader title={t.panel.title} back={{ href: "/app", label: t.common.home }} />
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.panel.loginNote}</p>
@@ -204,23 +216,23 @@ export default function OrganizerEventPage({
     }
   }
 
-  async function extendCapacity(current: number) {
+  async function extendCapacity(type: TicketTypeView) {
     setCapacityError(null);
-    const wanted = Number(newCapacity);
-    if (!Number.isInteger(wanted) || wanted <= current) {
+    const wanted = Number(newCapacity[type.id] ?? "");
+    if (!Number.isInteger(wanted) || wanted <= type.capacity) {
       setCapacityError(t.capacity.errorLower);
       return;
     }
     setCapacityBusy(true);
     try {
-      const res = await patch({ capacity: wanted });
+      const res = await patch({ ticketTypeId: type.id, capacity: wanted });
       const data = (await res.json()) as EventDetails & { error?: string; code?: string };
       if (!res.ok) {
         setCapacityError(data.code === "capacity_limit" ? t.capacity.errorLimit : (data.error ?? t.panel.saveError));
         return;
       }
       setState({ step: "loaded", event: data });
-      setNewCapacity("");
+      setNewCapacity((current) => ({ ...current, [type.id]: "" }));
     } catch (err) {
       setCapacityError(err instanceof Error ? err.message : t.panel.saveError);
     } finally {
@@ -334,47 +346,65 @@ export default function OrganizerEventPage({
             description={t.panel.salesTileBody}
           />
 
-          {!closed && (
-            <Card className="flex flex-col gap-3">
-              <h2 className="flex items-center gap-2 font-bold">
-                <Icon name="plus" size={18} className="text-primary" />
-                {t.capacity.title}
-              </h2>
-              {event.capacityIncreasesLeft > 0 ? (
-                <>
-                  <p className="text-sm leading-6 text-muted">
-                    {t.capacity.body(event.capacityIncreasesLeft)}
-                  </p>
-                  <div className="flex items-end gap-2">
-                    <Input
-                      label={t.capacity.field}
-                      type="number"
-                      inputMode="numeric"
-                      min={event.capacity + 1}
-                      placeholder={String(event.capacity + 10)}
-                      value={newCapacity}
-                      onChange={(e) => setNewCapacity(e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button
-                      loading={capacityBusy}
-                      disabled={!newCapacity.trim()}
-                      onClick={() => void extendCapacity(event.capacity)}
-                    >
-                      {t.capacity.submit}
-                    </Button>
+          <Card className="flex flex-col gap-4">
+            <h2 className="flex items-center gap-2 font-bold">
+              <Icon name="ticket" size={18} className="text-primary" />
+              {t.tiers.sectionTitle}
+            </h2>
+            {event.ticketTypes.map((type) => (
+              <div key={type.id} className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{type.name}</p>
+                    <p className="text-xs text-muted">
+                      {t.myEvents.sold(type.paid, type.capacity)} · {t.panel.statCheckedIn}:{" "}
+                      {type.checkedIn}
+                    </p>
                   </div>
-                </>
-              ) : (
-                <p className="text-sm leading-6 text-muted">{t.capacity.exhausted}</p>
-              )}
-              {capacityError && (
-                <p className="rounded-xl border border-error-border bg-error-light px-3 py-2 text-sm text-error">
-                  {capacityError}
-                </p>
-              )}
-            </Card>
-          )}
+                  <span className="shrink-0 font-mono font-semibold">
+                    {formatAmount(type.priceDecimal, locale)}
+                    <span className="ml-1 text-xs font-normal text-muted">USDC</span>
+                  </span>
+                </div>
+                {!closed &&
+                  (type.capacityIncreasesLeft > 0 ? (
+                    <>
+                      <p className="text-xs leading-5 text-muted">
+                        {t.capacity.body(type.capacityIncreasesLeft)}
+                      </p>
+                      <div className="flex items-end gap-2">
+                        <Input
+                          label={t.capacity.field}
+                          type="number"
+                          inputMode="numeric"
+                          min={type.capacity + 1}
+                          placeholder={String(type.capacity + 10)}
+                          value={newCapacity[type.id] ?? ""}
+                          onChange={(e) =>
+                            setNewCapacity((current) => ({ ...current, [type.id]: e.target.value }))
+                          }
+                          className="flex-1"
+                        />
+                        <Button
+                          loading={capacityBusy}
+                          disabled={!(newCapacity[type.id] ?? "").trim()}
+                          onClick={() => void extendCapacity(type)}
+                        >
+                          {t.capacity.submit}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs leading-5 text-muted">{t.capacity.exhausted}</p>
+                  ))}
+              </div>
+            ))}
+            {capacityError && (
+              <p className="rounded-xl border border-error-border bg-error-light px-3 py-2 text-sm text-error">
+                {capacityError}
+              </p>
+            )}
+          </Card>
 
           <Card className="flex flex-col gap-4">
             <button

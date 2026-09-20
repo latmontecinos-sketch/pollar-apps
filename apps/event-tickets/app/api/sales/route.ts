@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
-import { stroopsToDecimal } from "@/lib/money";
 import { salesClosed } from "@/lib/format";
+import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { generateReference, reserveAndCreateSale, sweepExpiredSales } from "@/lib/sales";
+import { listTicketTypes } from "@/lib/ticket-types";
 
 /** How long a seat stays held while the buyer pays (mirrors `t.hold.minutes`). */
 const SALE_TTL_MS = 10 * 60 * 1000;
 const MAX_REFERENCE_ATTEMPTS = 5;
 
-type CreateSaleBody = { eventId?: string; idempotencyKey?: string };
+type CreateSaleBody = { eventId?: string; ticketTypeId?: string; idempotencyKey?: string };
 
 type EventRow = {
   organizer_pollar_id: string;
-  price_stroops: string;
   datetime_utc: string;
 };
 
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
   await dbReady();
   const eventResult = await db.execute({
-    sql: "SELECT organizer_pollar_id, price_stroops, datetime_utc FROM events WHERE id = ?",
+    sql: "SELECT organizer_pollar_id, datetime_utc FROM events WHERE id = ?",
     args: [eventId],
   });
   if (eventResult.rows.length === 0) {
@@ -53,7 +53,16 @@ export async function POST(request: Request) {
   if (salesClosed(event.datetime_utc)) {
     return NextResponse.json({ error: "La venta de este evento ya cerró" }, { status: 409 });
   }
-  const amountStroops = BigInt(event.price_stroops);
+
+  // The tier decides the price — never a number the client sends.
+  const types = await listTicketTypes(eventId);
+  const ticketType = body.ticketTypeId
+    ? types.find((type) => type.id === body.ticketTypeId)
+    : types[0];
+  if (!ticketType) {
+    return NextResponse.json({ error: "Tipo de entrada no encontrado" }, { status: 404 });
+  }
+  const amountStroops = decimalToStroops(ticketType.priceDecimal);
 
   // Free up seats held by abandoned checkouts before deciding it's sold out.
   await sweepExpiredSales({ eventId });
@@ -63,6 +72,7 @@ export async function POST(request: Request) {
     try {
       result = await reserveAndCreateSale({
         eventId,
+        ticketTypeId: ticketType.id,
         buyerPollarId: auth.address,
         reference: generateReference(),
         amountStroops,
@@ -91,6 +101,8 @@ export async function POST(request: Request) {
       reference: result.sale.reference,
       amountDecimal: stroopsToDecimal(result.sale.amountStroops),
       organizerAddress: event.organizer_pollar_id,
+      ticketTypeId: ticketType.id,
+      ticketTypeName: ticketType.name,
       expiresAtUtc: result.sale.expiresAtUtc,
       status: result.sale.status,
     },

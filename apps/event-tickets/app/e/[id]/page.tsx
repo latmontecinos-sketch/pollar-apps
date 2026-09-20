@@ -3,11 +3,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, dbReady } from "@/lib/db";
-import { stroopsToDecimal } from "@/lib/money";
 import { contactHref, formatAmount, formatEventDateTime, salesClosed } from "@/lib/format";
 import { getDict } from "@/lib/i18n/server";
 import type { Dict } from "@/lib/i18n";
 import { sweepExpiredSales } from "@/lib/sales";
+import { listTicketTypes, summarize, type TicketType } from "@/lib/ticket-types";
+import { stroopsToDecimal } from "@/lib/money";
 import { AppHeader } from "@/components/AppHeader";
 import { BuyButton } from "@/components/BuyButton";
 import { Card } from "@/components/ui/Card";
@@ -19,44 +20,44 @@ type EventRow = {
   description: string;
   datetime_utc: string;
   place: string;
-  price_stroops: string;
-  capacity: number;
-  reserved: number;
   organizer_name: string;
   organizer_contact: string;
-  paid: number;
 };
 
 /** Shared by generateMetadata and the page (one DB read per request). */
-const loadPublicEvent = cache(async (id: string): Promise<EventRow | null> => {
-  await dbReady();
-  // Release seats held by abandoned checkouts, so "cupos disponibles" is honest.
-  await sweepExpiredSales({ eventId: id });
-  const result = await db.execute({
-    sql: `SELECT id, name, description, datetime_utc, place, price_stroops, capacity, reserved,
-                 organizer_name, organizer_contact,
-                 (SELECT count(*) FROM sales
-                  WHERE sales.event_id = events.id AND sales.status = 'paid') AS paid
-          FROM events WHERE id = ?`,
-    args: [id],
-  });
-  return result.rows.length > 0 ? (result.rows[0] as unknown as EventRow) : null;
-});
+const loadPublicEvent = cache(
+  async (id: string): Promise<{ event: EventRow; types: TicketType[] } | null> => {
+    await dbReady();
+    // Release seats held by abandoned checkouts, so the counts are honest.
+    await sweepExpiredSales({ eventId: id });
+    const result = await db.execute({
+      sql: `SELECT id, name, description, datetime_utc, place, organizer_name, organizer_contact
+            FROM events WHERE id = ?`,
+      args: [id],
+    });
+    if (result.rows.length === 0) return null;
+    return {
+      event: result.rows[0] as unknown as EventRow,
+      types: await listTicketTypes(id),
+    };
+  }
+);
 
 /** What WhatsApp/Telegram/etc. show when the organizer shares the link. */
 export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promise<Metadata> {
   const { id } = await params;
-  const [event, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
-  if (!event) return { title: t.meta.eventNotFound };
+  const [data, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
+  if (!data) return { title: t.meta.eventNotFound };
+  const price = formatAmount(stroopsToDecimal(summarize(data.types).priceStroops), locale);
   const description = t.meta.eventDescription(
-    formatEventDateTime(event.datetime_utc, locale),
-    event.place,
-    formatAmount(stroopsToDecimal(BigInt(event.price_stroops)), locale)
+    formatEventDateTime(data.event.datetime_utc, locale),
+    data.event.place,
+    price
   );
   return {
-    title: event.name,
+    title: data.event.name,
     description,
-    openGraph: { title: event.name, description },
+    openGraph: { title: data.event.name, description },
   };
 }
 
@@ -76,25 +77,25 @@ function OrganizerContact({ contact, t }: { contact: string; t: Dict }) {
 }
 
 /**
- * Public event page: no login, link-only. Anyone with the URL sees name,
- * date, place, price, remaining seats and whatever name/contact the
- * organizer chose to publish — never their wallet or email.
+ * Public event page: no login, link-only. Anyone with the URL sees the
+ * event, every ticket tier with its own price and remaining seats, and
+ * whatever name/contact the organizer chose to publish.
  */
 export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) {
   const { id } = await params;
-  const [event, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
-  if (!event) notFound();
+  const [data, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
+  if (!data) notFound();
+  const { event, types } = data;
 
-  const remaining = Math.max(0, event.capacity - event.reserved);
-  // "Sold out" means sold, not "held by someone mid-checkout": seats waiting
-  // on an unpaid reservation come back in minutes, and saying "agotado" for
-  // those turns a temporary hold into a lost sale.
-  const held = Math.max(0, event.reserved - Number(event.paid));
-  const soldOut = remaining <= 0 && held === 0;
-  const onlyHeld = remaining <= 0 && held > 0;
   const closed = salesClosed(event.datetime_utc);
-  const priceDecimal = stroopsToDecimal(BigInt(event.price_stroops));
-  const takenPct = Math.min(100, Math.round((event.reserved / event.capacity) * 100));
+  const totals = summarize(types);
+  const anySeats = types.some((type) => type.capacity - type.reserved > 0);
+  // "Sold out" means sold, not "held by someone mid-checkout": seats waiting
+  // on an unpaid reservation come back in minutes.
+  const heldOverall = Math.max(0, totals.reserved - totals.paid);
+  const soldOut = !anySeats && heldOverall === 0;
+  const onlyHeld = !anySeats && heldOverall > 0;
+  const buyable = !closed && !soldOut && !onlyHeld;
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
@@ -103,12 +104,10 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
       <Card className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <span className="w-fit rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary">
-            {t.event.ticketBadge(formatAmount(priceDecimal, locale))}
+            {t.tiers.from(formatAmount(stroopsToDecimal(totals.priceStroops), locale))}
           </span>
           <h1 className="text-2xl font-extrabold leading-tight tracking-tight">{event.name}</h1>
-          {event.description && (
-            <p className="text-sm leading-6 text-muted">{event.description}</p>
-          )}
+          {event.description && <p className="text-sm leading-6 text-muted">{event.description}</p>}
         </div>
 
         <ul className="flex flex-col gap-3 text-sm">
@@ -143,40 +142,70 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
           )}
         </ul>
 
-        {closed ? (
+        {closed && (
           <div className="rounded-xl bg-surface px-4 py-3 text-center text-sm font-semibold text-muted">
             {t.event.closed}
           </div>
-        ) : onlyHeld ? (
-          <div className="flex flex-col gap-1 rounded-xl border border-warning-border bg-warning-light px-4 py-3 text-sm leading-6">
-            <span className="font-semibold text-warning">{t.hold.heldSeats(held)}</span>
-            <span className="text-muted">{t.hold.retryLater}</span>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-1.5 text-muted">
-                <Icon name="users" size={16} /> {t.event.seats}
-              </span>
-              <span className={`font-semibold ${soldOut ? "text-error" : "text-foreground"}`}>
-                {soldOut ? t.event.soldOut : t.event.remaining(remaining, event.capacity)}
-              </span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-surface-hover">
-              <div
-                className={`h-full rounded-full ${soldOut ? "bg-error" : "bg-primary"}`}
-                style={{ width: `${takenPct}%` }}
-              />
-            </div>
+        )}
+        {!closed && soldOut && (
+          <div className="rounded-xl bg-error-light px-4 py-3 text-center text-sm font-semibold text-error">
+            {t.event.soldOut}
           </div>
         )}
-
-        {!soldOut && !onlyHeld && !closed && (
-          <BuyButton eventId={event.id} eventName={event.name} priceDecimal={priceDecimal} />
+        {!closed && onlyHeld && (
+          <div className="flex flex-col gap-1 rounded-xl border border-warning-border bg-warning-light px-4 py-3 text-sm leading-6">
+            <span className="font-semibold text-warning">{t.hold.heldSeats(heldOverall)}</span>
+            <span className="text-muted">{t.hold.retryLater}</span>
+          </div>
         )}
       </Card>
 
-      {!soldOut && !closed && (
+      {buyable && (
+        <section className="flex flex-col gap-3">
+          <h2 className="px-1 text-sm font-bold">
+            {types.length > 1 ? t.tiers.choose : t.tiers.sectionTitle}
+          </h2>
+          {types.map((type) => {
+            const remaining = Math.max(0, type.capacity - type.reserved);
+            const held = Math.max(0, type.reserved - type.paid);
+            return (
+              <Card key={type.id} className="flex flex-col gap-3 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold">{type.name}</h3>
+                    <p className="text-xs text-muted">
+                      {remaining > 0
+                        ? t.tiers.remaining(remaining)
+                        : held > 0
+                          ? `${t.tiers.held}: ${held}`
+                          : t.tiers.soldOut}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-mono text-lg font-bold">
+                    {formatAmount(type.priceDecimal, locale)}
+                    <span className="ml-1 text-xs font-normal text-muted">USDC</span>
+                  </span>
+                </div>
+                {remaining > 0 ? (
+                  <BuyButton
+                    eventId={event.id}
+                    eventName={event.name}
+                    ticketTypeId={type.id}
+                    ticketTypeName={type.name}
+                    priceDecimal={type.priceDecimal}
+                  />
+                ) : (
+                  <p className="rounded-xl bg-surface px-3 py-2 text-center text-xs font-semibold text-muted">
+                    {held > 0 ? t.hold.heldSeats(held) : t.tiers.soldOut}
+                  </p>
+                )}
+              </Card>
+            );
+          })}
+        </section>
+      )}
+
+      {buyable && (
         <Card className="flex flex-col gap-3 p-5">
           <h2 className="text-sm font-bold">{t.event.firstTimeTitle}</h2>
           <ol className="flex flex-col gap-2 text-sm text-muted">

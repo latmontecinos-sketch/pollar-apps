@@ -43,6 +43,7 @@ export async function markRefunded(
 export type Sale = {
   id: string;
   eventId: string;
+  ticketTypeId: string;
   buyerPollarId: string;
   reference: string;
   amountStroops: bigint;
@@ -57,6 +58,7 @@ function rowToSale(row: Record<string, unknown>): Sale {
   return {
     id: String(row.id),
     eventId: String(row.event_id),
+    ticketTypeId: String(row.ticket_type_id ?? ""),
     buyerPollarId: String(row.buyer_pollar_id),
     reference: String(row.reference),
     amountStroops: BigInt(String(row.amount_stroops)),
@@ -70,6 +72,8 @@ function rowToSale(row: Record<string, unknown>): Sale {
 
 export type ReserveParams = {
   eventId: string;
+  /** Which tier's seat this holds (General, VIP…). */
+  ticketTypeId: string;
   buyerPollarId: string;
   reference: string;
   amountStroops: bigint;
@@ -108,10 +112,10 @@ export async function reserveAndCreateSale(
 
     const live = await tx.execute({
       sql: `SELECT * FROM sales
-            WHERE event_id = ? AND buyer_pollar_id = ? AND status = 'pending'
+            WHERE event_id = ? AND ticket_type_id = ? AND buyer_pollar_id = ? AND status = 'pending'
               AND datetime(expires_at_utc) >= datetime('now')
             ORDER BY created_at DESC LIMIT 1`,
-      args: [params.eventId, params.buyerPollarId],
+      args: [params.eventId, params.ticketTypeId, params.buyerPollarId],
     });
     if (live.rows.length > 0) {
       const renewed = await tx.execute({
@@ -124,9 +128,12 @@ export async function reserveAndCreateSale(
       return { ok: true, sale: rowToSale(renewed.rows[0]), reused: true };
     }
 
+    // Atomic per tier: two people racing for the last VIP seat can't both win.
     const reserved = await tx.execute({
-      sql: "UPDATE events SET reserved = reserved + 1 WHERE id = ? AND reserved < capacity RETURNING reserved",
-      args: [params.eventId],
+      sql: `UPDATE ticket_types SET reserved = reserved + 1
+            WHERE id = ? AND event_id = ? AND reserved < capacity
+            RETURNING reserved`,
+      args: [params.ticketTypeId, params.eventId],
     });
     if (reserved.rows.length === 0) {
       return { ok: false, reason: "sold_out" };
@@ -136,12 +143,14 @@ export async function reserveAndCreateSale(
     const expiresAtUtc = new Date(Date.now() + params.ttlMs).toISOString();
     const inserted = await tx.execute({
       sql: `INSERT INTO sales
-              (id, event_id, buyer_pollar_id, reference, amount_stroops, idempotency_key, status, expires_at_utc)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+              (id, event_id, ticket_type_id, buyer_pollar_id, reference, amount_stroops,
+               idempotency_key, status, expires_at_utc)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
             RETURNING *`,
       args: [
         id,
         params.eventId,
+        params.ticketTypeId,
         params.buyerPollarId,
         params.reference,
         params.amountStroops.toString(),
@@ -161,14 +170,14 @@ export async function reserveAndCreateSale(
 export async function expireSale(saleId: string): Promise<{ expired: boolean }> {
   return withTransaction(async (tx: Transaction) => {
     const updated = await tx.execute({
-      sql: "UPDATE sales SET status = 'expired' WHERE id = ? AND status = 'pending' RETURNING event_id",
+      sql: "UPDATE sales SET status = 'expired' WHERE id = ? AND status = 'pending' RETURNING ticket_type_id",
       args: [saleId],
     });
     if (updated.rows.length === 0) return { expired: false };
 
     await tx.execute({
-      sql: "UPDATE events SET reserved = reserved - 1 WHERE id = ?",
-      args: [String(updated.rows[0].event_id)],
+      sql: "UPDATE ticket_types SET reserved = reserved - 1 WHERE id = ? AND reserved > 0",
+      args: [String(updated.rows[0].ticket_type_id)],
     });
     return { expired: true };
   });

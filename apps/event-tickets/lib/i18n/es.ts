@@ -60,6 +60,68 @@ export const es = {
       "Cada QR vale una sola vez en la puerta",
     ],
   },
+  /** The public product page at "/" — the app itself lives at "/app". */
+  product: {
+    openApp: "Abrir la app",
+    badge: "Stellar · USDC · Bolivia",
+    stats: {
+      currency: "Pagos en dólares digitales, directo al organizador",
+      hold: "Tu cupo, reservado mientras pagas",
+      entry: "Un código por entrada, válido una sola vez",
+    },
+    heroTitle: "Entradas con QR, cobradas en USDC.",
+    heroSubtitle:
+      "Publica tu evento, comparte un link y cobra al instante. Quien compra recibe un QR que vale una sola vez en la puerta. Sin tarjetas, sin billeteras externas, sin intermediarios que retengan tu dinero.",
+    heroNote: "Demo en la red de prueba de Stellar: los USDC no tienen valor real.",
+    problemTitle: "El problema",
+    problemBody:
+      "Un evento pequeño hoy se vende con efectivo, listas en papel y capturas de pantalla reenviadas. Nadie sabe cuánto se vendió hasta el final, y la misma captura entra dos veces.",
+    solutionTitle: "Qué hace Pollar Pass",
+    solutionBody:
+      "Convierte esa venta en un link y un QR: el dinero llega directo a la cuenta del organizador y cada entrada se valida una sola vez, verificada en la red de Stellar.",
+    featuresTitle: "Lo que incluye",
+    features: [
+      {
+        title: "Pago directo, sin intermediarios",
+        body: "Cada compra es un pago en USDC del comprador a la cuenta del organizador, verificado en Stellar antes de emitir la entrada.",
+      },
+      {
+        title: "Una entrada, un ingreso",
+        body: "El QR se marca como usado en el mismo instante en que se valida: una captura reenviada sale en rojo.",
+      },
+      {
+        title: "Se comparte por WhatsApp",
+        body: "Link con vista previa, QR para afiches y una página pública que se abre sin instalar nada.",
+      },
+      {
+        title: "Puerta con tu equipo",
+        body: "Un link secreto deja que otra persona valide entradas sin ver tus ventas ni tu cuenta.",
+      },
+      {
+        title: "Cupos que no mienten",
+        body: "Las reservas duran 10 minutos con contador a la vista y se liberan solas: nadie ve “agotado” por un pago a medias.",
+      },
+      {
+        title: "En tu idioma",
+        body: "Español, inglés y francés, con modo claro y oscuro, en toda la app y también en los correos.",
+      },
+    ],
+    stepsTitle: "Cómo funciona",
+    audienceOrganizerTitle: "Si organizas",
+    audienceOrganizerBody:
+      "Creas el evento en un minuto, compartes el link y ves cada pago con su comprobante. El día del evento, escaneas desde tu celular.",
+    audienceBuyerTitle: "Si vas a un evento",
+    audienceBuyerBody:
+      "Abres el link, entras con tu correo y pagas. Tu entrada queda guardada con su QR y te llega por correo.",
+    techTitle: "Cómo está hecho",
+    techBody:
+      "Next.js y el SDK de Pollar sobre Stellar. Los montos se manejan en enteros (stroops), cada pago se verifica contra Horizon y la validación en la puerta es una sola operación atómica en la base de datos.",
+    linkRepo: "Código en GitHub",
+    linkGuide: "Guía de uso",
+    linkDocs: "Documentación visual",
+    ctaTitle: "¿Lo probamos?",
+    ctaBody: "Abre la app, crea un evento de prueba y compártelo. No necesitas instalar nada.",
+  },
   home: {
     title: "¿Qué quieres hacer hoy?",
     subtitle: "Compra entradas o administra tus eventos.",
@@ -483,6 +545,31 @@ export const es = {
     addressCopiedFull: "Copiada ✓",
     receiveHintBefore: "¿Estás probando la app?",
     receiveHintLink: "Consigue USDC de prueba gratis",
+  },
+  /** Ticket tiers: General, VIP, Estudiantes… each with its own price and cupo. */
+  tiers: {
+    sectionTitle: "Tipos de entrada",
+    choose: "Elige tu entrada",
+    from: (price: string) => `Desde ${price} USDC`,
+    remaining: (left: number) => `Quedan ${left}`,
+    soldOut: "Agotado",
+    held: "Reservadas",
+    ticketOf: (name: string) => `Entrada ${name}`,
+    addType: "Agregar tipo de entrada",
+    removeType: "Quitar",
+    typeName: "Nombre del tipo",
+    typeNamePlaceholder: "Ej: General, VIP, Estudiantes",
+    typePrice: "Precio (USDC)",
+    typeCapacity: "Cupo",
+    typeHint:
+      "Puedes vender un solo tipo o varios (General, VIP, Estudiantes…), cada uno con su precio y su cupo.",
+    defaultName: "General",
+    errorName: "Cada tipo de entrada necesita un nombre",
+    errorDuplicate: "Hay dos tipos de entrada con el mismo nombre",
+    errorPrice: "Escribe el precio como número, por ejemplo 2,50",
+    errorCapacity: "El cupo debe ser un número entero mayor a 0",
+    errorTooMany: "Máximo 6 tipos de entrada por evento",
+    totalCapacity: (total: number) => `Cupo total: ${total}`,
   },
   /** Seat holds: the countdown a buyer sees, and what others see meanwhile. */
   hold: {

@@ -167,7 +167,7 @@ export default function ComoFuncionaPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.guide.title} back={{ href: "/", label: t.common.home }} />
+      <AppHeader title={t.guide.title} back={{ href: "/app", label: t.common.home }} />
 
       <Card className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">

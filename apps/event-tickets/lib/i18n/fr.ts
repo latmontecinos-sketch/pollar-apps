@@ -57,6 +57,67 @@ export const fr: Dict = {
       "Chaque QR n'est valable qu'une seule fois à l'entrée",
     ],
   },
+  product: {
+    openApp: "Ouvrir l'application",
+    badge: "Stellar · USDC · Bolivie",
+    stats: {
+      currency: "Des dollars numériques, directement à l'organisateur",
+      hold: "Votre place, réservée le temps de payer",
+      entry: "Un code par billet, valable une seule fois",
+    },
+    heroTitle: "Des billets QR, encaissés en USDC.",
+    heroSubtitle:
+      "Publiez votre événement, partagez un lien, encaissez tout de suite. L'acheteur reçoit un QR valable une seule fois à l'entrée. Sans carte, sans portefeuille externe, sans intermédiaire qui retient votre argent.",
+    heroNote: "Démo sur le réseau de test de Stellar : ces USDC n'ont aucune valeur réelle.",
+    problemTitle: "Le problème",
+    problemBody:
+      "Un petit événement se vend aujourd'hui en espèces, avec des listes papier et des captures d'écran transférées. Personne ne sait ce qui a été vendu avant la fin, et la même capture entre deux fois.",
+    solutionTitle: "Ce que fait Pollar Pass",
+    solutionBody:
+      "Il transforme cette vente en un lien et un QR : l'argent arrive directement sur le compte de l'organisateur et chaque billet n'est validé qu'une fois, vérifié sur le réseau Stellar.",
+    featuresTitle: "Ce qu'il contient",
+    features: [
+      {
+        title: "Paiement direct, sans intermédiaire",
+        body: "Chaque achat est un paiement en USDC de l'acheteur vers l'organisateur, vérifié sur Stellar avant l'émission du billet.",
+      },
+      {
+        title: "Un billet, une entrée",
+        body: "Le QR est marqué comme utilisé à l'instant de la validation : une capture transférée s'affiche en rouge.",
+      },
+      {
+        title: "Se partage sur WhatsApp",
+        body: "Un lien avec aperçu, un QR pour les affiches et une page publique qui s'ouvre sans rien installer.",
+      },
+      {
+        title: "L'entrée, à plusieurs",
+        body: "Un lien secret permet à quelqu'un d'autre de valider les billets sans voir vos ventes ni votre compte.",
+      },
+      {
+        title: "Des places qui ne mentent pas",
+        body: "Les réservations durent 10 minutes avec un compte à rebours visible et se libèrent seules : personne ne voit « complet » à cause d'un paiement à moitié fait.",
+      },
+      {
+        title: "Dans votre langue",
+        body: "Espagnol, anglais et français, en clair et en sombre, dans l'application comme dans les e-mails.",
+      },
+    ],
+    stepsTitle: "Comment ça marche",
+    audienceOrganizerTitle: "Si vous organisez",
+    audienceOrganizerBody:
+      "Créez l'événement en une minute, partagez le lien et suivez chaque paiement avec son justificatif. Le jour J, scannez depuis votre téléphone.",
+    audienceBuyerTitle: "Si vous y allez",
+    audienceBuyerBody:
+      "Ouvrez le lien, entrez avec votre e-mail et payez. Votre billet est enregistré avec son QR et vous arrive par e-mail.",
+    techTitle: "Comment c'est construit",
+    techBody:
+      "Next.js et le SDK Pollar sur Stellar. Les montants sont des entiers (stroops) de bout en bout, chaque paiement est vérifié auprès de Horizon et la validation à l'entrée est une seule opération atomique en base de données.",
+    linkRepo: "Code sur GitHub",
+    linkGuide: "Guide d'utilisation",
+    linkDocs: "Documentation visuelle",
+    ctaTitle: "On essaie ?",
+    ctaBody: "Ouvrez l'application, créez un événement de test et partagez-le. Rien à installer.",
+  },
   home: {
     title: "Que voulez-vous faire ?",
     subtitle: "Achetez des billets ou gérez vos événements.",
@@ -481,6 +542,30 @@ export const fr: Dict = {
     addressCopiedFull: "Copiée ✓",
     receiveHintBefore: "Vous testez l'application ?",
     receiveHintLink: "Obtenez des USDC de test gratuits",
+  },
+  tiers: {
+    sectionTitle: "Types de billets",
+    choose: "Choisissez votre billet",
+    from: (price: string) => `À partir de ${price} USDC`,
+    remaining: (left: number) => `${left} restantes`,
+    soldOut: "Complet",
+    held: "Réservées",
+    ticketOf: (name: string) => `Billet ${name}`,
+    addType: "Ajouter un type de billet",
+    removeType: "Retirer",
+    typeName: "Nom du type",
+    typeNamePlaceholder: "Ex. : Général, VIP, Étudiants",
+    typePrice: "Prix (USDC)",
+    typeCapacity: "Places",
+    typeHint:
+      "Vendez un seul type ou plusieurs (Général, VIP, Étudiants…), chacun avec son prix et ses places.",
+    defaultName: "Général",
+    errorName: "Chaque type de billet a besoin d'un nom",
+    errorDuplicate: "Deux types de billets portent le même nom",
+    errorPrice: "Écrivez le prix en chiffres, par exemple 2,50",
+    errorCapacity: "Les places doivent être un entier supérieur à 0",
+    errorTooMany: "6 types de billets au maximum par événement",
+    totalCapacity: (total: number) => `Places au total : ${total}`,
   },
   hold: {
     minutes: 10,

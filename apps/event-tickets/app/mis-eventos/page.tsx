@@ -74,7 +74,7 @@ export default function MisEventosPage() {
   if (!user) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.myEvents.title} back={{ href: "/", label: t.common.home }} />
+        <AppHeader title={t.myEvents.title} back={{ href: "/app", label: t.common.home }} />
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.myEvents.loginNote}</p>
@@ -86,7 +86,7 @@ export default function MisEventosPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.myEvents.title} back={{ href: "/", label: t.common.home }} />
+      <AppHeader title={t.myEvents.title} back={{ href: "/app", label: t.common.home }} />
 
       {state.step === "loading" && (
         <div className="flex justify-center py-12">

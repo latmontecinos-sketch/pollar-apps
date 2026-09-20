@@ -25,6 +25,7 @@ type Sale = {
   amountDecimal: string;
   expiresAtUtc: string;
   refundTxHash: string | null;
+  ticketTypeName: string | null;
   event: { id: string; name: string; datetimeUtc: string; place: string };
   ticket: { code: string; doorCode: string | null; usedAt: string | null } | null;
 };
@@ -100,7 +101,7 @@ export default function MisPasesPage() {
   if (!user) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.tickets.title} back={{ href: "/", label: t.common.home }} />
+        <AppHeader title={t.tickets.title} back={{ href: "/app", label: t.common.home }} />
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.tickets.loginNote}</p>
@@ -112,7 +113,7 @@ export default function MisPasesPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.tickets.title} back={{ href: "/", label: t.common.home }} />
+      <AppHeader title={t.tickets.title} back={{ href: "/app", label: t.common.home }} />
 
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
@@ -155,9 +156,16 @@ export default function MisPasesPage() {
                     {formatEventDateTime(sale.event.datetimeUtc, locale)} · {sale.event.place}
                   </p>
                 </div>
-                <span className="whitespace-nowrap font-mono text-xs font-semibold text-muted">
-                  {formatAmount(sale.amountDecimal, locale)} USDC
-                </span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="whitespace-nowrap font-mono text-xs font-semibold text-muted">
+                    {formatAmount(sale.amountDecimal, locale)} USDC
+                  </span>
+                  {sale.ticketTypeName && (
+                    <span className="rounded-full bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary">
+                      {sale.ticketTypeName}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {sale.ticket ? (

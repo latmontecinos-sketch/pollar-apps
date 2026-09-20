@@ -8,6 +8,13 @@
 import { randomUUID } from "node:crypto";
 import { db, dbReady } from "../lib/db.ts";
 import { reserveAndCreateSale, expireSale, markPaid } from "../lib/sales.ts";
+import { createTicketTypes, listTicketTypes } from "../lib/ticket-types.ts";
+
+/** Seats live on a tier, so every spike event gets one. */
+async function firstTicketTypeId(eventId: string): Promise<string> {
+  const types = await listTicketTypes(eventId);
+  return types[0].id;
+}
 
 let passed = 0;
 let failed = 0;
@@ -29,12 +36,13 @@ async function createEvent(capacity: number): Promise<string> {
           VALUES (?, 'GORGANIZER000000000000000000000000000000000000000000000', 'Spike event', datetime('now'), 'Test', 10000000, ?)`,
     args: [id, capacity],
   });
+  await createTicketTypes(id, [{ name: "General", priceDecimal: "1.0000000", capacity }]);
   return id;
 }
 
 async function eventReserved(eventId: string): Promise<number> {
   const r = await db.execute({
-    sql: "SELECT reserved FROM events WHERE id = ?",
+    sql: "SELECT COALESCE(sum(reserved), 0) AS reserved FROM ticket_types WHERE event_id = ?",
     args: [eventId],
   });
   return Number(r.rows[0].reserved);
@@ -43,10 +51,12 @@ async function eventReserved(eventId: string): Promise<number> {
 /** 1. capacity=1, dos reservas en paralelo: gana una sola. */
 async function testConcurrentCapacityOne(): Promise<void> {
   const eventId = await createEvent(1);
+  const ticketTypeId = await firstTicketTypeId(eventId);
 
   const attempt = (i: number) =>
     reserveAndCreateSale({
       eventId,
+      ticketTypeId,
       buyerPollarId: `GBUYER${i}`,
       reference: `ref_cap1_${i}_${randomUUID()}`,
       amountStroops: 10_000_000n,
@@ -71,11 +81,13 @@ async function testConcurrentCapacityOne(): Promise<void> {
 /** 2. Reserva + creación de venta en una transacción: si el INSERT falla, no queda asiento fantasma. */
 async function testNoPhantomSeat(): Promise<void> {
   const eventId = await createEvent(5);
+  const ticketTypeId = await firstTicketTypeId(eventId);
   const dupRef = `ref_dup_${randomUUID()}`;
 
   // Primera venta ocupa esa `reference`.
   const first = await reserveAndCreateSale({
     eventId,
+    ticketTypeId,
     buyerPollarId: "GBUYER_A",
     reference: dupRef,
     amountStroops: 10_000_000n,
@@ -93,6 +105,7 @@ async function testNoPhantomSeat(): Promise<void> {
   try {
     await reserveAndCreateSale({
       eventId,
+      ticketTypeId,
       buyerPollarId: "GBUYER_B",
       reference: dupRef,
       amountStroops: 10_000_000n,
@@ -115,8 +128,10 @@ async function testNoPhantomSeat(): Promise<void> {
 /** 3. Expirar la misma venta dos veces: reserved baja una sola vez. */
 async function testDoubleExpire(): Promise<void> {
   const eventId = await createEvent(5);
+  const ticketTypeId = await firstTicketTypeId(eventId);
   const created = await reserveAndCreateSale({
     eventId,
+    ticketTypeId,
     buyerPollarId: "GBUYER_C",
     reference: `ref_exp_${randomUUID()}`,
     amountStroops: 10_000_000n,
@@ -149,8 +164,10 @@ async function testDoubleExpire(): Promise<void> {
 /** 4. Pago y expiración compitiendo sobre la misma venta: gana uno, el otro no corrompe el cupo. */
 async function testPayVsExpireRace(): Promise<void> {
   const eventId = await createEvent(5);
+  const ticketTypeId = await firstTicketTypeId(eventId);
   const created = await reserveAndCreateSale({
     eventId,
+    ticketTypeId,
     buyerPollarId: "GBUYER_D",
     reference: `ref_race_${randomUUID()}`,
     amountStroops: 10_000_000n,
@@ -196,11 +213,13 @@ async function testPayVsExpireRace(): Promise<void> {
 /** 5. Un mismo comprador no puede acaparar cupos: repetir "comprar" reusa su reserva viva. */
 async function testOneLiveReservationPerBuyer(): Promise<void> {
   const eventId = await createEvent(5);
+  const ticketTypeId = await firstTicketTypeId(eventId);
   const buyer = `GBUYER_HOARDER_${randomUUID()}`;
 
   const attempt = () =>
     reserveAndCreateSale({
       eventId,
+      ticketTypeId,
       buyerPollarId: buyer,
       reference: `ref_hoard_${randomUUID()}`,
       amountStroops: 10_000_000n,
@@ -231,6 +250,7 @@ async function testOneLiveReservationPerBuyer(): Promise<void> {
   // Otro comprador sí toma un cupo distinto.
   const other = await reserveAndCreateSale({
     eventId,
+    ticketTypeId,
     buyerPollarId: `GBUYER_OTHER_${randomUUID()}`,
     reference: `ref_other_${randomUUID()}`,
     amountStroops: 10_000_000n,

@@ -43,21 +43,22 @@ type State =
 
 const MAX_VERIFY_ATTEMPTS = 6;
 
-const storageKey = (eventId: string) => `pollarpass:compra:${eventId}`;
+/** One in-flight checkout per tier: two tiers of the same event never collide. */
+const storageKey = (key: string) => `pollarpass:compra:${key}`;
 
-function readInFlight(eventId: string): InFlight | null {
+function readInFlight(key: string): InFlight | null {
   try {
-    const raw = localStorage.getItem(storageKey(eventId));
+    const raw = localStorage.getItem(storageKey(key));
     return raw ? (JSON.parse(raw) as InFlight) : null;
   } catch {
     return null;
   }
 }
 
-function writeInFlight(eventId: string, value: InFlight | null) {
+function writeInFlight(key: string, value: InFlight | null) {
   try {
-    if (value) localStorage.setItem(storageKey(eventId), JSON.stringify(value));
-    else localStorage.removeItem(storageKey(eventId));
+    if (value) localStorage.setItem(storageKey(key), JSON.stringify(value));
+    else localStorage.removeItem(storageKey(key));
   } catch {
     // Private mode / blocked storage: "Mis pases → Ya pagué, verificar" still recovers it.
   }
@@ -79,7 +80,7 @@ function covers(balance: string | null, price: string): boolean | null {
 /**
  * Buy flow for the public event page:
  * 1. review step (a single tap would otherwise send a real payment),
- * 2. create a pending sale (seat reserved 15 min),
+ * 2. create a pending sale (the tier's seat, held 10 min),
  * 3. pay it with the sale's unique memo (`runTx('payment', …)`, the same SDK
  *    method `SendModal` uses — `PayButton` can't carry a memo),
  * 4. hand the hash to our server, which verifies it against Horizon before
@@ -93,10 +94,14 @@ function covers(balance: string | null, price: string): boolean | null {
 export function BuyButton({
   eventId,
   eventName,
+  ticketTypeId,
+  ticketTypeName,
   priceDecimal,
 }: {
   eventId: string;
   eventName: string;
+  ticketTypeId: string;
+  ticketTypeName: string;
   priceDecimal: string;
 }) {
   const { user, verified } = usePollarAuth();
@@ -113,6 +118,8 @@ export function BuyButton({
   // Ticket prices are always USDC (see lib/money.ts); never fall back to XLM.
   const usdcAsset = asset && asset.type !== "native" ? asset : null;
   const address = user?.address;
+  // Remembered per tier, so a paused General checkout doesn't collide with a VIP one.
+  const flightKey = `${eventId}:${ticketTypeId}`;
 
   async function verify(inFlight: InFlight, opts: { fromReload: boolean }) {
     if (!address) return;
@@ -134,24 +141,24 @@ export function BuyButton({
       }
 
       if (res.ok && data.ticket) {
-        writeInFlight(eventId, null);
+        writeInFlight(flightKey, null);
         void refresh();
         setState({ step: "done", ticket: data.ticket });
         return;
       }
       if (res.status === 409 && data.status === "unclaimed") {
-        writeInFlight(eventId, null);
+        writeInFlight(flightKey, null);
         setState({ step: "unclaimed", message: data.error ?? t.buy.errorExpired });
         return;
       }
       if (res.status === 422 && data.code === "tx_failed") {
-        writeInFlight(eventId, null);
+        writeInFlight(flightKey, null);
         setState({ step: "error", message: data.error ?? t.buy.errorTxFailed });
         return;
       }
       if (res.status === 404 && data.code === "no_payment" && opts.fromReload && !inFlight.hash) {
         // Came back to a checkout that never got paid: nothing to recover.
-        writeInFlight(eventId, null);
+        writeInFlight(flightKey, null);
         setState({ step: "idle" });
         return;
       }
@@ -181,22 +188,27 @@ export function BuyButton({
       const res = await pollarFetch(pollarRef.current.getClient(), address, "/api/sales/mine");
       if (cancelled || !res.ok) return;
       const data = (await res.json()) as {
-        sales: { status: string; event: { id: string } }[];
+        sales: { status: string; ticketTypeName: string | null; event: { id: string } }[];
       };
       if (cancelled) return;
       setAlreadyOwned(
-        data.sales.filter((sale) => sale.event.id === eventId && sale.status === "paid").length
+        data.sales.filter(
+          (sale) =>
+            sale.event.id === eventId &&
+            sale.status === "paid" &&
+            (sale.ticketTypeName ?? null) === ticketTypeName
+        ).length
       );
     })();
     return () => {
       cancelled = true;
     };
-  }, [address, verified, eventId]);
+  }, [address, verified, eventId, ticketTypeName]);
 
   const resumed = useRef(false);
   useEffect(() => {
     if (!address || !verified || resumed.current) return;
-    const inFlight = readInFlight(eventId);
+    const inFlight = readInFlight(flightKey);
     if (!inFlight) return;
     // Marked inside the timer, not before it: StrictMode's mount/unmount/mount
     // would otherwise cancel the only scheduled run.
@@ -205,7 +217,7 @@ export function BuyButton({
       void verifyRef.current(inFlight, { fromReload: true });
     }, 0);
     return () => clearTimeout(timer);
-  }, [address, verified, eventId]);
+  }, [address, verified, flightKey]);
 
   /** Hands a held seat back to the event (pending -> expired). Fire-and-forget. */
   async function release(saleId: string) {
@@ -227,7 +239,7 @@ export function BuyButton({
     try {
       const createRes = await pollarFetch(client, user.address, "/api/sales", {
         method: "POST",
-        body: JSON.stringify({ eventId, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({ eventId, ticketTypeId, idempotencyKey: crypto.randomUUID() }),
       });
       const created = (await createRes.json()) as Sale & { error?: string };
       if (!createRes.ok) {
@@ -243,7 +255,7 @@ export function BuyButton({
       return;
     }
 
-    writeInFlight(eventId, { saleId: sale.id });
+    writeInFlight(flightKey, { saleId: sale.id });
     setState({ step: "paying" });
     let hash: string | undefined;
     try {
@@ -260,7 +272,7 @@ export function BuyButton({
         // Rejected before reaching the network (no XLM for fees, user
         // cancelled…): nothing was charged, so give the seat back at once
         // instead of holding it for the whole window.
-        writeInFlight(eventId, null);
+        writeInFlight(flightKey, null);
         void release(sale.id);
         setState({
           step: "error",
@@ -274,7 +286,7 @@ export function BuyButton({
     }
 
     const inFlight = { saleId: sale.id, hash };
-    writeInFlight(eventId, inFlight);
+    writeInFlight(flightKey, inFlight);
     await verify(inFlight, { fromReload: false });
   }
 
@@ -341,7 +353,7 @@ export function BuyButton({
         </p>
         <Button
           onClick={() => {
-            const inFlight = readInFlight(eventId);
+            const inFlight = readInFlight(flightKey);
             if (inFlight) void verify(inFlight, { fromReload: false });
             else setState({ step: "idle" });
           }}
@@ -382,7 +394,10 @@ export function BuyButton({
         <dl className="flex flex-col gap-1.5 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted">{t.buy.confirmTicket}</dt>
-            <dd className="text-right font-medium">{eventName}</dd>
+            <dd className="text-right font-medium">
+              {eventName}
+              <span className="block text-xs text-muted">{ticketTypeName}</span>
+            </dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted">{t.buy.confirmTotal}</dt>

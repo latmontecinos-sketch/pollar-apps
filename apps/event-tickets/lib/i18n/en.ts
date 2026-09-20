@@ -57,6 +57,67 @@ export const en: Dict = {
       "Every QR works exactly once at the door",
     ],
   },
+  product: {
+    openApp: "Open the app",
+    badge: "Stellar · USDC · Bolivia",
+    stats: {
+      currency: "Digital dollars, straight to the organizer",
+      hold: "Your seat, held while you pay",
+      entry: "One code per ticket, valid exactly once",
+    },
+    heroTitle: "QR tickets, paid in USDC.",
+    heroSubtitle:
+      "Publish your event, share a link, get paid instantly. Buyers get a QR that works exactly once at the door. No cards, no external wallets, no middleman holding your money.",
+    heroNote: "Demo on Stellar's test network: these USDC have no real value.",
+    problemTitle: "The problem",
+    problemBody:
+      "Small events are sold with cash, paper lists and forwarded screenshots. Nobody knows how much was sold until the end, and the same screenshot gets in twice.",
+    solutionTitle: "What Pollar Pass does",
+    solutionBody:
+      "It turns that sale into a link and a QR: the money lands straight in the organizer's account, and every ticket is validated exactly once, verified on the Stellar network.",
+    featuresTitle: "What's inside",
+    features: [
+      {
+        title: "Paid directly, no middleman",
+        body: "Every purchase is a USDC payment from buyer to organizer, verified on Stellar before the ticket is issued.",
+      },
+      {
+        title: "One ticket, one entry",
+        body: "The QR is marked used the moment it's validated: a forwarded screenshot comes up red.",
+      },
+      {
+        title: "Shared over WhatsApp",
+        body: "A link with a preview, a QR for posters, and a public page that opens with nothing to install.",
+      },
+      {
+        title: "Door duty, shared",
+        body: "A secret link lets someone else check people in without seeing your sales or your account.",
+      },
+      {
+        title: "Honest seat counts",
+        body: "Holds last 10 minutes with a visible countdown and release themselves: nobody sees “sold out” because of a half-finished payment.",
+      },
+      {
+        title: "In your language",
+        body: "Spanish, English and French, light and dark, across the app and the emails too.",
+      },
+    ],
+    stepsTitle: "How it works",
+    audienceOrganizerTitle: "If you're organizing",
+    audienceOrganizerBody:
+      "Create the event in a minute, share the link, and see every payment with its receipt. On the day, scan from your phone.",
+    audienceBuyerTitle: "If you're going",
+    audienceBuyerBody:
+      "Open the link, sign in with your email, pay. Your ticket is saved with its QR and emailed to you.",
+    techTitle: "How it's built",
+    techBody:
+      "Next.js and the Pollar SDK on Stellar. Amounts are integers (stroops) end to end, every payment is verified against Horizon, and door validation is a single atomic database operation.",
+    linkRepo: "Code on GitHub",
+    linkGuide: "User guide",
+    linkDocs: "Visual documentation",
+    ctaTitle: "Give it a try",
+    ctaBody: "Open the app, create a test event and share it. Nothing to install.",
+  },
   home: {
     title: "What would you like to do?",
     subtitle: "Buy tickets or manage your events.",
@@ -476,6 +537,30 @@ export const en: Dict = {
     addressCopiedFull: "Copied ✓",
     receiveHintBefore: "Just trying the app out?",
     receiveHintLink: "Get free test USDC",
+  },
+  tiers: {
+    sectionTitle: "Ticket types",
+    choose: "Pick your ticket",
+    from: (price: string) => `From ${price} USDC`,
+    remaining: (left: number) => `${left} left`,
+    soldOut: "Sold out",
+    held: "Held",
+    ticketOf: (name: string) => `${name} ticket`,
+    addType: "Add a ticket type",
+    removeType: "Remove",
+    typeName: "Type name",
+    typeNamePlaceholder: "e.g. General, VIP, Students",
+    typePrice: "Price (USDC)",
+    typeCapacity: "Seats",
+    typeHint:
+      "Sell one type or several (General, VIP, Students…), each with its own price and capacity.",
+    defaultName: "General",
+    errorName: "Every ticket type needs a name",
+    errorDuplicate: "Two ticket types share the same name",
+    errorPrice: "Write the price as a number, for example 2.50",
+    errorCapacity: "Seats must be a whole number above 0",
+    errorTooMany: "Up to 6 ticket types per event",
+    totalCapacity: (total: number) => `Total capacity: ${total}`,
   },
   hold: {
     minutes: 10,

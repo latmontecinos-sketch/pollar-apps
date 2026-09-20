@@ -72,7 +72,7 @@ export default function ScanPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.scan.title} back={{ href: "/", label: t.common.home }} />
+      <AppHeader title={t.scan.title} back={{ href: "/app", label: t.common.home }} />
 
       <p className="px-1 text-sm leading-6 text-muted">{t.scan.body}</p>
 

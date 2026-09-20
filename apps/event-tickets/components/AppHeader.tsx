@@ -40,13 +40,13 @@ export function AppHeader({
       )}
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <Link href="/" aria-label={t.common.home} className="shrink-0">
+          <Link href="/app" aria-label={t.common.home} className="shrink-0">
             <PollarLogo size={30} />
           </Link>
           {title ? (
             <h1 className="min-w-0 truncate text-xl font-bold tracking-tight">{title}</h1>
           ) : (
-            <Link href="/" className="text-base font-bold tracking-tight">
+            <Link href="/app" className="text-base font-bold tracking-tight">
               {t.common.appName}
             </Link>
           )}

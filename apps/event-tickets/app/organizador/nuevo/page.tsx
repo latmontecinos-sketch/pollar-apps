@@ -15,6 +15,7 @@ import {
 } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
+import { MAX_TICKET_TYPES } from "@/lib/ticket-limits";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -23,8 +24,16 @@ import { Input } from "@/components/ui/Input";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 
+/** One row of the tier editor, as typed (prices stay strings until validated). */
+type TierDraft = { name: string; price: string; capacity: string };
+
 function Hint({ children }: { children: React.ReactNode }) {
   return <p className="-mt-2 text-xs leading-5 text-muted">{children}</p>;
+}
+
+/** Module scope on purpose: reading the clock isn't something a render may do. */
+function isInThePast(isoUtc: string): boolean {
+  return new Date(isoUtc).getTime() < Date.now();
 }
 
 export default function CreateEventPage() {
@@ -38,10 +47,11 @@ export default function CreateEventPage() {
   const [description, setDescription] = useState("");
   const [place, setPlace] = useState("");
   const [datetimeLocal, setDatetimeLocal] = useState("");
-  const [price, setPrice] = useState("");
-  const [capacity, setCapacity] = useState("");
   const [organizerName, setOrganizerName] = useState("");
   const [organizerContact, setOrganizerContact] = useState("");
+  const [tiers, setTiers] = useState<TierDraft[]>([
+    { name: t.tiers.defaultName, price: "", capacity: "" },
+  ]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   /** Nothing is published until the organizer has seen it as a buyer will. */
@@ -52,7 +62,7 @@ export default function CreateEventPage() {
   if (!user) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.create.title} back={{ href: "/", label: t.common.home }} />
+        <AppHeader title={t.create.title} back={{ href: "/app", label: t.common.home }} />
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.create.loginNote}</p>
@@ -62,20 +72,48 @@ export default function CreateEventPage() {
     );
   }
 
-  const normalizedPrice = normalizeDecimalInput(price);
-  const priceValid = /^\d+(\.\d{1,7})?$/.test(normalizedPrice) && Number(normalizedPrice) > 0;
-  const capacityNumber = Number(capacity);
-  const capacityValid = Number.isInteger(capacityNumber) && capacityNumber > 0;
-  const maxRevenue =
-    priceValid && capacityValid
-      ? formatAmount(stroopsToDecimal(decimalToStroops(normalizedPrice) * BigInt(capacityNumber)), locale)
-      : null;
+  function updateTier(index: number, patch: Partial<TierDraft>) {
+    setTiers((current) => current.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
+  }
+
+  const parsedTiers = tiers.map((tier) => {
+    const price = normalizeDecimalInput(tier.price);
+    const capacity = Number(tier.capacity);
+    return {
+      name: tier.name.trim(),
+      priceDecimal: price,
+      capacity,
+      priceValid: /^\d+(\.\d{1,7})?$/.test(price) && Number(price) > 0,
+      capacityValid: Number.isInteger(capacity) && capacity > 0,
+    };
+  });
+  const totalCapacity = parsedTiers.reduce(
+    (sum, tier) => sum + (tier.capacityValid ? tier.capacity : 0),
+    0
+  );
+  const maxRevenue = parsedTiers.every((tier) => tier.priceValid && tier.capacityValid)
+    ? formatAmount(
+        stroopsToDecimal(
+          parsedTiers.reduce(
+            (sum, tier) => sum + decimalToStroops(tier.priceDecimal) * BigInt(tier.capacity),
+            0n
+          )
+        ),
+        locale
+      )
+    : null;
 
   function review(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!priceValid) return setError(t.create.errorPrice);
-    if (new Date(laPazLocalToUtcIso(datetimeLocal)).getTime() < Date.now()) {
+    for (const tier of parsedTiers) {
+      if (!tier.name) return setError(t.tiers.errorName);
+      if (!tier.priceValid) return setError(t.tiers.errorPrice);
+      if (!tier.capacityValid) return setError(t.tiers.errorCapacity);
+    }
+    const names = parsedTiers.map((tier) => tier.name.toLocaleLowerCase());
+    if (new Set(names).size !== names.length) return setError(t.tiers.errorDuplicate);
+    if (isInThePast(laPazLocalToUtcIso(datetimeLocal))) {
       return setError(t.create.errorPastDate);
     }
     setPreview(true);
@@ -92,10 +130,13 @@ export default function CreateEventPage() {
           description,
           place,
           datetimeUtc: laPazLocalToUtcIso(datetimeLocal),
-          priceDecimal: normalizedPrice,
-          capacity: capacityNumber,
           organizerName,
           organizerContact,
+          ticketTypes: parsedTiers.map((tier) => ({
+            name: tier.name,
+            priceDecimal: tier.priceDecimal,
+            capacity: tier.capacity,
+          })),
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -115,6 +156,10 @@ export default function CreateEventPage() {
 
   if (preview) {
     const contact = contactHref(organizerContact);
+    const cheapest = parsedTiers.reduce(
+      (min, tier) => (decimalToStroops(tier.priceDecimal) < min ? decimalToStroops(tier.priceDecimal) : min),
+      decimalToStroops(parsedTiers[0].priceDecimal)
+    );
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
         <AppHeader title={t.preview.title} back={{ href: "/mis-eventos", label: t.myEvents.title }} />
@@ -124,7 +169,7 @@ export default function CreateEventPage() {
         <Card className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <span className="w-fit rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary">
-              {t.event.ticketBadge(formatAmount(normalizedPrice, locale))}
+              {t.tiers.from(formatAmount(stroopsToDecimal(cheapest), locale))}
             </span>
             <h2 className="text-2xl font-extrabold leading-tight tracking-tight">{name}</h2>
             {description && <p className="text-sm leading-6 text-muted">{description}</p>}
@@ -162,17 +207,27 @@ export default function CreateEventPage() {
               </li>
             )}
           </ul>
-          <div className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-1.5 text-muted">
-              <Icon name="users" size={16} /> {t.event.seats}
-            </span>
-            <span className="font-semibold">{t.event.remaining(capacityNumber, capacityNumber)}</span>
-          </div>
         </Card>
 
-        {maxRevenue && (
-          <p className="px-1 text-xs leading-5 text-muted">{t.create.maxRevenue(maxRevenue).trim()}</p>
-        )}
+        <section className="flex flex-col gap-2">
+          <h3 className="px-1 text-sm font-bold">{t.tiers.sectionTitle}</h3>
+          {parsedTiers.map((tier) => (
+            <Card key={tier.name} className="flex items-center justify-between gap-3 p-4">
+              <div className="min-w-0">
+                <p className="font-semibold">{tier.name}</p>
+                <p className="text-xs text-muted">{t.tiers.remaining(tier.capacity)}</p>
+              </div>
+              <span className="shrink-0 font-mono text-lg font-bold">
+                {formatAmount(tier.priceDecimal, locale)}
+                <span className="ml-1 text-xs font-normal text-muted">USDC</span>
+              </span>
+            </Card>
+          ))}
+          <p className="px-1 text-xs leading-5 text-muted">
+            {t.tiers.totalCapacity(totalCapacity)}
+            {maxRevenue && t.create.maxRevenue(maxRevenue)}
+          </p>
+        </section>
 
         {error && (
           <p className="rounded-xl border border-error-border bg-error-light px-3 py-2 text-sm text-error">
@@ -261,28 +316,70 @@ export default function CreateEventPage() {
 
           <fieldset className="flex flex-col gap-4 border-t border-border pt-5">
             <legend className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
-              {t.create.sectionTickets}
+              {t.tiers.sectionTitle}
             </legend>
-            <Input
-              label={t.create.price}
-              inputMode="decimal"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder={t.create.pricePlaceholder}
-              required
-            />
+            <Hint>{t.tiers.typeHint}</Hint>
+
+            {tiers.map((tier, index) => (
+              <div
+                key={index}
+                className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-3"
+              >
+                <div className="flex items-end gap-2">
+                  <Input
+                    label={t.tiers.typeName}
+                    value={tier.name}
+                    onChange={(e) => updateTier(index, { name: e.target.value })}
+                    placeholder={t.tiers.typeNamePlaceholder}
+                    maxLength={40}
+                    required
+                    className="flex-1"
+                  />
+                  {tiers.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setTiers((current) => current.filter((_, i) => i !== index))}
+                      aria-label={t.tiers.removeType}
+                      className="mb-1 flex h-10 w-10 items-center justify-center rounded-xl border border-border text-muted transition-colors hover:border-error-border hover:text-error"
+                    >
+                      <Icon name="x" size={16} />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    label={t.tiers.typePrice}
+                    inputMode="decimal"
+                    value={tier.price}
+                    onChange={(e) => updateTier(index, { price: e.target.value })}
+                    placeholder={t.create.pricePlaceholder}
+                    required
+                  />
+                  <Input
+                    label={t.tiers.typeCapacity}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={tier.capacity}
+                    onChange={(e) => updateTier(index, { capacity: e.target.value })}
+                    placeholder={t.create.capacityPlaceholder}
+                    required
+                  />
+                </div>
+              </div>
+            ))}
+
+            {tiers.length < MAX_TICKET_TYPES && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setTiers((current) => [...current, { name: "", price: "", capacity: "" }])}
+              >
+                <Icon name="plus" size={16} />
+                {t.tiers.addType}
+              </Button>
+            )}
             <Hint>{t.create.priceHint}</Hint>
-            <Input
-              label={t.create.capacity}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={capacity}
-              onChange={(e) => setCapacity(e.target.value)}
-              placeholder={t.create.capacityPlaceholder}
-              required
-            />
-            <Hint>{t.create.capacityHint}</Hint>
           </fieldset>
 
           <div className="flex items-start gap-3 rounded-xl border border-border bg-surface p-3 text-xs leading-5 text-muted">

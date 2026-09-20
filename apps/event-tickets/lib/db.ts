@@ -67,6 +67,23 @@ const SCHEMA_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS sales_event_idx ON sales (event_id)`,
   `CREATE INDEX IF NOT EXISTS sales_status_idx ON sales (status)`,
   `CREATE INDEX IF NOT EXISTS sales_buyer_idx ON sales (buyer_pollar_id)`,
+  /**
+   * Ticket tiers (General, VIP, …). An event's seats live here, not on the
+   * event: capacity and price are per tier, and so is the atomic
+   * reservation. Every event has at least one.
+   */
+  `CREATE TABLE IF NOT EXISTS ticket_types (
+     id TEXT PRIMARY KEY,
+     event_id TEXT NOT NULL REFERENCES events(id),
+     name TEXT NOT NULL,
+     price_stroops INTEGER NOT NULL,
+     capacity INTEGER NOT NULL,
+     reserved INTEGER NOT NULL DEFAULT 0,
+     capacity_increases INTEGER NOT NULL DEFAULT 0,
+     sort_order INTEGER NOT NULL DEFAULT 0,
+     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+  `CREATE INDEX IF NOT EXISTS ticket_types_event_idx ON ticket_types (event_id)`,
   `CREATE TABLE IF NOT EXISTS tickets (
      id TEXT PRIMARY KEY,
      sale_id TEXT NOT NULL UNIQUE REFERENCES sales(id),
@@ -99,6 +116,27 @@ const ADDED_COLUMNS = [
   // in the language they bought in. Never shown to the organizer.
   `ALTER TABLE sales ADD COLUMN buyer_email TEXT`,
   `ALTER TABLE sales ADD COLUMN buyer_locale TEXT`,
+  // Which tier this sale holds a seat in.
+  `ALTER TABLE sales ADD COLUMN ticket_type_id TEXT`,
+];
+
+/**
+ * Events created before tiers existed carry their price and capacity on the
+ * event row; give each one a single "General" tier holding exactly those
+ * numbers, and point their sales at it. Idempotent: both statements skip
+ * rows that already have a tier.
+ */
+const BACKFILL_STATEMENTS = [
+  `INSERT INTO ticket_types (id, event_id, name, price_stroops, capacity, reserved, sort_order)
+   SELECT lower(hex(randomblob(16))), events.id, 'General',
+          events.price_stroops, events.capacity, events.reserved, 0
+   FROM events
+   WHERE NOT EXISTS (SELECT 1 FROM ticket_types WHERE ticket_types.event_id = events.id)`,
+  `UPDATE sales SET ticket_type_id = (
+     SELECT ticket_types.id FROM ticket_types
+     WHERE ticket_types.event_id = sales.event_id
+     ORDER BY ticket_types.sort_order LIMIT 1
+   ) WHERE ticket_type_id IS NULL`,
 ];
 
 async function runMigrations(): Promise<void> {
@@ -111,6 +149,9 @@ async function runMigrations(): Promise<void> {
     } catch (err) {
       if (!(err instanceof Error && /duplicate column/i.test(err.message))) throw err;
     }
+  }
+  for (const statement of BACKFILL_STATEMENTS) {
+    await db.execute(statement);
   }
 }
 

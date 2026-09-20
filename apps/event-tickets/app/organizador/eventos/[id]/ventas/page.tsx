@@ -26,6 +26,7 @@ type Sale = {
   refundTxHash: string | null;
   createdAt: string;
   usedAt: string | null;
+  ticketTypeName: string | null;
 };
 
 type LoadState =
@@ -166,7 +167,10 @@ export default function SalesPage({
                     <span className="font-mono text-xs" title={sale.buyerPollarId}>
                       {t.sales.buyer(shortAddress(sale.buyerPollarId))}
                     </span>
-                    <span className="text-xs text-muted">{formatTimestamp(sale.createdAt, locale)}</span>
+                    <span className="text-xs text-muted">
+                      {formatTimestamp(sale.createdAt, locale)}
+                      {sale.ticketTypeName ? ` · ${sale.ticketTypeName}` : ""}
+                    </span>
                     {sale.txHash && (
                       <a
                         href={`https://stellar.expert/explorer/testnet/tx/${sale.txHash}`}

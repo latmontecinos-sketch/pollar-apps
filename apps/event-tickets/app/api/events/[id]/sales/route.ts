@@ -18,6 +18,7 @@ type SaleRow = {
   refund_tx_hash: string | null;
   created_at: string;
   used_at: string | null;
+  ticket_type_name: string | null;
 };
 
 /** Owner-only: every sale ever made for this event, newest first, with whether its ticket already got in. */
@@ -41,8 +42,11 @@ export async function GET(request: Request, ctx: Ctx) {
 
   const result = await db.execute({
     sql: `SELECT sales.id, sales.buyer_pollar_id, sales.status, sales.amount_stroops,
-                 sales.tx_hash, sales.refund_tx_hash, sales.created_at, tickets.used_at
-          FROM sales LEFT JOIN tickets ON tickets.sale_id = sales.id
+                 sales.tx_hash, sales.refund_tx_hash, sales.created_at, tickets.used_at,
+                 ticket_types.name AS ticket_type_name
+          FROM sales
+          LEFT JOIN tickets ON tickets.sale_id = sales.id
+          LEFT JOIN ticket_types ON ticket_types.id = sales.ticket_type_id
           WHERE sales.event_id = ? ORDER BY sales.created_at DESC`,
     args: [id],
   });
@@ -57,6 +61,7 @@ export async function GET(request: Request, ctx: Ctx) {
     refundTxHash: row.refund_tx_hash,
     createdAt: sqlUtcToIso(row.created_at),
     usedAt: sqlUtcToIso(row.used_at),
+    ticketTypeName: row.ticket_type_name,
   }));
 
   const paidTotal = rows
