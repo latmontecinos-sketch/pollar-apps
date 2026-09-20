@@ -4,6 +4,8 @@ import { db, dbReady } from "@/lib/db";
 import { sqlUtcToIso } from "@/lib/format";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/locales";
 import { sendCheckinEmail } from "@/lib/mail";
+import { enforce } from "@/lib/rate-limit";
+import { securityLog, shortAddress } from "@/lib/security-log";
 import { validateAtDoor } from "@/lib/tickets";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -86,6 +88,11 @@ export async function POST(request: Request, ctx: Ctx) {
   const access = requireDoorAccess(request, event);
   if (!access.ok) return access.response;
 
+  // Per event, not per actor: the staff link is one shared credential, and
+  // the limit is what a real door scans in an hour with room to spare.
+  const limited = await enforce("door", id, { event: id });
+  if (limited) return limited;
+
   let body: { code?: string };
   try {
     body = (await request.json()) as { code?: string };
@@ -98,6 +105,12 @@ export async function POST(request: Request, ctx: Ctx) {
   const result = await validateAtDoor(id, code, access.actor);
   switch (result.result) {
     case "VALID":
+      // The one irreversible act at the door: a ticket just got spent.
+      securityLog("checkin.accepted", {
+        event: id,
+        ticket: result.ticket.id,
+        by: shortAddress(access.actor),
+      });
       await notifyBuyer(result.ticket.saleId, event.name);
       return NextResponse.json({ result: "VALID", checkedIn: (await doorCounts(id)).checkedIn });
     case "USED":

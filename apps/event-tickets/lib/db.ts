@@ -84,6 +84,16 @@ const SCHEMA_STATEMENTS = [
      created_at TEXT NOT NULL DEFAULT (datetime('now'))
    )`,
   `CREATE INDEX IF NOT EXISTS ticket_types_event_idx ON ticket_types (event_id)`,
+  /**
+   * Fixed-window rate limiting (lib/rate-limit.ts). One row per
+   * "quota:subject"; rows older than the longest window are swept
+   * opportunistically, so this stays small without a cron.
+   */
+  `CREATE TABLE IF NOT EXISTS rate_limits (
+     bucket TEXT PRIMARY KEY,
+     hits INTEGER NOT NULL DEFAULT 0,
+     window_start TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
   `CREATE TABLE IF NOT EXISTS tickets (
      id TEXT PRIMARY KEY,
      sale_id TEXT NOT NULL UNIQUE REFERENCES sales(id),

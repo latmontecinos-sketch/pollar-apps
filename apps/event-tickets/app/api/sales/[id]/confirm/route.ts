@@ -6,6 +6,8 @@ import { findPaymentHashByMemo, verifyPaymentOnHorizon } from "@/lib/horizon";
 import { settlePayment } from "@/lib/sales";
 import { sendTicketEmail } from "@/lib/mail";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/locales";
+import { enforce } from "@/lib/rate-limit";
+import { shortAddress } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -35,6 +37,13 @@ export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const auth = requireSignedAddress(request);
   if (!auth.ok) return auth.response;
+
+  // Every confirm can fan out up to three requests to Horizon, so a loop
+  // from one account would get us throttled and break everyone's checkout.
+  const limited = await enforce("confirmSale", auth.address, {
+    actor: shortAddress(auth.address),
+  });
+  if (limited) return limited;
 
   await dbReady();
   const result = await db.execute({

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { newId } from "@/lib/ids";
+import { enforce } from "@/lib/rate-limit";
+import { shortAddress } from "@/lib/security-log";
 import {
   createTicketTypes,
   parseTicketTypes,
@@ -29,6 +31,11 @@ function badRequest(error: string, code?: string) {
 export async function POST(request: Request) {
   const auth = requireSignedAddress(request);
   if (!auth.ok) return auth.response;
+
+  const limited = await enforce("createEvent", auth.address, {
+    actor: shortAddress(auth.address),
+  });
+  if (limited) return limited;
 
   let body: Partial<CreateEventBody>;
   try {

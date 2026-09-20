@@ -3,7 +3,9 @@ import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { findPaymentHashByMemo, verifyPaymentOnHorizon } from "@/lib/horizon";
 import { stroopsToDecimal } from "@/lib/money";
+import { enforce } from "@/lib/rate-limit";
 import { markRefunded, refundMemo } from "@/lib/sales";
+import { securityLog, shortAddress } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -60,6 +62,11 @@ export async function POST(request: Request, ctx: Ctx) {
   const auth = requireAddress(request, sale.organizer_pollar_id);
   if (!auth.ok) return auth.response;
 
+  const limited = await enforce("refundSale", auth.address, {
+    actor: shortAddress(auth.address),
+  });
+  if (limited) return limited;
+
   if (sale.status === "refunded") {
     return NextResponse.json({ status: "refunded", refundTxHash: sale.refund_tx_hash });
   }
@@ -102,5 +109,7 @@ export async function POST(request: Request, ctx: Ctx) {
   }
 
   await markRefunded(sale.id, hash);
+  // Money leaving the organizer's account is worth a line in the log.
+  securityLog("refund.recorded", { sale: sale.id, organizer: shortAddress(auth.address) });
   return NextResponse.json({ status: "refunded", refundTxHash: hash });
 }

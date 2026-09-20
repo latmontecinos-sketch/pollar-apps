@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { newDoorToken, requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
+import { enforce } from "@/lib/rate-limit";
+import { shortAddress } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -20,6 +22,9 @@ export async function POST(request: Request, ctx: Ctx) {
   if (!organizer) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
   const auth = requireAddress(request, organizer);
   if (!auth.ok) return auth.response;
+
+  const limited = await enforce("doorLink", auth.address, { actor: shortAddress(auth.address) });
+  if (limited) return limited;
 
   const token = newDoorToken();
   await db.execute({ sql: "UPDATE events SET door_token = ? WHERE id = ?", args: [token, id] });

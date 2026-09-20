@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { sweepExpiredSales } from "@/lib/sales";
+import { enforce } from "@/lib/rate-limit";
+import { shortAddress } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -25,6 +27,9 @@ export async function POST(request: Request, ctx: Ctx) {
 
   const auth = requireAddress(request, String(eventRow.rows[0].organizer_pollar_id));
   if (!auth.ok) return auth.response;
+
+  const limited = await enforce("sweep", auth.address, { actor: shortAddress(auth.address) });
+  if (limited) return limited;
 
   const expired = await sweepExpiredSales({ eventId });
   return NextResponse.json({ expired });

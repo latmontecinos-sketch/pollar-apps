@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireDoorAccess } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { sqlUtcToIso } from "@/lib/format";
+import { enforce } from "@/lib/rate-limit";
 import { peekAtDoor } from "@/lib/tickets";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -27,6 +28,11 @@ export async function POST(request: Request, ctx: Ctx) {
 
   const access = requireDoorAccess(request, eventResult.rows[0] as unknown as EventRow);
   if (!access.ok) return access.response;
+
+  // Shares the door budget with the check-in itself: peeking is free to
+  // repeat by design, which is exactly what makes it worth guessing codes on.
+  const limited = await enforce("door", id, { event: id });
+  if (limited) return limited;
 
   let body: { code?: string };
   try {
