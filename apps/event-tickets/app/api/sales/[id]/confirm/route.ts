@@ -4,10 +4,10 @@ import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { findPaymentHashByMemo, verifyPaymentOnHorizon } from "@/lib/horizon";
 import { settlePayment } from "@/lib/sales";
-import { sendTicketEmail } from "@/lib/mail";
+import { appOrigin, isDeliverableEmail, sendTicketEmail } from "@/lib/mail";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/locales";
 import { enforce } from "@/lib/rate-limit";
-import { shortAddress } from "@/lib/security-log";
+import { maskEmail, securityLog, shortAddress } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -67,7 +67,11 @@ export async function POST(request: Request, ctx: Ctx) {
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
-  const email = body.email?.trim() ?? "";
+  // An unvalidated address goes straight into our Resend "to" and into the
+  // database forever; anything that isn't a mailbox is simply dropped, and
+  // the purchase carries on (the ticket lives in the buyer's account).
+  const candidate = body.email?.trim() ?? "";
+  const email = isDeliverableEmail(candidate) ? candidate : "";
   const locale = isLocale(body.locale) ? body.locale : DEFAULT_LOCALE;
   let hash = body.hash?.trim() ?? "";
 
@@ -108,6 +112,15 @@ export async function POST(request: Request, ctx: Ctx) {
         { status: 422 }
       );
     }
+    if (check.code === "mismatch") {
+      // A real transaction that doesn't match this sale: either a mistake
+      // worth helping with, or someone trying to pass off a payment.
+      securityLog("payment.mismatch", {
+        sale: sale.id,
+        actor: shortAddress(auth.address),
+        hash: hash.slice(0, 12),
+      });
+    }
     const status = check.code === "mismatch" ? 400 : 503;
     return NextResponse.json({ error: check.error }, { status });
   }
@@ -130,7 +143,7 @@ export async function POST(request: Request, ctx: Ctx) {
         const mailResult = await sendTicketEmail({
           to: email,
           locale,
-          origin: new URL(request.url).origin,
+          origin: appOrigin(request),
           eventName: sale.event_name,
           eventDateTime: sale.event_datetime_utc,
           eventPlace: sale.event_place,
@@ -138,7 +151,8 @@ export async function POST(request: Request, ctx: Ctx) {
           doorCode: settled.ticket.doorCode,
         });
         if (!mailResult.sent) {
-          console.error(`[mail] ticket email to ${email} failed: ${mailResult.error}`);
+          // Masked: which provider bounced is useful, who bought is not.
+          console.error(`[mail] ticket email to ${maskEmail(email)} failed: ${mailResult.error}`);
         }
       }
       return NextResponse.json({

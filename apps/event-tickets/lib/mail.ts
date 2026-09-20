@@ -1,5 +1,5 @@
-import { formatEventDateTime, formatTimestamp } from "@/lib/format";
-import { dictFor, type Locale } from "@/lib/i18n";
+import { formatEventDateTime, formatTimestamp } from "./format.ts";
+import { dictFor, type Locale } from "./i18n/index.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 const FROM = "Pollar Pass <onboarding@resend.dev>";
@@ -9,11 +9,18 @@ const PRIMARY = "#005db4";
 const INK = "#111827";
 const MUTED = "#6b7280";
 
+/**
+ * Quotes included: today every interpolation below lands in text, but the
+ * one attribute here is a URL, and "this value never goes in an attribute"
+ * is a property one edit away from stopping being true.
+ */
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function shell(inner: string): string {
@@ -49,7 +56,7 @@ function ticketEmailHtml(opts: {
       <div style="padding:24px;text-align:center;">
         <p style="margin:0 0 18px;font-size:14px;color:${MUTED};">${when} · ${place}</p>
         <!-- Hosted PNG, not a data: URI: Gmail and Outlook drop inline base64 images. -->
-        <img src="${opts.qrUrl}" width="240" height="240" alt="QR"
+        <img src="${escapeHtml(opts.qrUrl)}" width="240" height="240" alt="QR"
              style="display:block;margin:0 auto;border:1px solid #e5e7eb;border-radius:16px;" />
         <p style="margin:22px 0 2px;font-size:12px;color:${MUTED};text-transform:uppercase;letter-spacing:0.6px;">
           ${escapeHtml(t.email.doorCode)}
@@ -81,6 +88,28 @@ function checkinEmailHtml(opts: {
         ${escapeHtml(t.email.checkinEnjoy(name))}
       </p>
     </div>`);
+}
+
+/** RFC-max length; anything longer is someone probing, not a mailbox. */
+const MAX_EMAIL_LENGTH = 254;
+
+/**
+ * Deliberately loose — one @, no spaces, something either side, a dot in
+ * the domain. Enough to keep junk out of the database and out of Resend's
+ * "to" field; the real validation is whether the mail arrives.
+ */
+export function isDeliverableEmail(value: string): boolean {
+  return value.length <= MAX_EMAIL_LENGTH && /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(value);
+}
+
+/**
+ * Where the QR in the email points. Taken from configuration, not from the
+ * request's Host header: that header is attacker-controlled, and an email
+ * we send should never take a stranger's word for which host to embed.
+ */
+export function appOrigin(request: Request): string {
+  const configured = process.env.APP_ORIGIN?.trim().replace(/\/$/, "");
+  return configured || new URL(request.url).origin;
 }
 
 type SendResult = { sent: boolean; error?: string };

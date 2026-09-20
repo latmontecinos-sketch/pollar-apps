@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { db, dbReady } from "./db.ts";
 import { securityLog } from "./security-log.ts";
 
@@ -93,8 +92,8 @@ export async function consume(name: QuotaName, subject: string): Promise<RateRes
  * The 429 to return when {@link consume} says no. Deliberately vague about
  * which limit was hit and how much is left — that's a map of our defences.
  */
-export function tooManyRequests(result: { retryAfterSeconds: number }): NextResponse {
-  return NextResponse.json(
+export function tooManyRequests(result: { retryAfterSeconds: number }): Response {
+  return Response.json(
     { error: "Demasiados intentos seguidos. Espera un momento y volvé a intentar.", code: "rate_limited" },
     { status: 429, headers: { "Retry-After": String(result.retryAfterSeconds) } }
   );
@@ -105,7 +104,7 @@ export async function enforce(
   name: QuotaName,
   subject: string,
   context: Record<string, string | number | undefined> = {}
-): Promise<NextResponse | null> {
+): Promise<Response | null> {
   const result = await consume(name, subject);
   if (result.ok) return null;
   securityLog("rate.limited", { quota: name, ...context });

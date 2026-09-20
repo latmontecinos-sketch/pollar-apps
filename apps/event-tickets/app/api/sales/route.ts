@@ -99,7 +99,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No se pudo generar una referencia única" }, { status: 500 });
   }
   if (!result.ok) {
-    return NextResponse.json({ error: "Evento agotado" }, { status: 409 });
+    return result.reason === "key_taken"
+      ? NextResponse.json(
+          { error: "Esa reserva ya se usó. Recarga la página e intenta de nuevo.", code: "key_taken" },
+          { status: 409 }
+        )
+      : NextResponse.json({ error: "Evento agotado" }, { status: 409 });
   }
 
   return NextResponse.json(

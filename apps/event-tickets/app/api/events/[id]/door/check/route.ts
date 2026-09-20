@@ -7,7 +7,12 @@ import { peekAtDoor } from "@/lib/tickets";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-type EventRow = { organizer_pollar_id: string; door_token: string | null };
+type EventRow = {
+  organizer_pollar_id: string;
+  door_token: string | null;
+  /** The staff link expires with the event — see `requireDoorAccess`. */
+  datetime_utc: string;
+};
 
 /**
  * Step 1 of check-in: says what a scanned code is **without spending it**,
@@ -19,7 +24,7 @@ export async function POST(request: Request, ctx: Ctx) {
 
   await dbReady();
   const eventResult = await db.execute({
-    sql: "SELECT organizer_pollar_id, door_token FROM events WHERE id = ?",
+    sql: "SELECT organizer_pollar_id, door_token, datetime_utc FROM events WHERE id = ?",
     args: [id],
   });
   if (eventResult.rows.length === 0) {

@@ -1,3 +1,4 @@
+import { decimalToStroops } from "./money.ts";
 import { isUsdcPayment } from "./usdc.ts";
 
 const HORIZON =
@@ -29,10 +30,19 @@ type HorizonOp = {
   asset_issuer?: string;
 };
 
-function normalizeAmount(value: string): string {
-  const n = Number(value);
-  if (Number.isNaN(n)) return value.trim();
-  return n.toFixed(7);
+/**
+ * Amounts are compared in stroops, never as floats. Everything else in this
+ * codebase already refuses to put money through a `number`, and this was the
+ * one place that didn't: past ~9·10⁹ USDC two different amounts collapse
+ * onto the same double, which is exactly the kind of "can't happen at our
+ * prices" that stops being true the day it matters.
+ */
+function sameAmount(a: string, b: string): boolean {
+  try {
+    return decimalToStroops(a.trim()) === decimalToStroops(b.trim());
+  } catch {
+    return false;
+  }
 }
 
 async function horizonGet<T>(path: string): Promise<T | null> {
@@ -142,9 +152,7 @@ export async function verifyPaymentOnHorizon(opts: {
     if (op.to !== opts.destination) return false;
     if (opts.source && op.from !== opts.source) return false;
     if (!isUsdcPayment(op)) return false;
-    if (normalizeAmount(op.amount ?? "") !== normalizeAmount(opts.amountDecimal)) {
-      return false;
-    }
+    if (!sameAmount(op.amount ?? "", opts.amountDecimal)) return false;
     return true;
   });
 

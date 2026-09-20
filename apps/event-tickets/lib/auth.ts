@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Keypair } from "@stellar/stellar-base";
-import { NextResponse } from "next/server";
-import { authMessage, POLLAR_PROOF_HEADER } from "./auth-message.ts";
+import { authMessage, normalizeRoute, POLLAR_PROOF_HEADER } from "./auth-message.ts";
+import { securityLog, shortAddress } from "./security-log.ts";
 
 /**
  * Server-side identity for a Pollar user, without an "Authorization: Bearer".
@@ -12,11 +12,25 @@ import { authMessage, POLLAR_PROOF_HEADER } from "./auth-message.ts";
  * apps/vendor-pay-link, a merged PR in this monorepo): the client signs a
  * short-lived message via `client.stellar.sep53.signMessage()`, and we
  * verify that signature purely cryptographically — no call to Pollar at all.
+ *
+ * Returns plain `Response`s rather than `NextResponse`: route handlers
+ * accept either, and not importing `next/server` is what lets the abuse
+ * cases in tests/security.test.mts run this module directly under `node
+ * --test`, with no framework booted around it.
  */
 
 export { POLLAR_PROOF_HEADER };
 const SEP53_PREFIX = "Stellar Signed Message:\n";
-const MAX_TTL_MS = 10 * 60 * 1000;
+/**
+ * A proof is a bearer credential for its window: whoever holds the header
+ * is the user until it expires. It's bound to one endpoint (see
+ * `authMessage`), so the window is all that's left to shrink — the client
+ * signs for 2 minutes, and anything claiming more than 3 is refused.
+ *
+ * Not single-use, deliberately: on an external wallet every signature is a
+ * popup, so per-request signing would put a prompt in front of each tap.
+ */
+const MAX_TTL_MS = 3 * 60 * 1000;
 
 function decodeSignature(signature: string): Buffer | null {
   const trimmed = signature.trim();
@@ -55,10 +69,10 @@ export type ProofPayload = { address: string; exp: number; signature: string };
 
 type AuthOutcome =
   | { ok: true; address: string }
-  | { ok: false; response: NextResponse };
+  | { ok: false; response: Response };
 
 function fail(status: number, error: string): AuthOutcome {
-  return { ok: false, response: NextResponse.json({ error }, { status }) };
+  return { ok: false, response: Response.json({ error }, { status }) };
 }
 
 /**
@@ -74,27 +88,56 @@ export function requireSignedAddress(request: Request): AuthOutcome {
   try {
     proof = JSON.parse(raw) as ProofPayload;
   } catch {
-    return fail(401, "Prueba de sesión inválida");
+    return reject(request, "malformed");
   }
 
   const address = proof.address?.trim() ?? "";
   const exp = Number(proof.exp);
   const signature = proof.signature?.trim() ?? "";
   if (!/^G[A-Z2-7]{55}$/.test(address) || !Number.isFinite(exp) || !signature) {
-    return fail(401, "Prueba de sesión inválida");
+    return reject(request, "malformed");
   }
 
   const now = Date.now();
   if (exp < now || exp > now + MAX_TTL_MS) {
+    securityLog("auth.rejected", {
+      reason: "expired",
+      route: routeOf(request),
+      actor: shortAddress(address),
+    });
     return fail(401, "La sesión expiró. Recarga la página e intenta de nuevo.");
   }
 
-  const message = authMessage(address, exp);
+  // The signature covers the endpoint being called, so a proof lifted from
+  // one request can't be spent on another.
+  const { method, path } = requestRoute(request);
+  const message = authMessage(address, exp, method, path);
   if (!verifySep53({ address, message, signature })) {
-    return fail(401, "No se pudo verificar la sesión Pollar");
+    return reject(request, "bad_signature", address);
   }
 
   return { ok: true, address };
+}
+
+function requestRoute(request: Request): { method: string; path: string } {
+  return { method: request.method, path: new URL(request.url).pathname };
+}
+
+function routeOf(request: Request): string {
+  const { method, path } = requestRoute(request);
+  return `${method} ${normalizeRoute(path)}`;
+}
+
+function reject(request: Request, reason: string, address?: string): AuthOutcome {
+  securityLog("auth.rejected", {
+    reason,
+    route: routeOf(request),
+    actor: address && shortAddress(address),
+  });
+  return fail(
+    401,
+    "No se pudo verificar la sesión Pollar. Recarga la página e intenta de nuevo."
+  );
 }
 
 export const DOOR_TOKEN_HEADER = "x-door-token";
@@ -111,23 +154,42 @@ function sameSecret(a: string, b: string): boolean {
 }
 
 /**
+ * How long a staff door link outlives the event it belongs to. A link that
+ * works forever is a credential the organizer stops thinking about: it gets
+ * forwarded, screenshotted and left in a WhatsApp group, and it still opens
+ * the door months later. Tying it to the event means it dies on its own.
+ */
+export const DOOR_TOKEN_GRACE_MS = 24 * 60 * 60 * 1000;
+
+export function doorTokenExpired(eventIsoUtc: string, now = Date.now()): boolean {
+  const start = new Date(eventIsoUtc).getTime();
+  return !Number.isNaN(start) && now > start + DOOR_TOKEN_GRACE_MS;
+}
+
+/**
  * Door check-in access: either the organizer's own signed session, or the
  * event's staff door token (what the organizer hands to whoever runs the
  * entrance). The token only ever unlocks check-in for *this* event — never
- * the panel, the sales list or edits — and the organizer can revoke it.
+ * the panel, the sales list or edits — the organizer can revoke it, and it
+ * lapses a day after the event whether they remember to or not.
  */
 export function requireDoorAccess(
   request: Request,
-  event: { organizer_pollar_id: string; door_token: string | null }
-): { ok: true; actor: string } | { ok: false; response: NextResponse } {
+  event: { organizer_pollar_id: string; door_token: string | null; datetime_utc: string }
+): { ok: true; actor: string } | { ok: false; response: Response } {
   const token = request.headers.get(DOOR_TOKEN_HEADER)?.trim();
   if (token) {
-    if (event.door_token && sameSecret(token, event.door_token)) {
+    const expired = doorTokenExpired(event.datetime_utc);
+    if (!expired && event.door_token && sameSecret(token, event.door_token)) {
       return { ok: true, actor: "staff" };
     }
+    securityLog("door.token_rejected", {
+      route: routeOf(request),
+      reason: expired ? "event_over" : event.door_token ? "mismatch" : "revoked",
+    });
     return {
       ok: false,
-      response: NextResponse.json(
+      response: Response.json(
         { error: "Este link de puerta ya no es válido. Pide uno nuevo al organizador." },
         { status: 403 }
       ),

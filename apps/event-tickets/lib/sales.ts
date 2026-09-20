@@ -84,7 +84,7 @@ export type ReserveParams = {
 export type ReserveResult =
   /** `reused`: the buyer's existing live reservation, not a newly held seat. */
   | { ok: true; sale: Sale; reused?: boolean }
-  | { ok: false; reason: "sold_out" };
+  | { ok: false; reason: "sold_out" | "key_taken" };
 
 /**
  * Reserves a seat and creates the sale as one DB transaction: if the INSERT
@@ -102,13 +102,26 @@ export async function reserveAndCreateSale(
   params: ReserveParams
 ): Promise<ReserveResult> {
   return withTransaction(async (tx: Transaction) => {
+    // Scoped to the buyer on purpose: the key comes from the client, and
+    // an unscoped lookup would hand whoever guessed (or collided with)
+    // someone else's key that other person's sale — id, reference, amount.
+    // The key is a UUID today, so this closes a door rather than a hole.
     const existing = await tx.execute({
-      sql: "SELECT * FROM sales WHERE idempotency_key = ?",
-      args: [params.idempotencyKey],
+      sql: "SELECT * FROM sales WHERE idempotency_key = ? AND buyer_pollar_id = ?",
+      args: [params.idempotencyKey, params.buyerPollarId],
     });
     if (existing.rows.length > 0) {
       return { ok: true, sale: rowToSale(existing.rows[0]) };
     }
+
+    // Same key, different buyer: the column is UNIQUE, so inserting would
+    // blow up as a 500. Say what happened instead, without describing the
+    // sale that owns the key.
+    const taken = await tx.execute({
+      sql: "SELECT 1 FROM sales WHERE idempotency_key = ?",
+      args: [params.idempotencyKey],
+    });
+    if (taken.rows.length > 0) return { ok: false, reason: "key_taken" };
 
     const live = await tx.execute({
       sql: `SELECT * FROM sales
