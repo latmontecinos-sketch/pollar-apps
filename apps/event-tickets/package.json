@@ -7,12 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:probe": "node --env-file-if-exists=.env scripts/db-probe.mjs",
-    "spike:capacity": "node --env-file-if-exists=.env scripts/spike-capacity.mts",
-    "spike:door": "node --env-file-if-exists=.env scripts/spike-door.mts",
-    "spike:horizon-verify": "node --env-file-if-exists=.env scripts/spike-horizon-verify.mts",
+    "db:probe": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/db-probe.mjs",
+    "spike:capacity": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/spike-capacity.mts",
+    "spike:door": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/spike-door.mts",
+    "spike:horizon-verify": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/spike-horizon-verify.mts",
     "test": "node --test tests/*.test.mts",
-    "audit": "pnpm audit --audit-level high"
+    "audit": "pnpm audit --audit-level high",
+    "db:probe:prod": "node --env-file=.env.ops scripts/db-probe.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
