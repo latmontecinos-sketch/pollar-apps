@@ -21,7 +21,9 @@ export async function GET(_request: Request, ctx: Ctx) {
   return new Response(new Uint8Array(png), {
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // `private`: the URL *is* the ticket, so it belongs in the reader's
+      // own cache and never in a shared proxy's.
+      "Cache-Control": "private, max-age=31536000, immutable",
       "X-Robots-Tag": "noindex",
     },
   });
