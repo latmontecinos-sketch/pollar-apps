@@ -71,6 +71,16 @@ Scanning only **reads** the ticket (`POST /api/events/[id]/door/check`); the tic
 
 Pollar sessions are DPoP-bound — the signing key lives in the browser and never reaches this server, so a forwarded access token proves nothing here. Every write route instead requires a short-lived **SEP-53** signature of the live Pollar session (`x-pollar-proof`), verified purely cryptographically (`@stellar/stellar-base`, no call back to Pollar) — the same pattern already merged in `vendor-pay-link`. Ownership checks (editing an event, door mode, the sales view) return a real 403 for a different address.
 
+## Security
+
+A full review against the [OWASP Top 10:2025](https://owasp.org/Top10/2025/) lives in [docs/SEGURIDAD.md](docs/SEGURIDAD.md) — what's defended, what deliberately isn't, and where each control lives. The short version:
+
+- **The signature is bound to the endpoint.** `x-pollar-proof` signs `POST /api/sales/:id/confirm`, not just "I am this address", and lasts 2 minutes. A proof captured from a harmless read can't be replayed against the route that rotates the staff door link.
+- **Nothing the client says about money is trusted.** Price comes from the tier, the payment is verified on Horizon (destination, USDC issuer, amount in stroops, memo), and the memo is unique per sale so a payment can't be counted twice.
+- **The browser runs only our scripts.** Nonce-based CSP with `strict-dynamic`, plus `frame-ancestors 'none'` — the door's "Aceptar ingreso" button is one invisible iframe away from being clicked by someone else's page.
+- **Every route that costs us something has a ceiling** (`lib/rate-limit.ts`), sized to be invisible to a real user.
+- **The buyer's email deletes itself** 30 days after the event, because by then it has done its only two jobs.
+
 ## Money and codes
 
 - Amounts are integer **stroops** end to end (`lib/money.ts`), never floats.
@@ -102,10 +112,15 @@ Automated where it's cheap, by hand where it isn't. The spikes below run against
 ## Tests
 
 ```bash
-pnpm test    # node --test, no extra dependency
+pnpm test     # node --test, no extra dependency
+pnpm audit    # dependencies with a known CVE; fails on high or worse
 ```
 
 Covers what has actually broken here: stroops arithmetic (never floats), the SQLite-timestamp and timezone bugs, tier validation and capacity limits, the sale state machine (holds, expiry, late payments, refunds, one live reservation per buyer), and that all three dictionaries define the same keys with their interpolations intact.
+
+`tests/security.test.mts` covers the abuse cases instead: a proof replayed on a different endpoint or a different method, an expired one, one claiming a week of life, one forging someone else's address, a staff token used on the wrong event or after it ended, and a quota that lets the honest case through and stops the loop. They run the real modules directly — `lib/auth.ts` returns plain `Response`s precisely so no framework has to be booted around them.
+
+`.npmrc` sets `minimum-release-age=1440`: never install a version published less than 24 hours ago. A compromised release is usually yanked within hours, so our installs are never the ones that run it.
 
 ## Reproducible spikes
 

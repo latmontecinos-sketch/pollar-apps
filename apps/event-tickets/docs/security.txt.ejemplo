@@ -1,0 +1,17 @@
+# Plantilla de /.well-known/security.txt (RFC 9116).
+#
+# No está publicada todavía: publicar un contacto es una decisión que
+# conviene tomar a conciencia, porque un correo en un sitio público se
+# cosecha para siempre y no se puede despublicar.
+#
+# Para publicarla: completa Contact (un correo, o la URL de un formulario
+# o de un issue tracker público) y mueve este archivo a
+# public/.well-known/security.txt sin la extensión .ejemplo.
+#
+# Expires es obligatorio en la RFC y tiene que ser una fecha futura:
+# actualízala al renovarla, o el archivo deja de valer.
+
+Contact: COMPLETAR
+Expires: 2027-09-20T00:00:00.000Z
+Preferred-Languages: es, en
+Canonical: https://pollarpass.vercel.app/.well-known/security.txt
