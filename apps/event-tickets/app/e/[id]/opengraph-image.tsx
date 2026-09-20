@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { db, dbReady } from "@/lib/db";
 import { formatAmount, formatEventDateTime } from "@/lib/format";
+import { getDict } from "@/lib/i18n/server";
 import { stroopsToDecimal } from "@/lib/money";
 
 /**
@@ -23,6 +24,7 @@ type Row = { name: string; datetime_utc: string; place: string; price_stroops: s
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const { locale, t } = await getDict();
   await dbReady();
   const result = await db.execute({
     sql: "SELECT name, datetime_utc, place, price_stroops FROM events WHERE id = ?",
@@ -61,7 +63,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           }}
         >
           <div style={{ display: "flex", fontSize: 30, color: PRIMARY, fontWeight: 700 }}>
-            ENTRADA
+            {t.meta.ogTicket}
           </div>
           <div
             style={{
@@ -77,7 +79,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
           </div>
           {event && (
             <div style={{ display: "flex", marginTop: 28, fontSize: 34, color: MUTED }}>
-              {formatEventDateTime(event.datetime_utc)} · {event.place}
+              {formatEventDateTime(event.datetime_utc, locale)} · {event.place}
             </div>
           )}
           {event && (
@@ -93,7 +95,8 @@ export default async function Image({ params }: { params: Promise<{ id: string }
                   borderRadius: 999,
                 }}
               >
-                {formatAmount(stroopsToDecimal(BigInt(event.price_stroops)))} USDC · Compra tu entrada
+                {formatAmount(stroopsToDecimal(BigInt(event.price_stroops)), locale)} USDC ·{" "}
+                {t.meta.ogCta}
               </div>
             </div>
           )}

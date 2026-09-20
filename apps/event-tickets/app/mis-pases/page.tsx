@@ -6,7 +6,9 @@ import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, formatEventDateTime, formatTimestamp, salesClosed } from "@/lib/format";
+import { useLocale, useT } from "@/lib/i18n/client";
 import { AppHeader } from "@/components/AppHeader";
+import { HoldCountdown } from "@/components/HoldCountdown";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -33,6 +35,8 @@ type VerifyState = { busy: boolean; message?: string; tone?: "info" | "error" };
 
 export default function MisPasesPage() {
   const { user, isLoading: authLoading } = usePollarAuth();
+  const t = useT();
+  const locale = useLocale();
   const pollar = usePollar();
   const pollarRef = useRef(pollar);
   useEffect(() => {
@@ -64,7 +68,7 @@ export default function MisPasesPage() {
         pollarRef.current.getClient(),
         address,
         `/api/sales/${sale.id}/confirm`,
-        { method: "POST", body: JSON.stringify({ email: user?.profile?.mail }) }
+        { method: "POST", body: JSON.stringify({ email: user?.profile?.mail, locale }) }
       );
       const data = (await res.json()) as { ticket?: unknown; error?: string; code?: string };
       if (res.ok && data.ticket) {
@@ -75,9 +79,9 @@ export default function MisPasesPage() {
       const message =
         data.code === "no_payment"
           ? sale.status === "pending"
-            ? `No encontramos un pago para esta reserva. Si no pagaste, no hagas nada: se libera sola a las ${formatTimestamp(sale.expiresAtUtc)}.`
-            : "No encontramos ningún pago para esta reserva, así que no se te cobró nada."
-          : (data.error ?? "No pudimos verificar ahora. Intenta en unos segundos.");
+            ? t.tickets.noPaymentPending(formatTimestamp(sale.expiresAtUtc, locale))
+            : t.tickets.noPaymentOther
+          : (data.error ?? t.tickets.verifyRetry);
       setVerifying((v) => ({
         ...v,
         [sale.id]: { busy: false, message, tone: data.code === "no_payment" ? "info" : "error" },
@@ -86,7 +90,7 @@ export default function MisPasesPage() {
     } catch {
       setVerifying((v) => ({
         ...v,
-        [sale.id]: { busy: false, message: "Sin conexión. Intenta de nuevo.", tone: "error" },
+        [sale.id]: { busy: false, message: t.tickets.offline, tone: "error" },
       }));
     }
   }
@@ -96,10 +100,10 @@ export default function MisPasesPage() {
   if (!user) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title="Mis entradas" back={{ href: "/", label: "Inicio" }} />
+        <AppHeader title={t.tickets.title} back={{ href: "/", label: t.common.home }} />
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
-          <p className="max-w-sm text-muted">Ingresa para ver las entradas que compraste.</p>
+          <p className="max-w-sm text-muted">{t.tickets.loginNote}</p>
           <LoginButton />
         </div>
       </main>
@@ -108,7 +112,7 @@ export default function MisPasesPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title="Mis entradas" back={{ href: "/", label: "Inicio" }} />
+      <AppHeader title={t.tickets.title} back={{ href: "/", label: t.common.home }} />
 
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
@@ -118,18 +122,18 @@ export default function MisPasesPage() {
 
       {state.step === "error" && (
         <Card>
-          <p className="text-center text-sm text-error">No se pudieron cargar tus entradas. Recarga la página.</p>
+          <p className="text-center text-sm text-error">{t.tickets.loadError}</p>
         </Card>
       )}
 
       {state.step === "loaded" && state.sales.length === 0 && (
         <Card>
           <EmptyState
-            title="Todavía no tienes entradas"
-            description="Las entradas se compran desde el link que comparte cada organizador. Cuando compres una, aparecerá aquí con su QR."
+            title={t.tickets.emptyTitle}
+            description={t.tickets.emptyBody}
             action={
               <Link href="/como-funciona" className="text-sm font-semibold text-primary underline">
-                Ver cómo comprar una entrada →
+                {t.tickets.emptyCta}
               </Link>
             }
           />
@@ -148,11 +152,11 @@ export default function MisPasesPage() {
                     {sale.event.name}
                   </Link>
                   <p className="text-sm text-muted first-letter:uppercase">
-                    {formatEventDateTime(sale.event.datetimeUtc)} · {sale.event.place}
+                    {formatEventDateTime(sale.event.datetimeUtc, locale)} · {sale.event.place}
                   </p>
                 </div>
                 <span className="whitespace-nowrap font-mono text-xs font-semibold text-muted">
-                  {formatAmount(sale.amountDecimal)} USDC
+                  {formatAmount(sale.amountDecimal, locale)} USDC
                 </span>
               </div>
 
@@ -160,23 +164,25 @@ export default function MisPasesPage() {
                 <div className="flex flex-col items-center gap-3 border-t border-dashed border-border bg-surface px-5 py-5">
                   {sale.ticket.usedAt ? (
                     <span className="flex items-center gap-2 rounded-full bg-success-light px-3 py-1 text-sm font-semibold text-success">
-                      <Icon name="check" size={16} /> Usada el {formatTimestamp(sale.ticket.usedAt)}
+                      <Icon name="check" size={16} /> {t.tickets.usedAt(formatTimestamp(sale.ticket.usedAt, locale))}
                     </span>
                   ) : past ? (
-                    <span className="text-sm text-muted">Este evento ya pasó.</span>
+                    <span className="text-sm text-muted">{t.tickets.past}</span>
                   ) : (
                     <>
                       <div className="rounded-xl bg-background p-2 shadow-sm">
                         <TicketQr value={sale.ticket.code} size={180} />
                       </div>
-                      <p className="text-center text-xs text-muted">
-                        Muestra este QR en la puerta. Si no se puede escanear, dicta tu código:
-                      </p>
+                      <p className="text-center text-xs text-muted">{t.tickets.showQr}</p>
                     </>
                   )}
                   <div className="flex flex-col items-center gap-2">
-                    <span className="text-[11px] uppercase tracking-wide text-muted">Código de puerta</span>
-                    <span className="font-mono text-lg font-bold tracking-[0.2em]">{sale.ticket.doorCode}</span>
+                    <span className="text-[11px] uppercase tracking-wide text-muted">
+                      {t.tickets.doorCode}
+                    </span>
+                    <span className="font-mono text-lg font-bold tracking-[0.2em]">
+                      {sale.ticket.doorCode}
+                    </span>
                     {!sale.ticket.usedAt && !past && sale.ticket.doorCode && (
                       <SaveTicketButton
                         code={sale.ticket.code}
@@ -191,28 +197,30 @@ export default function MisPasesPage() {
               ) : (
                 <div className="flex flex-col gap-3 border-t border-border bg-surface px-5 py-4 text-sm">
                   {sale.status === "pending" && (
-                    <p className="flex items-start gap-2">
-                      <Icon name="clock" size={17} className="mt-0.5 text-primary" />
-                      <span>
-                        <span className="font-semibold">Compra sin confirmar.</span>{" "}
-                        <span className="text-muted">
-                          Tu cupo está reservado hasta las {formatTimestamp(sale.expiresAtUtc)}. Si ya
-                          pagaste, verifícalo aquí — no vuelvas a pagar.
+                    <>
+                      <p className="flex items-start gap-2">
+                        <Icon name="clock" size={17} className="mt-0.5 text-primary" />
+                        <span>
+                          <span className="font-semibold">{t.tickets.pendingStrong}</span>{" "}
+                          <span className="text-muted">
+                            {t.tickets.pendingBody(formatTimestamp(sale.expiresAtUtc, locale))}
+                          </span>
                         </span>
-                      </span>
-                    </p>
+                      </p>
+                      <HoldCountdown expiresAtUtc={sale.expiresAtUtc} onExpired={() => void load()} />
+                    </>
                   )}
                   {sale.status === "expired" && (
                     <p className="flex items-start gap-2 text-muted">
                       <Icon name="x" size={17} className="mt-0.5" />
-                      <span>Reserva vencida: no se completó el pago y no se te cobró nada.</span>
+                      <span>{t.tickets.expired}</span>
                     </p>
                   )}
                   {sale.status === "refunded" && (
                     <p className="flex items-start gap-2 text-muted">
                       <Icon name="check" size={17} className="mt-0.5 text-success" />
                       <span>
-                        El organizador te devolvió el pago.
+                        {t.tickets.refunded}
                         {sale.refundTxHash && (
                           <>
                             {" "}
@@ -222,7 +230,7 @@ export default function MisPasesPage() {
                               rel="noopener noreferrer"
                               className="font-semibold text-primary underline"
                             >
-                              Ver comprobante
+                              {t.tickets.receipt}
                             </a>
                           </>
                         )}
@@ -232,10 +240,7 @@ export default function MisPasesPage() {
                   {sale.status === "unclaimed" && (
                     <p className="flex items-start gap-2 text-error">
                       <Icon name="alert" size={17} className="mt-0.5" />
-                      <span>
-                        Tu pago llegó después de que venciera la reserva, así que no se emitió
-                        entrada. Contacta al organizador para que te lo devuelva.
-                      </span>
+                      <span>{t.tickets.unclaimed}</span>
                     </p>
                   )}
 
@@ -246,7 +251,7 @@ export default function MisPasesPage() {
                       onClick={() => void verify(sale)}
                       className={sale.status === "pending" ? "w-full" : "w-fit px-0 underline"}
                     >
-                      {sale.status === "pending" ? "Ya pagué, verificar" : "¿Pagaste igual? Verificar"}
+                      {sale.status === "pending" ? t.tickets.verifyPending : t.tickets.verifyExpired}
                     </Button>
                   )}
                   {check?.message && (

@@ -45,6 +45,46 @@
   --logo: var(--primary);
 }
 
+/*
+ * Dark palette, applied two ways: automatically when the device asks for
+ * dark (unless the reader pinned light), and explicitly when they chose
+ * dark in Preferences. Both blocks carry the same tokens.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --background: #0a0e14;
+    --foreground: #eef2f6;
+
+    --primary: #1668c1;
+    --primary-hover: #2f81d6;
+    --primary-light: #0e1d33;
+    --primary-foreground: #ffffff;
+
+    --surface: #111823;
+    --surface-hover: #18202e;
+    --border: #232d3d;
+
+    --muted: #8b95a5;
+    --muted-light: #647080;
+
+    --error: #f87171;
+    --error-light: #2a1113;
+    --error-border: #542427;
+
+    --success: #4ade80;
+    --success-light: #0c2416;
+    --success-border: #1d4a2c;
+
+    --warning: #fbbf24;
+    --warning-light: #291d05;
+    --warning-border: #57420f;
+
+    --logo: var(--foreground);
+  }
+}
+
 :root[data-theme="dark"] {
   color-scheme: dark;
 
@@ -111,6 +151,39 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/*
+ * Small celebration for the moment a ticket exists: the card rises in and
+ * the check mark pops. Motion-sensitive readers get the end state only.
+ */
+@keyframes pollar-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+@keyframes pollar-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+.pollar-rise {
+  animation: pollar-rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pollar-pop {
+  animation: pollar-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pollar-rise,
+  .pollar-pop {
+    animation: none;
+  }
 }
 
 /*

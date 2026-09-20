@@ -5,6 +5,7 @@ import { stroopsToDecimal } from "@/lib/money";
 import { findPaymentHashByMemo, verifyPaymentOnHorizon } from "@/lib/horizon";
 import { settlePayment } from "@/lib/sales";
 import { sendTicketEmail } from "@/lib/mail";
+import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/locales";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -51,13 +52,14 @@ export async function POST(request: Request, ctx: Ctx) {
     return NextResponse.json({ error: "No tienes acceso a esta venta" }, { status: 403 });
   }
 
-  let body: { hash?: string; email?: string };
+  let body: { hash?: string; email?: string; locale?: string };
   try {
-    body = (await request.json()) as { hash?: string; email?: string };
+    body = (await request.json()) as { hash?: string; email?: string; locale?: string };
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
   const email = body.email?.trim() ?? "";
+  const locale = isLocale(body.locale) ? body.locale : DEFAULT_LOCALE;
   let hash = body.hash?.trim() ?? "";
 
   if (!hash) {
@@ -108,10 +110,18 @@ export async function POST(request: Request, ctx: Ctx) {
       // Only on the first settlement: a replay (retry, "verificar" again)
       // must not send the buyer a second copy of the same ticket.
       if (email && settled.outcome === "paid") {
+        // Kept so we can tell this buyer (in their language) when their
+        // ticket is accepted at the door. Never shown to the organizer.
+        await db.execute({
+          sql: "UPDATE sales SET buyer_email = ?, buyer_locale = ? WHERE id = ?",
+          args: [email, locale, sale.id],
+        });
         // Best-effort: the ticket already lives in the buyer's own account
         // either way, so a failed send doesn't get retried or block anything.
         const mailResult = await sendTicketEmail({
           to: email,
+          locale,
+          origin: new URL(request.url).origin,
           eventName: sale.event_name,
           eventDateTime: sale.event_datetime_utc,
           eventPlace: sale.event_place,

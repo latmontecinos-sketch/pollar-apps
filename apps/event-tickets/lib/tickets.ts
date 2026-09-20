@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Transaction } from "@libsql/client";
-import { db, withTransaction } from "./db.ts";
+import { db, dbReady, withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
 
 /** Unambiguous alphabet: no 0/O, no 1/I/L. 31 symbols. */
@@ -116,6 +116,28 @@ export type DoorResult =
  * and `door_code` (the short one typed by hand) — the door doesn't need to
  * know which kind it got.
  */
+/**
+ * Read-only version of {@link validateAtDoor}: says what a scanned code is
+ * without consuming it, so the door can show it and let the person on the
+ * door decide. The ticket is only spent when they confirm.
+ */
+export async function peekAtDoor(
+  eventId: string,
+  input: string
+): Promise<DoorResult> {
+  await dbReady();
+  const found = await db.execute({
+    sql: `SELECT id, sale_id, event_id, code, door_code, used_at, used_by, created_at
+          FROM tickets WHERE (code = ? OR door_code = ?) AND event_id = ?`,
+    args: [input, input, eventId],
+  });
+  if (found.rows.length === 0) return { result: "UNKNOWN" };
+  const ticket = rowToTicket(found.rows[0]);
+  return ticket.usedAt
+    ? { result: "USED", usedAt: ticket.usedAt }
+    : { result: "VALID", ticket };
+}
+
 export async function validateAtDoor(
   eventId: string,
   input: string,

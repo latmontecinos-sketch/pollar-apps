@@ -93,6 +93,12 @@ const ADDED_COLUMNS = [
   `ALTER TABLE events ADD COLUMN door_token TEXT`,
   // `unclaimed` -> `refunded`: the organizer's refund payment, verified on Horizon.
   `ALTER TABLE sales ADD COLUMN refund_tx_hash TEXT`,
+  // Capacity can be extended (twice at most) after publishing, never reduced.
+  `ALTER TABLE events ADD COLUMN capacity_increases INTEGER NOT NULL DEFAULT 0`,
+  // Kept to notify the buyer when their ticket is accepted at the door,
+  // in the language they bought in. Never shown to the organizer.
+  `ALTER TABLE sales ADD COLUMN buyer_email TEXT`,
+  `ALTER TABLE sales ADD COLUMN buyer_locale TEXT`,
 ];
 
 async function runMigrations(): Promise<void> {

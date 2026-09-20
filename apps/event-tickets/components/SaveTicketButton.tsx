@@ -4,6 +4,7 @@ import { useState } from "react";
 import QRCode from "qrcode";
 import { Icon } from "@/components/ui/Icon";
 import { formatEventDateTime } from "@/lib/format";
+import { useLocale, useT } from "@/lib/i18n/client";
 
 /** Reads a design token so the drawn ticket matches the app's theme. */
 function token(name: string, fallback: string): string {
@@ -45,6 +46,8 @@ export function SaveTicketButton({
   eventDateTime: string;
   eventPlace: string;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -80,7 +83,7 @@ export function SaveTicketButton({
 
       ctx.fillStyle = token("--muted", "#6b7280");
       ctx.font = "24px system-ui, sans-serif";
-      ctx.fillText(formatEventDateTime(eventDateTime), canvas.width / 2, y + 10);
+      ctx.fillText(formatEventDateTime(eventDateTime, locale), canvas.width / 2, y + 10);
       for (const line of wrap(ctx, eventPlace, canvas.width - 80)) {
         y += 34;
         ctx.fillText(line, canvas.width / 2, y + 10);
@@ -90,7 +93,7 @@ export function SaveTicketButton({
 
       ctx.fillStyle = token("--muted", "#6b7280");
       ctx.font = "20px system-ui, sans-serif";
-      ctx.fillText("CÓDIGO DE PUERTA", canvas.width / 2, y + 620);
+      ctx.fillText(t.tickets.doorCode.toUpperCase(), canvas.width / 2, y + 620);
       ctx.fillStyle = token("--foreground", "#1a1a1a");
       ctx.font = "bold 44px ui-monospace, monospace";
       ctx.fillText(doorCode, canvas.width / 2, y + 672);
@@ -111,7 +114,7 @@ export function SaveTicketButton({
       className="flex items-center gap-1.5 text-xs font-semibold text-primary underline disabled:opacity-50"
     >
       <Icon name="share" size={14} />
-      {busy ? "Guardando…" : "Guardar entrada como imagen"}
+      {busy ? t.tickets.saving : t.tickets.saveImage}
     </button>
   );
 }

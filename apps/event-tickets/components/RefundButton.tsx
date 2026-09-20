@@ -6,6 +6,7 @@ import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useBalance } from "@/hooks/useBalance";
 import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, shortAddress } from "@/lib/format";
+import { useLocale, useT } from "@/lib/i18n/client";
 import { paymentAssetFrom } from "@/lib/payments";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
@@ -31,6 +32,8 @@ type State =
  */
 export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunded: () => void }) {
   const { user } = usePollarAuth();
+  const t = useT();
+  const locale = useLocale();
   const pollar = usePollar();
   const pollarRef = useRef(pollar);
   useEffect(() => {
@@ -49,7 +52,7 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
       `/api/sales/${saleId}/refund`
     );
     const data = (await res.json()) as RefundPlan & { error?: string };
-    if (!res.ok) return setState({ step: "error", message: data.error ?? "No se pudo preparar la devolución" });
+    if (!res.ok) return setState({ step: "error", message: data.error ?? t.refund.errorPrepare });
     setState({ step: "confirm", plan: data });
   }
 
@@ -72,7 +75,7 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
       step: "unverified",
       message:
         data.error ??
-        "Todavía no vemos la devolución en la red. No pagues de nuevo: verifica en unos segundos.",
+        t.refund.errorNotSeen,
     });
   }
 
@@ -89,7 +92,7 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
       if (result.status === "error" && !result.hash) {
         setState({
           step: "error",
-          message: result.message ?? result.details ?? "No se pudo enviar la devolución.",
+          message: result.message ?? result.details ?? t.refund.errorSend,
         });
         return;
       }
@@ -103,7 +106,7 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
   if (state.step === "done") {
     return (
       <span className="flex items-center gap-1 text-xs font-semibold text-success">
-        <Icon name="check" size={13} /> Devuelto
+        <Icon name="check" size={13} /> {t.refund.done}
       </span>
     );
   }
@@ -112,16 +115,17 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
     return (
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3 text-xs leading-5">
         <p>
-          Vas a devolver{" "}
-          <span className="font-mono font-semibold">{formatAmount(state.plan.amountDecimal)} USDC</span> a{" "}
-          <span className="font-mono">{shortAddress(state.plan.destination)}</span>.
+          {t.refund.confirm(
+            `${formatAmount(state.plan.amountDecimal, locale)} USDC`,
+            shortAddress(state.plan.destination)
+          )}
         </p>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" onClick={() => setState({ step: "idle" })}>
-            Cancelar
+            {t.common.cancel}
           </Button>
           <Button disabled={!usdcAsset} onClick={() => void send(state.plan)}>
-            Devolver
+            {t.refund.confirmCta}
           </Button>
         </div>
       </div>
@@ -136,7 +140,7 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
           onClick={() => void (state.step === "unverified" ? record() : loadPlan())}
           className="text-xs font-semibold text-primary underline"
         >
-          {state.step === "unverified" ? "Verificar de nuevo" : "Intentar otra vez"}
+          {state.step === "unverified" ? t.refund.verifyAgain : t.refund.retry}
         </button>
       </div>
     );
@@ -151,10 +155,10 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
       className="px-3 py-1.5 text-xs"
     >
       {state.step === "paying"
-        ? "Enviando…"
+        ? t.refund.sending
         : state.step === "verifying"
-          ? "Verificando…"
-          : "Devolver pago"}
+          ? t.refund.verifying
+          : t.refund.button}
     </Button>
   );
 }

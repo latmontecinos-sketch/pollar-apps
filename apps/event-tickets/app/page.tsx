@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { AppHeader } from "@/components/AppHeader";
 import { BalanceCard } from "@/components/BalanceCard";
-import { BUYER_STEPS, GuideSteps } from "@/components/GuideSteps";
+import { buyerSteps, GuideSteps } from "@/components/GuideSteps";
 import { LoginButton } from "@/components/LoginButton";
 import { ReceiveModal } from "@/components/ReceiveModal";
 import { Card } from "@/components/ui/Card";
@@ -12,12 +12,9 @@ import { Icon, type IconName } from "@/components/ui/Icon";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { useBalance } from "@/hooks/useBalance";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
+import { useT } from "@/lib/i18n/client";
 
-const PROMISES: { icon: IconName; text: string }[] = [
-  { icon: "wallet", text: "Sin billetera externa: ingresas con tu correo" },
-  { icon: "shield", text: "Cada pago se verifica en la red Stellar" },
-  { icon: "qr", text: "Cada QR vale una sola vez en la puerta" },
-];
+const PROMISE_ICONS: IconName[] = ["wallet", "shield", "qr"];
 
 function ActionTile({
   href,
@@ -60,6 +57,7 @@ function ActionTile({
 }
 
 function Landing() {
+  const t = useT();
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-6 lg:max-w-lg lg:py-10">
       <AppHeader />
@@ -67,23 +65,20 @@ function Landing() {
       <section className="flex flex-col items-center gap-5 pt-4 text-center">
         <PollarLogo size={84} />
         <span className="rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary">
-          Entradas digitales para eventos en Bolivia
+          {t.landing.badge}
         </span>
         <h1 className="text-4xl font-extrabold leading-tight tracking-tight">
-          Tu entrada es un QR.
-          <span className="block text-primary">Tu pago, en USDC.</span>
+          {t.landing.titleLine1}
+          <span className="block text-primary">{t.landing.titleLine2}</span>
         </h1>
-        <p className="max-w-sm text-base leading-7 text-muted">
-          Organiza un evento y vende entradas con un link, o compra la tuya en segundos. Todo
-          dentro de la app, sin tarjetas ni billeteras externas.
-        </p>
+        <p className="max-w-sm text-base leading-7 text-muted">{t.landing.subtitle}</p>
         <div className="flex w-full max-w-xs flex-col gap-2">
-          <LoginButton label="Empezar con mi correo" className="w-full py-3.5 text-base" />
+          <LoginButton label={t.landing.cta} className="w-full py-3.5 text-base" />
           <Link
             href="/como-funciona"
             className="rounded-xl py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-light"
           >
-            Ver cómo funciona →
+            {t.landing.seeHow}
           </Link>
         </div>
       </section>
@@ -93,31 +88,31 @@ function Landing() {
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-light text-primary">
             <Icon name="ticket" />
           </span>
-          <h2 className="font-semibold">¿Vas a un evento?</h2>
-          <p className="text-sm leading-5 text-muted">Abre el link que te compartieron y compra tu entrada.</p>
+          <h2 className="font-semibold">{t.landing.buyerCardTitle}</h2>
+          <p className="text-sm leading-5 text-muted">{t.landing.buyerCardBody}</p>
         </Card>
         <Card className="flex flex-col gap-2 p-4">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-light text-primary">
             <Icon name="calendar" />
           </span>
-          <h2 className="font-semibold">¿Organizas?</h2>
-          <p className="text-sm leading-5 text-muted">Crea tu evento, comparte el link y valida en la puerta.</p>
+          <h2 className="font-semibold">{t.landing.organizerCardTitle}</h2>
+          <p className="text-sm leading-5 text-muted">{t.landing.organizerCardBody}</p>
         </Card>
       </div>
 
       <Card className="flex flex-col gap-5">
-        <h2 className="text-lg font-bold tracking-tight">Así se compra una entrada</h2>
-        <GuideSteps steps={BUYER_STEPS.slice(0, 4)} />
+        <h2 className="text-lg font-bold tracking-tight">{t.landing.stepsTitle}</h2>
+        <GuideSteps steps={buyerSteps(t).slice(0, 4)} />
         <Link href="/como-funciona" className="text-sm font-semibold text-primary underline">
-          Guía completa y preguntas frecuentes →
+          {t.landing.fullGuide}
         </Link>
       </Card>
 
       <ul className="flex flex-col gap-2.5 px-1">
-        {PROMISES.map((item) => (
-          <li key={item.text} className="flex items-center gap-3 text-sm text-muted">
-            <Icon name={item.icon} size={18} className="text-primary" />
-            {item.text}
+        {t.landing.promises.map((text, index) => (
+          <li key={text} className="flex items-center gap-3 text-sm text-muted">
+            <Icon name={PROMISE_ICONS[index]} size={18} className="text-primary" />
+            {text}
           </li>
         ))}
       </ul>
@@ -129,6 +124,7 @@ export default function Home() {
   const { user } = usePollarAuth();
   const { balance, isLoading } = useBalance();
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const t = useT();
 
   if (!user) return <Landing />;
 
@@ -139,8 +135,8 @@ export default function Home() {
       <AppHeader />
 
       <div className="flex flex-col gap-0.5 px-1">
-        <h1 className="text-2xl font-bold tracking-tight">¿Qué quieres hacer hoy?</h1>
-        <p className="text-sm text-muted">Compra entradas o administra tus eventos.</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t.home.title}</h1>
+        <p className="text-sm text-muted">{t.home.subtitle}</p>
       </div>
 
       <BalanceCard />
@@ -151,14 +147,14 @@ export default function Home() {
           className="flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-sm font-semibold transition-colors hover:bg-surface-hover"
         >
           <Icon name="wallet" size={17} className="text-primary" />
-          Recibir USDC
+          {t.home.receive}
         </button>
         <Link
           href="/como-funciona#usdc"
           className="flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-sm font-semibold transition-colors hover:bg-surface-hover"
         >
           <Icon name="plus" size={17} className="text-primary" />
-          USDC de prueba
+          {t.home.testUsdc}
         </Link>
       </div>
 
@@ -166,10 +162,10 @@ export default function Home() {
         <div className="flex items-start gap-3 rounded-2xl border border-warning-border bg-warning-light p-4 text-sm leading-6">
           <Icon name="alert" size={20} className="mt-0.5 text-warning" />
           <p>
-            <span className="font-semibold">Tu saldo está en 0.</span> Para comprar entradas
-            necesitas USDC. En esta demo son de prueba y{" "}
+            <span className="font-semibold">{t.home.emptyBalanceStrong}</span>{" "}
+            {t.home.emptyBalanceBody}{" "}
             <Link href="/como-funciona#usdc" className="font-semibold text-primary underline">
-              los consigues gratis
+              {t.home.emptyBalanceLink}
             </Link>
             .
           </p>
@@ -178,23 +174,29 @@ export default function Home() {
 
       <div className="flex flex-col gap-3 pt-2">
         <ActionTile
+          href="/escanear"
+          icon="scan"
+          title={t.scan.open}
+          description={t.scan.body}
+        />
+        <ActionTile
           href="/mis-pases"
           icon="ticket"
-          title="Mis entradas"
-          description="Tus entradas compradas, con su QR"
+          title={t.home.ticketsTile}
+          description={t.home.ticketsTileBody}
           primary
         />
         <ActionTile
           href="/mis-eventos"
           icon="calendar"
-          title="Mis eventos"
-          description="Ventas, link para compartir y modo puerta"
+          title={t.home.eventsTile}
+          description={t.home.eventsTileBody}
         />
         <ActionTile
           href="/organizador/nuevo"
           icon="plus"
-          title="Crear evento"
-          description="Publica tu evento y empieza a vender"
+          title={t.home.createTile}
+          description={t.home.createTileBody}
         />
       </div>
 
@@ -204,8 +206,8 @@ export default function Home() {
       >
         <Icon name="help" size={20} className="text-primary" />
         <span className="flex-1">
-          <span className="font-semibold">¿Primera vez?</span>{" "}
-          <span className="text-muted">Mira cómo funciona Pollar Pass, paso a paso.</span>
+          <span className="font-semibold">{t.home.firstTimeStrong}</span>{" "}
+          <span className="text-muted">{t.home.firstTimeBody}</span>
         </span>
         <Icon name="chevron" size={18} className="text-muted-light" />
       </Link>

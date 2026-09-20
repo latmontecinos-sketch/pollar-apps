@@ -5,7 +5,8 @@ import { stroopsToDecimal } from "@/lib/money";
 import { salesClosed } from "@/lib/format";
 import { generateReference, reserveAndCreateSale, sweepExpiredSales } from "@/lib/sales";
 
-const SALE_TTL_MS = 15 * 60 * 1000;
+/** How long a seat stays held while the buyer pays (mirrors `t.hold.minutes`). */
+const SALE_TTL_MS = 10 * 60 * 1000;
 const MAX_REFERENCE_ATTEMPTS = 5;
 
 type CreateSaleBody = { eventId?: string; idempotencyKey?: string };

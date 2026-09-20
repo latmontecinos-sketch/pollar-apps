@@ -19,7 +19,11 @@ type EventRow = {
   organizer_name: string;
   organizer_contact: string;
   door_token: string | null;
+  capacity_increases: number;
 };
+
+/** Events often add a second batch of tickets; twice is enough to stay honest about "cupo". */
+const MAX_CAPACITY_INCREASES = 2;
 
 async function loadEvent(id: string): Promise<EventRow | null> {
   const result = await db.execute({
@@ -57,6 +61,7 @@ function toJson(row: EventRow, counts: { paid: number; checkedIn: number }) {
     organizerContact: row.organizer_contact,
     // Owner-only route, so the staff door secret is shown to its owner only.
     doorToken: row.door_token,
+    capacityIncreasesLeft: Math.max(0, MAX_CAPACITY_INCREASES - Number(row.capacity_increases ?? 0)),
   };
 }
 
@@ -76,6 +81,8 @@ export async function GET(request: Request, ctx: Ctx) {
 type PatchBody = {
   organizerName?: string;
   organizerContact?: string;
+  /** Only ever upwards, at most twice — see MAX_CAPACITY_INCREASES. */
+  capacity?: number;
   name?: string;
   description?: string;
   place?: string;
@@ -111,6 +118,28 @@ export async function PATCH(request: Request, ctx: Ctx) {
       return NextResponse.json({ error: "La fecha no es válida" }, { status: 400 });
     }
     datetimeUtc = parsed.toISOString();
+  }
+
+  // Capacity: never down (someone already holds those seats), never more
+  // than twice — an event that keeps "adding tickets" isn't a capacity.
+  if (body.capacity !== undefined) {
+    const capacity = Number(body.capacity);
+    if (!Number.isInteger(capacity) || capacity <= event.capacity) {
+      return NextResponse.json(
+        { error: "El cupo nuevo tiene que ser mayor al actual", code: "capacity_lower" },
+        { status: 400 }
+      );
+    }
+    if (Number(event.capacity_increases ?? 0) >= MAX_CAPACITY_INCREASES) {
+      return NextResponse.json(
+        { error: "Ya usaste las 2 ampliaciones de cupo de este evento", code: "capacity_limit" },
+        { status: 409 }
+      );
+    }
+    await db.execute({
+      sql: "UPDATE events SET capacity = ?, capacity_increases = capacity_increases + 1 WHERE id = ?",
+      args: [capacity, id],
+    });
   }
 
   await db.execute({

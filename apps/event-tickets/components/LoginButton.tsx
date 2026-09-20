@@ -4,20 +4,22 @@ import { useState } from "react";
 import { AccountModal } from "@/components/AccountModal";
 import { Button } from "@/components/ui/Button";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
+import { useT } from "@/lib/i18n/client";
 
 /**
- * Logged out: the "Ingresar con Pollar" button (or a contextual `label`).
+ * Logged out: the "sign in with Pollar" button (or a contextual `label`).
  * Logged in: a round account button that opens the account modal (email,
  * wallet address, log out).
  */
 export function LoginButton({
-  label = "Ingresar con Pollar",
+  label,
   className = "",
 }: {
   label?: string;
   className?: string;
 } = {}) {
   const { user, isLoading, login } = usePollarAuth();
+  const t = useT();
   const [accountOpen, setAccountOpen] = useState(false);
 
   if (user) {
@@ -26,7 +28,7 @@ export function LoginButton({
       <>
         <button
           onClick={() => setAccountOpen(true)}
-          aria-label="Mi cuenta"
+          aria-label={t.account.accountLabel}
           title={user.profile?.mail ?? user.address}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-sm font-bold text-primary transition-colors hover:bg-surface-hover"
         >
@@ -39,7 +41,7 @@ export function LoginButton({
 
   return (
     <Button onClick={login} loading={isLoading} className={className}>
-      {isLoading ? "Conectando…" : label}
+      {isLoading ? t.account.connecting : (label ?? t.account.login)}
     </Button>
   );
 }

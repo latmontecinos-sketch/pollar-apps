@@ -8,6 +8,7 @@ import { useBalance } from "@/hooks/useBalance";
 import { pollarFetch } from "@/lib/auth-client";
 import { paymentAssetFrom } from "@/lib/payments";
 import { formatAmount } from "@/lib/format";
+import { useLocale, useT } from "@/lib/i18n/client";
 import { decimalToStroops } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
@@ -99,6 +100,8 @@ export function BuyButton({
   priceDecimal: string;
 }) {
   const { user, verified } = usePollarAuth();
+  const t = useT();
+  const locale = useLocale();
   const pollar = usePollar();
   const pollarRef = useRef(pollar);
   useEffect(() => {
@@ -121,7 +124,8 @@ export function BuyButton({
       try {
         res = await pollarFetch(client, address, `/api/sales/${inFlight.saleId}/confirm`, {
           method: "POST",
-          body: JSON.stringify({ hash: inFlight.hash, email: user?.profile?.mail }),
+          // `locale` so the ticket email arrives in the buyer's language.
+          body: JSON.stringify({ hash: inFlight.hash, email: user?.profile?.mail, locale }),
         });
         data = (await res.json()) as typeof data;
       } catch {
@@ -137,12 +141,12 @@ export function BuyButton({
       }
       if (res.status === 409 && data.status === "unclaimed") {
         writeInFlight(eventId, null);
-        setState({ step: "unclaimed", message: data.error ?? "La reserva expiró antes del pago." });
+        setState({ step: "unclaimed", message: data.error ?? t.buy.errorExpired });
         return;
       }
       if (res.status === 422 && data.code === "tx_failed") {
         writeInFlight(eventId, null);
-        setState({ step: "error", message: data.error ?? "El pago no se completó. No se te cobró." });
+        setState({ step: "error", message: data.error ?? t.buy.errorTxFailed });
         return;
       }
       if (res.status === 404 && data.code === "no_payment" && opts.fromReload && !inFlight.hash) {
@@ -155,17 +159,10 @@ export function BuyButton({
         await sleep(1500 * attempt);
         continue;
       }
-      setState({
-        step: "unverified",
-        message: data.error ?? "No pudimos verificar el pago.",
-      });
+      setState({ step: "unverified", message: data.error ?? t.buy.errorVerify });
       return;
     }
-    setState({
-      step: "unverified",
-      message:
-        "La red de Stellar todavía no confirma tu pago. No vuelvas a pagar: toca “Verificar de nuevo” en unos segundos.",
-    });
+    setState({ step: "unverified", message: t.buy.errorNetworkLag });
   }
 
   // Resume a checkout interrupted by a reload / closed tab. Read through a
@@ -210,6 +207,18 @@ export function BuyButton({
     return () => clearTimeout(timer);
   }, [address, verified, eventId]);
 
+  /** Hands a held seat back to the event (pending -> expired). Fire-and-forget. */
+  async function release(saleId: string) {
+    if (!address) return;
+    try {
+      await pollarFetch(pollarRef.current.getClient(), address, `/api/sales/${saleId}/release`, {
+        method: "POST",
+      });
+    } catch {
+      // The seat expires on its own anyway; nothing to tell the buyer.
+    }
+  }
+
   async function buy() {
     if (!user || !usdcAsset) return;
     const client = pollarRef.current.getClient();
@@ -222,14 +231,14 @@ export function BuyButton({
       });
       const created = (await createRes.json()) as Sale & { error?: string };
       if (!createRes.ok) {
-        setState({ step: "error", message: created.error ?? "No se pudo reservar tu cupo." });
+        setState({ step: "error", message: created.error ?? t.buy.errorReserve });
         return;
       }
       sale = created;
     } catch (err) {
       setState({
         step: "error",
-        message: err instanceof Error ? err.message : "No se pudo reservar tu cupo. Intenta de nuevo.",
+        message: err instanceof Error ? err.message : t.buy.errorReserveRetry,
       });
       return;
     }
@@ -248,12 +257,14 @@ export function BuyButton({
         { memo: { type: "text", value: sale.reference } }
       );
       if (payResult.status === "error" && !payResult.hash) {
-        // Rejected before reaching the network: nothing was charged.
+        // Rejected before reaching the network (no XLM for fees, user
+        // cancelled…): nothing was charged, so give the seat back at once
+        // instead of holding it for the whole window.
         writeInFlight(eventId, null);
+        void release(sale.id);
         setState({
           step: "error",
-          message:
-            payResult.message ?? payResult.details ?? "El pago no se pudo enviar. No se te cobró nada.",
+          message: payResult.message ?? payResult.details ?? t.buy.errorPay,
         });
         return;
       }
@@ -270,37 +281,35 @@ export function BuyButton({
   if (!user) {
     return (
       <div className="flex flex-col gap-3">
-        <LoginButton label="Ingresar para comprar" className="w-full py-3" />
-        <p className="text-center text-xs leading-5 text-muted">
-          Ingresas con tu correo. Si es tu primera vez, Pollar te crea una cuenta con billetera
-          automáticamente — no necesitas instalar nada.
-        </p>
+        <LoginButton label={t.buy.loginCta} className="w-full py-3" />
+        <p className="text-center text-xs leading-5 text-muted">{t.buy.loginNote}</p>
       </div>
     );
   }
 
   if (state.step === "done") {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-2xl border border-success-border bg-success-light px-4 py-5 text-center">
-        <span className="flex items-center gap-2 font-semibold text-success">
-          <Icon name="check" size={20} /> ¡Listo! Ya tienes tu entrada
+      <div className="pollar-rise flex flex-col items-center gap-3 rounded-2xl border border-success-border bg-success-light px-4 py-5 text-center">
+        <span className="pollar-pop flex h-14 w-14 items-center justify-center rounded-full bg-background text-success shadow-sm">
+          <Icon name="check" size={30} strokeWidth={3} />
         </span>
+        <span className="font-semibold text-success">{t.buy.doneTitle}</span>
         <div className="rounded-xl bg-background p-2">
           <TicketQr value={state.ticket.code} size={180} />
         </div>
         <div className="flex flex-col">
-          <span className="text-xs uppercase tracking-wide text-muted">Código de puerta</span>
+          <span className="text-xs uppercase tracking-wide text-muted">{t.buy.doorCode}</span>
           <span className="font-mono text-xl font-bold tracking-[0.2em]">{state.ticket.doorCode}</span>
         </div>
         <p className="text-xs leading-5 text-muted">
-          Muestra este QR en la puerta. Queda guardado en “Mis entradas”
-          {user.profile?.mail ? ` y te lo mandamos a ${user.profile.mail}` : ""}.
+          {t.buy.doneNote}
+          {user.profile?.mail ? t.buy.doneNoteMail(user.profile.mail) : ""}.
         </p>
         <Link
           href="/mis-pases"
           className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
         >
-          Ver mis entradas
+          {t.buy.seeTickets}
         </Link>
       </div>
     );
@@ -309,16 +318,16 @@ export function BuyButton({
   if (state.step === "verifying" || state.step === "creating_sale" || state.step === "paying") {
     const label =
       state.step === "creating_sale"
-        ? "Reservando tu cupo…"
+        ? t.buy.reserving
         : state.step === "paying"
-          ? "Enviando el pago…"
-          : "Verificando el pago en la red de Stellar…";
+          ? t.buy.sending
+          : t.buy.verifying;
     return (
       <div className="flex flex-col gap-2">
         <Button disabled loading className="w-full py-3">
           {label}
         </Button>
-        <p className="text-center text-xs text-muted">No cierres esta página.</p>
+        <p className="text-center text-xs text-muted">{t.buy.dontClose}</p>
       </div>
     );
   }
@@ -338,10 +347,10 @@ export function BuyButton({
           }}
           className="w-full"
         >
-          Verificar de nuevo
+          {t.buy.verifyAgain}
         </Button>
         <Link href="/mis-pases" className="text-center text-xs font-semibold text-primary underline">
-          También puedes verificarlo después desde Mis entradas
+          {t.buy.verifyLater}
         </Link>
       </div>
     );
@@ -352,12 +361,15 @@ export function BuyButton({
       <div className="flex flex-col gap-2 rounded-2xl border border-error-border bg-error-light p-4 text-sm leading-6 text-error">
         <p>{state.message}</p>
         <Link href="/mis-pases" className="font-semibold underline">
-          Ver el detalle en Mis entradas
+          {t.buy.seeDetail}
         </Link>
       </div>
     );
   }
 
+  // A wallet in deferred funding mode has no XLM for fees yet, so the
+  // payment would fail with a network error the buyer can't act on.
+  const walletNotReady = user.wallet.existsOnStellar === false;
   const enough = covers(usdcAsset?.balance ?? (usdcAsset ? balance : null), priceDecimal);
   const balanceKnown = !balanceLoading && asset !== null;
   const noUsdc = balanceKnown && !usdcAsset;
@@ -366,25 +378,23 @@ export function BuyButton({
   if (state.step === "confirm") {
     return (
       <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
-        <p className="text-sm font-semibold">Revisa tu compra</p>
+        <p className="text-sm font-semibold">{t.buy.confirmTitle}</p>
         <dl className="flex flex-col gap-1.5 text-sm">
           <div className="flex justify-between gap-3">
-            <dt className="text-muted">Entrada</dt>
+            <dt className="text-muted">{t.buy.confirmTicket}</dt>
             <dd className="text-right font-medium">{eventName}</dd>
           </div>
           <div className="flex justify-between gap-3">
-            <dt className="text-muted">Total</dt>
-            <dd className="font-mono font-semibold">{formatAmount(priceDecimal)} USDC</dd>
+            <dt className="text-muted">{t.buy.confirmTotal}</dt>
+            <dd className="font-mono font-semibold">{formatAmount(priceDecimal, locale)} USDC</dd>
           </div>
         </dl>
-        <p className="text-xs leading-5 text-muted">
-          El pago va directo al organizador. Tu cupo queda reservado 15 minutos mientras se confirma.
-        </p>
+        <p className="text-xs leading-5 text-muted">{t.buy.confirmNote}</p>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" onClick={() => setState({ step: "idle" })}>
-            Cancelar
+            {t.common.cancel}
           </Button>
-          <Button onClick={() => void buy()}>Pagar</Button>
+          <Button onClick={() => void buy()}>{t.buy.pay}</Button>
         </div>
       </div>
     );
@@ -396,12 +406,22 @@ export function BuyButton({
         <div className="flex items-start gap-2 rounded-xl border border-success-border bg-success-light p-3 text-sm leading-6">
           <Icon name="check" size={17} className="mt-0.5 text-success" />
           <span>
-            Ya tienes {alreadyOwned === 1 ? "una entrada" : `${alreadyOwned} entradas`} para este
-            evento.{" "}
+            {t.buy.alreadyOwned(alreadyOwned)}{" "}
             <Link href="/mis-pases" className="font-semibold text-primary underline">
-              Verla en Mis entradas
+              {t.buy.alreadyOwnedLink}
             </Link>
-            . Si compras otra, se cobra de nuevo.
+            {t.buy.alreadyOwnedTail}
+          </span>
+        </div>
+      )}
+      {walletNotReady && (
+        <div className="flex items-start gap-2 rounded-xl border border-warning-border bg-warning-light p-3 text-sm leading-6">
+          <Icon name="alert" size={17} className="mt-0.5 text-warning" />
+          <span>
+            {t.buy.walletNotReady}{" "}
+            <Link href="/como-funciona#comisiones" className="font-semibold text-primary underline">
+              {t.buy.walletNotReadyLink}
+            </Link>
           </span>
         </div>
       )}
@@ -411,23 +431,26 @@ export function BuyButton({
             <Icon name="alert" size={18} className="mt-0.5 text-warning" />
             <span>
               {noUsdc
-                ? "Tu cuenta todavía no tiene USDC."
-                : `Te faltan USDC: la entrada cuesta ${formatAmount(priceDecimal)} y tienes ${formatAmount(usdcAsset?.balance ?? balance)}.`}
+                ? t.buy.noUsdc
+                : t.buy.missing(
+                    formatAmount(priceDecimal, locale),
+                    formatAmount(usdcAsset?.balance ?? balance, locale)
+                  )}
             </span>
           </p>
           <div className="grid grid-cols-2 gap-2">
             <Button variant="secondary" onClick={() => setReceiveOpen(true)}>
-              Recibir USDC
+              {t.buy.receive}
             </Button>
             <Link
               href="/como-funciona#usdc"
               className="flex items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-center text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
             >
-              Conseguir USDC
+              {t.buy.getUsdc}
             </Link>
           </div>
           <button onClick={() => void refresh()} className="text-xs font-semibold text-primary underline">
-            Ya cargué saldo, actualizar
+            {t.buy.refreshBalance}
           </button>
         </div>
       ) : (
@@ -437,12 +460,13 @@ export function BuyButton({
           loading={!balanceKnown}
           className="w-full py-3"
         >
-          {balanceKnown ? `Comprar entrada · ${formatAmount(priceDecimal)} USDC` : "Revisando tu saldo…"}
+          {balanceKnown ? t.buy.cta(formatAmount(priceDecimal, locale)) : t.buy.checkingBalance}
         </Button>
       )}
       {balanceKnown && usdcAsset && (
         <p className="text-center text-xs text-muted">
-          Tu saldo: <span className="font-mono">{formatAmount(usdcAsset.balance)} USDC</span>
+          {t.buy.yourBalance}{" "}
+          <span className="font-mono">{formatAmount(usdcAsset.balance, locale)} USDC</span>
         </p>
       )}
       {state.step === "error" && (

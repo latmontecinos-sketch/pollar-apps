@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
+import { useT } from "@/lib/i18n/client";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -27,6 +28,7 @@ export function DoorStaffCard({
 }) {
   const { user } = usePollarAuth();
   const { getClient } = usePollar();
+  const t = useT();
   const origin = useSyncExternalStore(noopSubscribe, () => window.location.origin, () => "");
   const [token, setToken] = useState(initialToken);
   const [busy, setBusy] = useState(false);
@@ -37,17 +39,17 @@ export function DoorStaffCard({
 
   async function change(method: "POST" | "DELETE") {
     if (!user) return;
-    if (method === "DELETE" && !confirm("¿Desactivar el link? Quien lo tenga ya no podrá validar entradas.")) return;
-    if (method === "POST" && token && !confirm("¿Crear un link nuevo? El anterior dejará de funcionar.")) return;
+    if (method === "DELETE" && !confirm(t.staff.confirmDisable)) return;
+    if (method === "POST" && token && !confirm(t.staff.confirmRegenerate)) return;
     setBusy(true);
     setError(null);
     try {
       const res = await pollarFetch(getClient(), user.address, `/api/events/${eventId}/door-link`, { method });
       const data = (await res.json()) as { doorToken?: string | null; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "No se pudo actualizar el link");
+      if (!res.ok) throw new Error(data.error ?? t.staff.error);
       setToken(data.doorToken ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Algo salió mal");
+      setError(err instanceof Error ? err.message : t.staff.error);
     } finally {
       setBusy(false);
     }
@@ -59,19 +61,16 @@ export function DoorStaffCard({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const message = `Link para validar entradas en la puerta de "${eventName}" (no lo compartas con nadie más): ${link}`;
+  const message = t.staff.message(eventName, link);
 
   return (
     <Card className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h2 className="flex items-center gap-2 font-bold">
           <Icon name="users" size={18} className="text-primary" />
-          Personal de puerta
+          {t.staff.cardTitle}
         </h2>
-        <p className="text-sm leading-6 text-muted">
-          ¿Alguien más va a recibir a la gente? Mándale un link que solo sirve para escanear entradas
-          de este evento — no ve tus ventas ni tu cuenta.
-        </p>
+        <p className="text-sm leading-6 text-muted">{t.staff.cardBody}</p>
       </div>
 
       {token ? (
@@ -83,7 +82,7 @@ export function DoorStaffCard({
             <span className="min-w-0 truncate font-mono text-xs">{link || "…"}</span>
             <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
               <Icon name={copied ? "check" : "copy"} size={16} />
-              {copied ? "Copiado" : "Copiar"}
+              {copied ? t.common.copied : t.common.copy}
             </span>
           </button>
           <div className="grid grid-cols-2 gap-2">
@@ -94,10 +93,10 @@ export function DoorStaffCard({
               className="flex items-center justify-center gap-2 rounded-xl border border-primary/30 px-3 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-light"
             >
               <Icon name="message" size={16} />
-              Enviar
+              {t.staff.send}
             </a>
             <Button variant="ghost" loading={busy} onClick={() => void change("DELETE")}>
-              Desactivar
+              {t.staff.disable}
             </Button>
           </div>
           <button
@@ -105,13 +104,13 @@ export function DoorStaffCard({
             disabled={busy}
             className="text-xs font-semibold text-muted underline hover:text-primary"
           >
-            Crear un link nuevo (anula el actual)
+            {t.staff.regenerate}
           </button>
         </>
       ) : (
         <Button variant="secondary" loading={busy} onClick={() => void change("POST")}>
           <Icon name="scan" size={17} />
-          Crear link para el personal
+          {t.staff.create}
         </Button>
       )}
 

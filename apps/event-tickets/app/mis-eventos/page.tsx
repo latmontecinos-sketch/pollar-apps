@@ -6,6 +6,7 @@ import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, formatEventDateTime, salesClosed } from "@/lib/format";
+import { useLocale, useT } from "@/lib/i18n/client";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -27,20 +28,22 @@ type EventRow = {
 
 type LoadState = { step: "loading" } | { step: "loaded"; events: EventRow[] } | { step: "error" };
 
-function CreateButton() {
+function CreateButton({ label }: { label: string }) {
   return (
     <Link
       href="/organizador/nuevo"
       className="flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
     >
       <Icon name="plus" size={18} />
-      Crear evento
+      {label}
     </Link>
   );
 }
 
 export default function MisEventosPage() {
   const { user, isLoading: authLoading } = usePollarAuth();
+  const t = useT();
+  const locale = useLocale();
   const pollar = usePollar();
   const pollarRef = useRef(pollar);
   useEffect(() => {
@@ -71,10 +74,10 @@ export default function MisEventosPage() {
   if (!user) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title="Mis eventos" back={{ href: "/", label: "Inicio" }} />
+        <AppHeader title={t.myEvents.title} back={{ href: "/", label: t.common.home }} />
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
-          <p className="max-w-sm text-muted">Ingresa para ver los eventos que organizas.</p>
+          <p className="max-w-sm text-muted">{t.myEvents.loginNote}</p>
           <LoginButton />
         </div>
       </main>
@@ -83,7 +86,7 @@ export default function MisEventosPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title="Mis eventos" back={{ href: "/", label: "Inicio" }} />
+      <AppHeader title={t.myEvents.title} back={{ href: "/", label: t.common.home }} />
 
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
@@ -93,23 +96,23 @@ export default function MisEventosPage() {
 
       {state.step === "error" && (
         <Card>
-          <p className="text-center text-sm text-error">No se pudieron cargar tus eventos. Recarga la página.</p>
+          <p className="text-center text-sm text-error">{t.myEvents.loadError}</p>
         </Card>
       )}
 
       {state.step === "loaded" && state.events.length === 0 && (
         <Card>
           <EmptyState
-            title="Todavía no organizas eventos"
-            description="Crea uno en un minuto: pones nombre, lugar, fecha, precio y cupo, y te damos un link para vender entradas."
-            action={<CreateButton />}
+            title={t.myEvents.emptyTitle}
+            description={t.myEvents.emptyBody}
+            action={<CreateButton label={t.myEvents.create} />}
           />
         </Card>
       )}
 
       {state.step === "loaded" && state.events.length > 0 && (
         <>
-          <CreateButton />
+          <CreateButton label={t.myEvents.create} />
           {state.events.map((event) => {
             const closed = salesClosed(event.datetimeUtc);
             const soldPct = Math.min(100, Math.round((event.paid / event.capacity) * 100));
@@ -120,7 +123,7 @@ export default function MisEventosPage() {
                     <div className="min-w-0">
                       <h2 className="font-semibold">{event.name}</h2>
                       <p className="text-sm text-muted first-letter:uppercase">
-                        {formatEventDateTime(event.datetimeUtc)} · {event.place}
+                        {formatEventDateTime(event.datetimeUtc, locale)} · {event.place}
                       </p>
                     </div>
                     <span
@@ -128,15 +131,15 @@ export default function MisEventosPage() {
                         closed ? "bg-surface text-muted" : "bg-success-light text-success"
                       }`}
                     >
-                      {closed ? "Finalizado" : "En venta"}
+                      {closed ? t.myEvents.finished : t.myEvents.onSale}
                     </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <div className="flex justify-between text-xs text-muted">
-                      <span>
-                        <span className="font-semibold text-foreground">{event.paid}</span> de {event.capacity} vendidas
+                      <span>{t.myEvents.sold(event.paid, event.capacity)}</span>
+                      <span className="font-mono">
+                        {t.myEvents.each(formatAmount(event.priceDecimal, locale))}
                       </span>
-                      <span className="font-mono">{formatAmount(event.priceDecimal)} USDC c/u</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-surface-hover">
                       <div className="h-full rounded-full bg-primary" style={{ width: `${soldPct}%` }} />

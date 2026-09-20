@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { useBalance } from "@/hooks/useBalance";
 import { formatAmount, middleTruncate } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/client";
 import {
   currencyOf,
   looksLikeAddress,
@@ -31,6 +32,7 @@ export function SendModal({
 }) {
   const { runTx } = usePollar();
   const { balance, asset } = useBalance();
+  const locale = useLocale();
   const [step, setStep] = useState<Step>("amount");
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
@@ -130,7 +132,7 @@ export function SendModal({
             <span>
               Balance:{" "}
               <span className="font-mono">
-                {formatAmount(balance)} {currency}
+                {formatAmount(balance, locale)} {currency}
               </span>
             </span>
             <span className="text-muted-light">
@@ -140,7 +142,7 @@ export function SendModal({
           {overBalance && (
             <p className="text-sm text-error">
               That&apos;s more than you have. Your balance is{" "}
-              {formatAmount(balance)} {currency}.
+              {formatAmount(balance, locale)} {currency}.
             </p>
           )}
           <Button

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { TicketQr } from "@/components/TicketQr";
 import { formatEventDateTime } from "@/lib/format";
+import { useLocale, useT } from "@/lib/i18n/client";
 
 const noopSubscribe = () => () => {};
 
@@ -23,6 +24,8 @@ export function ShareEventCard({
   eventName: string;
   datetimeUtc: string;
 }) {
+  const t = useT();
+  const locale = useLocale();
   // Browser-only values: empty/false during SSR, real after hydration.
   const origin = useSyncExternalStore(noopSubscribe, () => window.location.origin, () => "");
   const canShare = useSyncExternalStore(
@@ -34,7 +37,7 @@ export function ShareEventCard({
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
 
-  const message = `🎟️ ${eventName} — ${formatEventDateTime(datetimeUtc)}. Compra tu entrada aquí: ${url}`;
+  const message = t.share.message(eventName, formatEventDateTime(datetimeUtc, locale), url);
 
   async function copy() {
     await navigator.clipboard.writeText(url);
@@ -47,9 +50,9 @@ export function ShareEventCard({
       <div className="flex flex-col gap-1">
         <h2 className="flex items-center gap-2 font-bold">
           <Icon name="share" size={18} className="text-primary" />
-          Comparte tu evento
+          {t.share.title}
         </h2>
-        <p className="text-sm text-muted">Quien abra este link puede ver el evento y comprar su entrada.</p>
+        <p className="text-sm text-muted">{t.share.body}</p>
       </div>
 
       <button
@@ -59,7 +62,7 @@ export function ShareEventCard({
         <span className="min-w-0 truncate font-mono text-sm">{url || "…"}</span>
         <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
           <Icon name={copied ? "check" : "copy"} size={16} />
-          {copied ? "Copiado" : "Copiar"}
+          {copied ? t.common.copied : t.common.copy}
         </span>
       </button>
 
@@ -71,7 +74,7 @@ export function ShareEventCard({
           className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover"
         >
           <Icon name="message" size={17} />
-          WhatsApp
+          {t.common.whatsapp}
         </a>
         {canShare ? (
           <Button
@@ -79,12 +82,12 @@ export function ShareEventCard({
             onClick={() => void navigator.share({ title: eventName, text: message, url }).catch(() => {})}
           >
             <Icon name="share" size={17} />
-            Compartir
+            {t.common.share}
           </Button>
         ) : (
           <Button variant="secondary" onClick={() => setShowQr((v) => !v)}>
             <Icon name="qr" size={17} />
-            {showQr ? "Ocultar QR" : "QR del evento"}
+            {showQr ? t.share.qrButtonHide : t.share.qrButton}
           </Button>
         )}
       </div>
@@ -95,16 +98,14 @@ export function ShareEventCard({
           className="flex items-center justify-center gap-1.5 text-sm font-semibold text-primary"
         >
           <Icon name="qr" size={16} />
-          {showQr ? "Ocultar QR del evento" : "Mostrar QR del evento (para afiches)"}
+          {showQr ? t.share.hideQr : t.share.showQr}
         </button>
       )}
 
       {showQr && url && (
         <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background p-4">
-          <TicketQr value={url} size={200} alt={`QR del link de ${eventName}`} />
-          <p className="text-center text-xs text-muted">
-            Imprímelo o muéstralo: al escanearlo se abre la página para comprar. (No es una entrada.)
-          </p>
+          <TicketQr value={url} size={200} alt={eventName} />
+          <p className="text-center text-xs text-muted">{t.share.qrNote}</p>
         </div>
       )}
     </Card>

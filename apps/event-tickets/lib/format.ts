@@ -1,10 +1,16 @@
-/** "0.0000000" → "0.00", "12.5000000" → "12.50". Falls back to the raw string. */
-export function formatAmount(value: string | null): string {
+import { INTL_LOCALE, type Locale } from "./i18n/locales.ts";
+
+/**
+ * "0.0000000" → "0.00", "12.5000000" → "12.50", written the way the reader's
+ * language writes numbers ("2,50" in Spanish and French, "2.50" in English).
+ * The locale is always passed in: falling back to the device's own locale
+ * would make the server and the browser render different strings.
+ */
+export function formatAmount(value: string | null, locale: Locale): string {
   if (value === null) return "—";
   const n = Number(value);
   if (Number.isNaN(n)) return value;
-  // Fixed locale: server and browser must render the same string (hydration).
-  return n.toLocaleString("es-BO", {
+  return n.toLocaleString(INTL_LOCALE[locale], {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -35,10 +41,10 @@ export function sqlUtcToIso(value: string | null): string | null {
 }
 
 /** "18 sep, 14:05" in America/La_Paz — for timestamps like a sale or a check-in. */
-export function formatTimestamp(isoUtc: string): string {
+export function formatTimestamp(isoUtc: string, locale: Locale): string {
   const date = new Date(isoUtc);
   if (Number.isNaN(date.getTime())) return isoUtc;
-  return new Intl.DateTimeFormat("es-BO", {
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
     timeZone: BUSINESS_TIMEZONE,
     day: "numeric",
     month: "short",
@@ -94,11 +100,15 @@ export function salesClosed(eventIsoUtc: string, now = Date.now()): boolean {
   return !Number.isNaN(start) && now > start + SALES_GRACE_MS;
 }
 
-/** Stored as UTC always; only the view converts. E.g. "vie 12 sep, 19:00" in America/La_Paz. */
-export function formatEventDateTime(isoUtc: string): string {
+/**
+ * Stored as UTC always; only the view converts. E.g. "vie 12 sep, 19:00".
+ * The zone stays America/La_Paz whatever the language: the event happens in
+ * Bolivia, so a reader in Paris still needs the door time in La Paz.
+ */
+export function formatEventDateTime(isoUtc: string, locale: Locale): string {
   const date = new Date(isoUtc);
   if (Number.isNaN(date.getTime())) return isoUtc;
-  return new Intl.DateTimeFormat("es-BO", {
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
     timeZone: BUSINESS_TIMEZONE,
     weekday: "short",
     day: "numeric",

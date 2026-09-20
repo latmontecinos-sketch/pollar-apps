@@ -29,11 +29,12 @@ Deploying to a new domain (Vercel or otherwise) also needs that domain added on 
 |---|---|---|
 | `/` | anyone | Logged out: what Pollar Pass is + how buying works. Logged in: balance, "get test USDC", and the three main actions |
 | `/como-funciona` | anyone, no login | In-app guide: buyer steps, organizer steps, FAQ (test USDC faucet, "I paid but got no ticket", refunds, privacy). Deep-linkable (`#usdc`, `#organizador`…) and reachable from the **Ayuda** button in every header |
-| `/organizador/nuevo` | organizer | Create an event (name, place, date in Bolivia time, price, capacity) |
+| `/escanear` | anyone | Scan an event's QR (poster, invitation) to open its page |
+| `/organizador/nuevo` | organizer | Create an event (name, place, date in Bolivia time, price, capacity), with a preview of the public page before publishing |
 | `/e/[id]` | anyone, no login | Public event page — buy a ticket. Link previews (WhatsApp etc.) show the event's name, date and price |
 | `/mis-pases` | buyer | "Mis entradas": every ticket with its QR; unconfirmed purchases get **"Ya pagué, verificar"** |
 | `/mis-eventos` | organizer | Every event they organize, with sold count, linking to its panel |
-| `/organizador/eventos/[id]` | owning organizer | Share the link (copy / WhatsApp / QR for posters), sold vs. in-progress vs. checked-in, edit event |
+| `/organizador/eventos/[id]` | owning organizer | Share the link (copy / WhatsApp / QR for posters), sold vs. in-progress vs. checked-in, edit event, extend capacity (twice at most), staff door link |
 | `/organizador/eventos/[id]/puerta` | owning organizer | Door check-in: camera scan or typed short code, big green/red result that clears itself, live check-in counter |
 | `/puerta/[id]` | door staff, no login | The same check-in screen, opened from the staff link the organizer shares (`#t=<token>`) |
 | `/organizador/eventos/[id]/ventas` | owning organizer | Revenue, per-sale detail with Stellar receipt, who already got in |
@@ -49,6 +50,18 @@ There's no merchant "charge" API in Pollar — an in-app purchase is a user-to-u
 
 **Never charging twice.** Once a sale exists the buyer's browser remembers it, and once a payment may have been sent the only action offered is *verify* — never *buy* again. Confirmation retries with backoff (Horizon can lag a few seconds behind a fresh payment), resumes after a reload, and `confirm` also works **without a hash**: the server finds the payment on Horizon by the sale's unique memo. That's what "Mis entradas → Ya pagué, verificar" uses when the tab was closed mid-payment.
 
+## Languages and theme
+
+Spanish, English and French, plus light / dark / system. Both live in cookies read on the **server** (`lib/i18n/server.ts`), so the first paint is already in the right language and theme — no flash, and shared links preview correctly for whoever opens them. A visitor with no cookie gets their `Accept-Language`. `lib/i18n/es.ts` is the source dictionary; `en.ts` and `fr.ts` are typed against it, so a missing key fails the build instead of rendering blank. Amounts and dates follow the reader's language (`2,50` vs `2.50`) while event times stay in `America/La_Paz` — the event happens in Bolivia whoever is reading.
+
+## Holding a seat, and giving it back
+
+A checkout holds its seat for **10 minutes**, shown to the buyer as a live countdown. The hold ends early when the buyer cancels or the payment is rejected before reaching the network (`POST /api/sales/[id]/release`) — without that, a wallet with no XLM for fees could leave an event looking sold out with nothing sold. A page whose remaining seats are only *held* says so instead of "agotado", since those come back in minutes.
+
+## Check-in is two taps, not one
+
+Scanning only **reads** the ticket (`POST /api/events/[id]/door/check`); the ticket is spent only when the person on the door confirms (`POST …/door`). A QR read from a pocket, or a scan of the wrong person's phone, costs nothing. On confirmation the buyer gets a "you're in" email in the language they bought in, and both parties see it under the bell in the header (`GET /api/notifications`: your event sold a ticket, your ticket was accepted).
+
 ## Identity, without a Bearer token
 
 Pollar sessions are DPoP-bound — the signing key lives in the browser and never reaches this server, so a forwarded access token proves nothing here. Every write route instead requires a short-lived **SEP-53** signature of the live Pollar session (`x-pollar-proof`), verified purely cryptographically (`@stellar/stellar-base`, no call back to Pollar) — the same pattern already merged in `vendor-pay-link`. Ownership checks (editing an event, door mode, the sales view) return a real 403 for a different address.
@@ -57,6 +70,29 @@ Pollar sessions are DPoP-bound — the signing key lives in the browser and neve
 
 - Amounts are integer **stroops** end to end (`lib/money.ts`), never floats.
 - A ticket's QR `code` is CSPRNG, ~128.8 bits of entropy (rejection-sampled against its alphabet so there's no modulo bias), never derived from the sale, timestamp, or buyer. Its `door_code` is a short, hand-typeable fallback. Either one checks in through the same atomic `UPDATE ... WHERE (code = ? OR door_code = ?) AND event_id = ? AND used_at IS NULL` — a valid ticket scanned at the wrong event's door reads as unknown without being consumed.
+
+## Testing and QA
+
+Automated where it's cheap, by hand where it isn't. The spikes below run against the real remote database and real testnet; the manual pass is the one to repeat before a demo.
+
+**Manual pass (two accounts, two phones — the same setup as the demo video):**
+
+| # | Scenario | Expected |
+|---|---|---|
+| 1 | Brand-new account, no USDC, opens an event | "Te faltan USDC" with the faucet link, no dead button |
+| 2 | Brand-new account whose wallet isn't on-chain yet | "Tu cuenta todavía no está activa" + link to the fees question; see the XLM note below |
+| 3 | Buy 0.01 USDC, confirm | Ticket QR in seconds, email arrives with the QR **rendered** (not a broken image) |
+| 4 | Buy, then cancel the payment / reject it in the wallet | Seat released immediately; the event doesn't read "agotado" |
+| 5 | Start a checkout, don't pay | Countdown runs to 0, sale goes `expired`, seat back on sale |
+| 6 | Close the tab mid-payment, reopen "Mis entradas" | "Ya pagué, verificar" finds the payment on Stellar and issues the ticket — never a second charge |
+| 7 | Scan the ticket at the door | Review step first; the ticket is spent only after "Aceptar ingreso" |
+| 8 | Scan the same ticket again | Red "Ya fue usada", with the time it came in |
+| 9 | Scan a ticket from another event | "No válida", and the ticket stays unused for its own event |
+| 10 | Staff door link on a second phone | Checks in, sees no sales and no account |
+| 11 | Revoke the staff link, scan again | "Este link de puerta ya no es válido" |
+| 12 | Switch language and theme | Whole app (including emails and link previews) follows; no flash on reload |
+
+**Network fees (XLM), the one thing a tester hits first:** payments are USDC, but Stellar charges a fraction of a cent in **XLM** per transaction, paid by the buyer's own account. A brand-new Pollar wallet can be created in deferred funding mode, with no XLM yet — the app detects that (`wallet.existsOnStellar === false`) and says so instead of failing with a network error. For testing, `friendbot.stellar.org` funds an address on testnet for free. Sponsoring those fees from the app would need Pollar's own sponsorship path, not something this app can decide on its own.
 
 ## Reproducible spikes
 

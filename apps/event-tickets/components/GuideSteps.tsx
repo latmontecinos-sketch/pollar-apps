@@ -1,4 +1,5 @@
 import { Icon, type IconName } from "@/components/ui/Icon";
+import type { Dict } from "@/lib/i18n";
 
 export type GuideStep = { icon: IconName; title: string; body: React.ReactNode };
 
@@ -27,58 +28,14 @@ export function GuideSteps({ steps }: { steps: GuideStep[] }) {
   );
 }
 
-export const BUYER_STEPS: GuideStep[] = [
-  {
-    icon: "share",
-    title: "Abre el link del evento",
-    body: "El organizador comparte un link (por WhatsApp, redes, etc.). Ahí ves fecha, lugar, precio y cupos disponibles. No necesitas cuenta para mirar.",
-  },
-  {
-    icon: "wallet",
-    title: "Ingresa con tu correo",
-    body: "Tocas “Ingresar” y Pollar te crea una cuenta con billetera automáticamente. No instalas nada ni guardas frases secretas.",
-  },
-  {
-    icon: "ticket",
-    title: "Compra tu entrada",
-    body: "Revisas el precio y confirmas. Tu cupo queda reservado 15 minutos mientras se procesa el pago en USDC, que va directo al organizador.",
-  },
-  {
-    icon: "qr",
-    title: "Recibe tu QR",
-    body: "Tu entrada aparece al instante con un código QR y un código corto de puerta. Queda guardada en “Mis entradas” y te llega por correo.",
-  },
-  {
-    icon: "check",
-    title: "Muéstralo en la puerta",
-    body: "El organizador escanea tu QR (o escribe tu código de puerta). Cada entrada vale una sola vez.",
-  },
-];
+/** Icons stay here; the words come from the reader's dictionary. */
+const BUYER_ICONS: IconName[] = ["share", "wallet", "ticket", "qr", "check"];
+const ORGANIZER_ICONS: IconName[] = ["plus", "share", "wallet", "chart", "scan"];
 
-export const ORGANIZER_STEPS: GuideStep[] = [
-  {
-    icon: "plus",
-    title: "Crea tu evento",
-    body: "Nombre, lugar, fecha, precio en USDC y cupo total. El precio y el cupo quedan fijos después de publicar, para no afectar a quien ya compró.",
-  },
-  {
-    icon: "share",
-    title: "Comparte el link",
-    body: "Desde el panel del evento copias el link, lo mandas por WhatsApp o muestras su QR en un afiche.",
-  },
-  {
-    icon: "wallet",
-    title: "Cobra directo en USDC",
-    body: "Cada compra es un pago del comprador a tu cuenta Pollar. La app verifica cada pago en la red de Stellar antes de emitir la entrada — no hay intermediario que retenga tu dinero.",
-  },
-  {
-    icon: "chart",
-    title: "Sigue tus ventas",
-    body: "En “Ventas” ves lo recaudado, cada pago con su comprobante y quién ya ingresó.",
-  },
-  {
-    icon: "scan",
-    title: "Valida en la puerta",
-    body: "El día del evento abre “Modo puerta” en tu celular y escanea los QR. Verde: puede pasar. Rojo: ya usada o no válida.",
-  },
-];
+export function buyerSteps(t: Dict): GuideStep[] {
+  return t.guide.buyerSteps.map((step, index) => ({ icon: BUYER_ICONS[index], ...step }));
+}
+
+export function organizerSteps(t: Dict): GuideStep[] {
+  return t.guide.organizerSteps.map((step, index) => ({ icon: ORGANIZER_ICONS[index], ...step }));
+}

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
+import { getDict } from "@/lib/i18n/server";
 
-export const metadata: Metadata = {
-  title: "Cómo funciona",
-  description:
-    "Guía paso a paso de Pollar Pass: cómo comprar una entrada, cómo organizar un evento y preguntas frecuentes.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getDict();
+  return { title: t.meta.guideTitle, description: t.meta.guideDescription };
+}
 
 export default function ComoFuncionaLayout({ children }: LayoutProps<"/como-funciona">) {
   return children;

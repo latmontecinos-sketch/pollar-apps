@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { contactHref, formatAmount, formatEventDateTime, salesClosed } from "@/lib/format";
+import { getDict } from "@/lib/i18n/server";
+import type { Dict } from "@/lib/i18n";
 import { sweepExpiredSales } from "@/lib/sales";
 import { AppHeader } from "@/components/AppHeader";
 import { BuyButton } from "@/components/BuyButton";
@@ -22,6 +24,7 @@ type EventRow = {
   reserved: number;
   organizer_name: string;
   organizer_contact: string;
+  paid: number;
 };
 
 /** Shared by generateMetadata and the page (one DB read per request). */
@@ -31,7 +34,9 @@ const loadPublicEvent = cache(async (id: string): Promise<EventRow | null> => {
   await sweepExpiredSales({ eventId: id });
   const result = await db.execute({
     sql: `SELECT id, name, description, datetime_utc, place, price_stroops, capacity, reserved,
-                 organizer_name, organizer_contact
+                 organizer_name, organizer_contact,
+                 (SELECT count(*) FROM sales
+                  WHERE sales.event_id = events.id AND sales.status = 'paid') AS paid
           FROM events WHERE id = ?`,
     args: [id],
   });
@@ -41,10 +46,13 @@ const loadPublicEvent = cache(async (id: string): Promise<EventRow | null> => {
 /** What WhatsApp/Telegram/etc. show when the organizer shares the link. */
 export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promise<Metadata> {
   const { id } = await params;
-  const event = await loadPublicEvent(id);
-  if (!event) return { title: "Evento no encontrado" };
-  const price = formatAmount(stroopsToDecimal(BigInt(event.price_stroops)));
-  const description = `${formatEventDateTime(event.datetime_utc)} · ${event.place} · ${price} USDC. Compra tu entrada con Pollar Pass.`;
+  const [event, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
+  if (!event) return { title: t.meta.eventNotFound };
+  const description = t.meta.eventDescription(
+    formatEventDateTime(event.datetime_utc, locale),
+    event.place,
+    formatAmount(stroopsToDecimal(BigInt(event.price_stroops)), locale)
+  );
   return {
     title: event.name,
     description,
@@ -52,9 +60,9 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
   };
 }
 
-function OrganizerContact({ contact }: { contact: string }) {
+function OrganizerContact({ contact, t }: { contact: string; t: Dict }) {
   const href = contactHref(contact);
-  if (!href) return <span className="truncate text-xs text-muted">Contacto: {contact}</span>;
+  if (!href) return <span className="truncate text-xs text-muted">{t.event.contactPlain(contact)}</span>;
   return (
     <a
       href={href}
@@ -62,7 +70,7 @@ function OrganizerContact({ contact }: { contact: string }) {
       rel="noopener noreferrer"
       className="flex w-fit items-center gap-1 truncate text-xs font-semibold text-primary underline"
     >
-      Contactar: {contact} <Icon name="external" size={11} />
+      {t.event.contactLink(contact)} <Icon name="external" size={11} />
     </a>
   );
 }
@@ -74,11 +82,16 @@ function OrganizerContact({ contact }: { contact: string }) {
  */
 export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) {
   const { id } = await params;
-  const event = await loadPublicEvent(id);
+  const [event, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
   if (!event) notFound();
 
   const remaining = Math.max(0, event.capacity - event.reserved);
-  const soldOut = remaining <= 0;
+  // "Sold out" means sold, not "held by someone mid-checkout": seats waiting
+  // on an unpaid reservation come back in minutes, and saying "agotado" for
+  // those turns a temporary hold into a lost sale.
+  const held = Math.max(0, event.reserved - Number(event.paid));
+  const soldOut = remaining <= 0 && held === 0;
+  const onlyHeld = remaining <= 0 && held > 0;
   const closed = salesClosed(event.datetime_utc);
   const priceDecimal = stroopsToDecimal(BigInt(event.price_stroops));
   const takenPct = Math.min(100, Math.round((event.reserved / event.capacity) * 100));
@@ -90,7 +103,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
       <Card className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <span className="w-fit rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary">
-            Entrada · {formatAmount(priceDecimal)} USDC
+            {t.event.ticketBadge(formatAmount(priceDecimal, locale))}
           </span>
           <h1 className="text-2xl font-extrabold leading-tight tracking-tight">{event.name}</h1>
           {event.description && (
@@ -104,7 +117,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
               <Icon name="calendar" size={18} />
             </span>
             <span className="font-medium first-letter:uppercase">
-              {formatEventDateTime(event.datetime_utc)}
+              {formatEventDateTime(event.datetime_utc, locale)}
             </span>
           </li>
           <li className="flex items-center gap-3">
@@ -120,10 +133,10 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
               </span>
               <span className="flex min-w-0 flex-col">
                 <span className="font-medium">
-                  Organiza: {event.organizer_name || "el organizador"}
+                  {t.event.organizedBy(event.organizer_name || t.event.organizerFallback)}
                 </span>
                 {event.organizer_contact && (
-                  <OrganizerContact contact={event.organizer_contact} />
+                  <OrganizerContact contact={event.organizer_contact} t={t} />
                 )}
               </span>
             </li>
@@ -132,16 +145,21 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
 
         {closed ? (
           <div className="rounded-xl bg-surface px-4 py-3 text-center text-sm font-semibold text-muted">
-            Este evento ya pasó: la venta de entradas está cerrada.
+            {t.event.closed}
+          </div>
+        ) : onlyHeld ? (
+          <div className="flex flex-col gap-1 rounded-xl border border-warning-border bg-warning-light px-4 py-3 text-sm leading-6">
+            <span className="font-semibold text-warning">{t.hold.heldSeats(held)}</span>
+            <span className="text-muted">{t.hold.retryLater}</span>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-1.5 text-muted">
-                <Icon name="users" size={16} /> Cupos
+                <Icon name="users" size={16} /> {t.event.seats}
               </span>
               <span className={`font-semibold ${soldOut ? "text-error" : "text-foreground"}`}>
-                {soldOut ? "Agotado" : `Quedan ${remaining} de ${event.capacity}`}
+                {soldOut ? t.event.soldOut : t.event.remaining(remaining, event.capacity)}
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-surface-hover">
@@ -153,27 +171,23 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
           </div>
         )}
 
-        {!soldOut && !closed && (
+        {!soldOut && !onlyHeld && !closed && (
           <BuyButton eventId={event.id} eventName={event.name} priceDecimal={priceDecimal} />
         )}
       </Card>
 
       {!soldOut && !closed && (
         <Card className="flex flex-col gap-3 p-5">
-          <h2 className="text-sm font-bold">¿Primera vez comprando con Pollar Pass?</h2>
+          <h2 className="text-sm font-bold">{t.event.firstTimeTitle}</h2>
           <ol className="flex flex-col gap-2 text-sm text-muted">
-            <li className="flex gap-2">
-              <span className="font-bold text-primary">1.</span> Ingresa con tu correo (se crea tu cuenta sola).
-            </li>
-            <li className="flex gap-2">
-              <span className="font-bold text-primary">2.</span> Ten saldo en USDC y toca “Comprar entrada”.
-            </li>
-            <li className="flex gap-2">
-              <span className="font-bold text-primary">3.</span> Recibes un QR: muéstralo en la puerta.
-            </li>
+            {t.event.firstTimeSteps.map((step, index) => (
+              <li key={step} className="flex gap-2">
+                <span className="font-bold text-primary">{index + 1}.</span> {step}
+              </li>
+            ))}
           </ol>
           <Link href="/como-funciona" className="text-sm font-semibold text-primary underline">
-            Ver la guía completa →
+            {t.event.fullGuide}
           </Link>
         </Card>
       )}

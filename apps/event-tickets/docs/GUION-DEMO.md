@@ -31,6 +31,12 @@ con dos personas distintas y dos celulares, en testnet de Stellar.
 | 9 | Organizadora | Escanea el mismo QR otra vez → rojo "Ya fue usada" | "Si alguien intenta entrar con el mismo QR o una captura, sale en rojo. Cada entrada vale una sola vez." |
 | 10 | — | Contador "Ingresaron 1 / 1" y cierre con el logo | "Pollar Pass: entradas con QR, cobradas en USDC, sin intermediarios." |
 
+## Antes de grabar: pasada de pruebas
+
+Corre la tabla de **Testing and QA** del [README](../README.md) con las dos cuentas.
+Los dos tropiezos típicos: la cuenta nueva sin XLM para comisiones (se resuelve
+con `friendbot.stellar.org`) y quedarse sin USDC de prueba (faucet de Circle).
+
 ## Detalles que conviene mostrar (si hay tiempo)
 
 - El **link de puerta para el personal** (`Personal de puerta` en el panel):
