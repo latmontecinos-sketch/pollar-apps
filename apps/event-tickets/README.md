@@ -27,11 +27,12 @@ Deploying to a new domain (Vercel or otherwise) also needs that domain added on 
 
 | Path | Who | What |
 |---|---|---|
-| `/` | anyone | Logged out: what Pollar Pass is + how buying works. Logged in: balance, "get test USDC", and the three main actions |
+| `/` | anyone | Product page: what Pollar Pass is, who it is for, how it works, with "Abrir la app" as the single action |
+| `/app` | anyone | The app itself: balance, "get test USDC", scan an event, and the three main actions |
 | `/como-funciona` | anyone, no login | In-app guide: buyer steps, organizer steps, FAQ (test USDC faucet, "I paid but got no ticket", refunds, privacy). Deep-linkable (`#usdc`, `#organizador`…) and reachable from the **Ayuda** button in every header |
 | `/escanear` | anyone | Scan an event's QR (poster, invitation) to open its page |
-| `/organizador/nuevo` | organizer | Create an event (name, place, date in Bolivia time, price, capacity), with a preview of the public page before publishing |
-| `/e/[id]` | anyone, no login | Public event page — buy a ticket. Link previews (WhatsApp etc.) show the event's name, date and price |
+| `/organizador/nuevo` | organizer | Create an event and its ticket tiers (General, VIP…), with a preview of the public page before publishing |
+| `/e/[id]` | anyone, no login | Public event page — one row per ticket tier with its own price and remaining seats. Link previews (WhatsApp etc.) show the event's name, date and cheapest price |
 | `/mis-pases` | buyer | "Mis entradas": every ticket with its QR; unconfirmed purchases get **"Ya pagué, verificar"** |
 | `/mis-eventos` | organizer | Every event they organize, with sold count, linking to its panel |
 | `/organizador/eventos/[id]` | owning organizer | Share the link (copy / WhatsApp / QR for posters), sold vs. in-progress vs. checked-in, edit event, extend capacity (twice at most), staff door link |
@@ -53,6 +54,10 @@ There's no merchant "charge" API in Pollar — an in-app purchase is a user-to-u
 ## Languages and theme
 
 Spanish, English and French, plus light / dark / system. Both live in cookies read on the **server** (`lib/i18n/server.ts`), so the first paint is already in the right language and theme — no flash, and shared links preview correctly for whoever opens them. A visitor with no cookie gets their `Accept-Language`. `lib/i18n/es.ts` is the source dictionary; `en.ts` and `fr.ts` are typed against it, so a missing key fails the build instead of rendering blank. Amounts and dates follow the reader's language (`2,50` vs `2.50`) while event times stay in `America/La_Paz` — the event happens in Bolivia whoever is reading.
+
+## Ticket tiers
+
+An event's seats live on `ticket_types` (`lib/ticket-types.ts`), not on the event: each tier has its own name, price, capacity and **its own atomic reservation**, so General selling out never closes VIP, and two people racing for the last VIP seat still can't both win. The event row keeps the cheapest price and the total capacity as a summary for listings. Capacity is extended per tier and only upwards, twice at most. Events created before tiers existed get a single "General" tier carrying their original price and capacity, backfilled idempotently on boot.
 
 ## Holding a seat, and giving it back
 
@@ -93,6 +98,14 @@ Automated where it's cheap, by hand where it isn't. The spikes below run against
 | 12 | Switch language and theme | Whole app (including emails and link previews) follows; no flash on reload |
 
 **Network fees (XLM), the one thing a tester hits first:** payments are USDC, but Stellar charges a fraction of a cent in **XLM** per transaction, paid by the buyer's own account. A brand-new Pollar wallet can be created in deferred funding mode, with no XLM yet — the app detects that (`wallet.existsOnStellar === false`) and says so instead of failing with a network error. For testing, `friendbot.stellar.org` funds an address on testnet for free. Sponsoring those fees from the app would need Pollar's own sponsorship path, not something this app can decide on its own.
+
+## Tests
+
+```bash
+pnpm test    # node --test, no extra dependency
+```
+
+Covers what has actually broken here: stroops arithmetic (never floats), the SQLite-timestamp and timezone bugs, tier validation and capacity limits, the sale state machine (holds, expiry, late payments, refunds, one live reservation per buyer), and that all three dictionaries define the same keys with their interpolations intact.
 
 ## Reproducible spikes
 
