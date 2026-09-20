@@ -11,14 +11,15 @@
     "spike:capacity": "node --env-file-if-exists=.env scripts/spike-capacity.mts",
     "spike:door": "node --env-file-if-exists=.env scripts/spike-door.mts",
     "spike:horizon-verify": "node --env-file-if-exists=.env scripts/spike-horizon-verify.mts",
-    "test": "node --test tests/*.test.mts"
+    "test": "node --test tests/*.test.mts",
+    "audit": "pnpm audit --audit-level high"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "@pollar/core": "^0.11.2",
     "@pollar/react": "^0.11.2",
     "@stellar/stellar-base": "15.0.0",
-    "next": "16.3.1",
+    "next": "16.3.5",
     "qr-scanner": "^1.4.2",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
@@ -31,9 +32,14 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.1",
+    "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
-  "packageManager": "pnpm@10.23.0"
+  "packageManager": "pnpm@10.23.0",
+  "pnpm": {
+    "overrides": {
+      "js-yaml@>=4.0.0 <4.3.2": "^4.3.2"
+    }
+  }
 }
