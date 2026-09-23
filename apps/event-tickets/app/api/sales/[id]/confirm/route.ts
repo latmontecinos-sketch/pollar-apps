@@ -76,8 +76,16 @@ export async function POST(request: Request, ctx: Ctx) {
   let hash = body.hash?.trim() ?? "";
 
   if (!hash) {
+    // The buyer's account, not the organizer's: the payment shows up on both
+    // (Horizon lists an account's payments in either direction), but the
+    // organizer's is the one that fills up — and the lookup only reads one
+    // page. A popular organizer, or anyone spraying 1-stroop payments at the
+    // address we publish to every buyer, would push the real payment out of
+    // that page and break this recovery path. The destination and amount are
+    // re-checked by verifyPaymentOnHorizon either way, so searching the
+    // quieter account costs nothing.
     const found = await findPaymentHashByMemo({
-      account: sale.organizer_pollar_id,
+      account: sale.buyer_pollar_id,
       memo: sale.reference,
     });
     if (found === undefined) {
@@ -125,7 +133,34 @@ export async function POST(request: Request, ctx: Ctx) {
     return NextResponse.json({ error: check.error }, { status });
   }
 
-  const settled = await settlePayment(sale.id, sale.event_id, hash);
+  // The payment is verified on-chain by this point: the money is gone and
+  // this record is the only thing standing between the buyer and their
+  // ticket. If the database refuses (write contention, a blip reaching
+  // Turso), an uncaught throw became a raw 500, which the client reads as
+  // "unverified" — and the sale could later expire with no trace that it was
+  // ever paid, which is also the one state the refund flow can't reach. A
+  // 503 says "ask me again", which is exactly right: settlePayment is
+  // idempotent, so retrying costs nothing and the retry is already built
+  // into BuyButton.
+  let settled: Awaited<ReturnType<typeof settlePayment>>;
+  try {
+    settled = await settlePayment(sale.id, sale.event_id, hash);
+  } catch (err) {
+    console.error(
+      `[sales] settlePayment failed for ${sale.id} with a verified payment (${hash.slice(0, 12)}): ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+    return NextResponse.json(
+      {
+        error:
+          "Tu pago está confirmado en la red, pero no pudimos registrarlo en este momento. Volvé a intentar en unos segundos: no se te va a cobrar de nuevo.",
+        code: "settle_retry",
+      },
+      { status: 503 }
+    );
+  }
+
   switch (settled.outcome) {
     case "paid":
     case "already_paid": {
