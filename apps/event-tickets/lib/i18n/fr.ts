@@ -21,6 +21,7 @@ export const fr: Dict = {
   footer: {
     disclaimer:
       "Pollar Pass · démo sur le réseau de test de Stellar (testnet) : ces USDC n'ont aucune valeur réelle ·",
+    disclaimerLive: "Pollar Pass · paiements en USDC sur le réseau Stellar ·",
     howItWorks: "Comment ça marche",
   },
   meta: {
@@ -69,6 +70,7 @@ export const fr: Dict = {
     heroSubtitle:
       "Publiez votre événement, partagez un lien, encaissez tout de suite. L'acheteur reçoit un QR valable une seule fois à l'entrée. Sans carte, sans portefeuille externe, sans intermédiaire qui retient votre argent.",
     heroNote: "Démo sur le réseau de test de Stellar : ces USDC n'ont aucune valeur réelle.",
+    heroNoteLive: "Paiements en USDC sur le réseau Stellar, directement sur votre compte.",
     problemTitle: "Le problème",
     problemBody:
       "Un petit événement se vend aujourd'hui en espèces, avec des listes papier et des captures d'écran transférées. Personne ne sait ce qui a été vendu avant la fin, et la même capture entre deux fois.",

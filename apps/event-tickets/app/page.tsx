@@ -4,6 +4,7 @@ import { ProductHeader } from "@/components/ProductHeader";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { getDict } from "@/lib/i18n/server";
+import { IS_MAINNET } from "@/lib/network";
 
 const FEATURE_ICONS: IconName[] = ["wallet", "shield", "share", "users", "clock", "settings"];
 const REPO_URL = "https://github.com/pollar-xyz/pollar-apps/pull/32";
@@ -78,7 +79,9 @@ export default async function ProductPage() {
                 {t.landing.seeHow}
               </Link>
             </div>
-            <p className="text-xs text-muted-light">{t.product.heroNote}</p>
+            <p className="text-xs text-muted-light">
+              {IS_MAINNET ? t.product.heroNoteLive : t.product.heroNote}
+            </p>
           </div>
         </div>
       </section>

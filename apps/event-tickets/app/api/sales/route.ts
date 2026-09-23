@@ -3,6 +3,7 @@ import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { salesClosed } from "@/lib/format";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
+import { usdcAsset } from "@/lib/network";
 import { generateReference, reserveAndCreateSale, sweepExpiredSales } from "@/lib/sales";
 import { listTicketTypes } from "@/lib/ticket-types";
 import { enforce } from "@/lib/rate-limit";
@@ -113,6 +114,12 @@ export async function POST(request: Request) {
       reference: result.sale.reference,
       amountDecimal: stroopsToDecimal(result.sale.amountStroops),
       organizerAddress: event.organizer_pollar_id,
+      // The sale names its own asset. Before this, the response said "pay
+      // 10.00 to G…" and the client chose *what* to pay with from the first
+      // non-native balance its wallet listed — so the one thing the server
+      // verifies afterwards (that it was this USDC, from this issuer) was
+      // the one thing the client was left to guess.
+      asset: usdcAsset(),
       ticketTypeId: ticketType.id,
       ticketTypeName: ticketType.name,
       expiresAtUtc: result.sale.expiresAtUtc,

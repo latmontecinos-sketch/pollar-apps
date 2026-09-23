@@ -7,6 +7,7 @@ import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, formatEventDateTime, formatTimestamp, salesClosed } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
+import { explorerTxUrl } from "@/lib/network";
 import { AppHeader } from "@/components/AppHeader";
 import { HoldCountdown } from "@/components/HoldCountdown";
 import { Button } from "@/components/ui/Button";
@@ -233,7 +234,7 @@ export default function MisPasesPage() {
                           <>
                             {" "}
                             <a
-                              href={`https://stellar.expert/explorer/testnet/tx/${sale.refundTxHash}`}
+                              href={explorerTxUrl(sale.refundTxHash)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="font-semibold text-primary underline"

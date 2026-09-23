@@ -21,6 +21,7 @@ export const en: Dict = {
   footer: {
     disclaimer:
       "Pollar Pass · demo on Stellar's test network (testnet): these USDC have no real value ·",
+    disclaimerLive: "Pollar Pass · payments in USDC on the Stellar network ·",
     howItWorks: "How it works",
   },
   meta: {
@@ -69,6 +70,7 @@ export const en: Dict = {
     heroSubtitle:
       "Publish your event, share a link, get paid instantly. Buyers get a QR that works exactly once at the door. No cards, no external wallets, no middleman holding your money.",
     heroNote: "Demo on Stellar's test network: these USDC have no real value.",
+    heroNoteLive: "Payments in USDC on the Stellar network, straight to your account.",
     problemTitle: "The problem",
     problemBody:
       "Small events are sold with cash, paper lists and forwarded screenshots. Nobody knows how much was sold until the end, and the same screenshot gets in twice.",

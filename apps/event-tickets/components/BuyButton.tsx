@@ -6,7 +6,8 @@ import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useBalance } from "@/hooks/useBalance";
 import { pollarFetch } from "@/lib/auth-client";
-import { paymentAssetFrom } from "@/lib/payments";
+import { creditAsset } from "@/lib/payments";
+import { USDC_CODE } from "@/lib/network";
 import { formatAmount } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { decimalToStroops } from "@/lib/money";
@@ -21,6 +22,8 @@ type Sale = {
   reference: string;
   amountDecimal: string;
   organizerAddress: string;
+  /** What to pay with, decided by the server — never by this component. */
+  asset: { code: string; issuer: string };
 };
 
 type Ticket = { code: string; doorCode: string };
@@ -115,8 +118,11 @@ export function BuyButton({
   const { asset, balance, isLoading: balanceLoading, refresh } = useBalance();
   const [state, setState] = useState<State>({ step: "idle" });
   const [receiveOpen, setReceiveOpen] = useState(false);
-  // Ticket prices are always USDC (see lib/money.ts); never fall back to XLM.
-  const usdcAsset = asset && asset.type !== "native" ? asset : null;
+  // Ticket prices are always USDC, so this checks the code instead of merely
+  // "not XLM" — a wallet holding some other app-enabled asset first used to
+  // satisfy this test and get billed in the wrong currency.
+  const usdcAsset =
+    asset && asset.code === USDC_CODE && asset.type !== "native" ? asset : null;
   const address = user?.address;
   // Remembered per tier, so a paused General checkout doesn't collide with a VIP one.
   const flightKey = `${eventId}:${ticketTypeId}`;
@@ -264,7 +270,10 @@ export function BuyButton({
         {
           destination: sale.organizerAddress,
           amount: sale.amountDecimal,
-          asset: paymentAssetFrom(usdcAsset),
+          // From the sale, so the asset paid is the asset the server will
+          // look for on Horizon. The wallet's balance list only decides
+          // whether the buyer *can* pay, never with what.
+          asset: creditAsset(sale.asset),
         },
         { memo: { type: "text", value: sale.reference } }
       );

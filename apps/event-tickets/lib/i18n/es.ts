@@ -24,6 +24,9 @@ export const es = {
   footer: {
     disclaimer:
       "Pollar Pass · demo en la red de prueba de Stellar (testnet): los USDC no tienen valor real ·",
+    /** Shown instead of `disclaimer` when the app runs on mainnet: telling
+     *  someone their real money has no value is worse than saying nothing. */
+    disclaimerLive: "Pollar Pass · pagos en USDC sobre la red Stellar ·",
     howItWorks: "Cómo funciona",
   },
   meta: {
@@ -73,6 +76,7 @@ export const es = {
     heroSubtitle:
       "Publica tu evento, comparte un link y cobra al instante. Quien compra recibe un QR que vale una sola vez en la puerta. Sin tarjetas, sin billeteras externas, sin intermediarios que retengan tu dinero.",
     heroNote: "Demo en la red de prueba de Stellar: los USDC no tienen valor real.",
+    heroNoteLive: "Pagos en USDC sobre la red Stellar, directo a tu cuenta.",
     problemTitle: "El problema",
     problemBody:
       "Un evento pequeño hoy se vende con efectivo, listas en papel y capturas de pantalla reenviadas. Nadie sabe cuánto se vendió hasta el final, y la misma captura entra dos veces.",

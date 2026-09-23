@@ -1,9 +1,20 @@
 import { decimalToStroops } from "./money.ts";
+import { HORIZON_URL, NETWORK } from "./network.ts";
 import { isUsdcPayment } from "./usdc.ts";
 
-const HORIZON =
-  process.env.HORIZON_URL?.replace(/\/$/, "") ??
-  "https://horizon-testnet.stellar.org";
+/**
+ * Which Horizon, and therefore which network, is decided in lib/network.ts —
+ * together with the expected USDC issuer, so the two can't contradict.
+ */
+const HORIZON = HORIZON_URL;
+
+/**
+ * Every call here sits in the buyer's critical path, right after their money
+ * left. Without a deadline a hung Horizon holds the serverless function until
+ * the platform kills it (~300s of undici default), which reaches the buyer as
+ * a 504 instead of the retryable error this module is careful to return.
+ */
+const HORIZON_TIMEOUT_MS = 6000;
 
 export type HorizonCheck =
   | { ok: true }
@@ -49,6 +60,9 @@ async function horizonGet<T>(path: string): Promise<T | null> {
   const res = await fetch(`${HORIZON}${path}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
+    // An abort surfaces as a throw, which every caller already maps to the
+    // retryable "not_found" — a timeout must never read as "no payment".
+    signal: AbortSignal.timeout(HORIZON_TIMEOUT_MS),
   });
   if (res.status === 404) return null;
   if (!res.ok) {
@@ -116,14 +130,27 @@ export async function verifyPaymentOnHorizon(opts: {
     return { ok: false, error: "Hash de transacción inválido", code: "mismatch" };
   }
 
-  let tx: HorizonTx | null;
-  try {
-    tx = await horizonGet<HorizonTx>(`/transactions/${hash}`);
-  } catch {
+  type OpsPage = { _embedded?: { records?: HorizonOp[] } };
+
+  // Both lookups are keyed only by `hash`, so the second never needed the
+  // first's answer — they were sequential for no reason, doubling the wait in
+  // the happy path while the buyer stares at "verificando". `allSettled` so a
+  // failure on one still lets the other produce the more specific verdict.
+  const [txResult, opsResult] = await Promise.allSettled([
+    horizonGet<HorizonTx>(`/transactions/${hash}`),
+    horizonGet<OpsPage>(`/transactions/${hash}/operations?limit=50`),
+  ]);
+
+  if (txResult.status === "rejected") {
     return { ok: false, error: "No se pudo consultar Horizon", code: "not_found" };
   }
+  const tx = txResult.value;
   if (!tx) {
-    return { ok: false, error: "Transacción no encontrada en testnet", code: "not_found" };
+    return {
+      ok: false,
+      error: `Transacción no encontrada en la red de Stellar (${NETWORK})`,
+      code: "not_found",
+    };
   }
   if (!tx.successful) {
     return { ok: false, error: "La transacción no fue exitosa", code: "failed" };
@@ -138,15 +165,10 @@ export async function verifyPaymentOnHorizon(opts: {
     };
   }
 
-  type OpsPage = { _embedded?: { records?: HorizonOp[] } };
-  let ops: OpsPage | null;
-  try {
-    ops = await horizonGet<OpsPage>(`/transactions/${hash}/operations?limit=50`);
-  } catch {
+  if (opsResult.status === "rejected") {
     return { ok: false, error: "No se pudieron leer las operaciones", code: "not_found" };
   }
-
-  const records = ops?._embedded?.records ?? [];
+  const records = opsResult.value?._embedded?.records ?? [];
   const payment = records.find((op) => {
     if (op.type !== "payment") return false;
     if (op.to !== opts.destination) return false;

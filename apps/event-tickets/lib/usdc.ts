@@ -1,26 +1,20 @@
-/** Circle USDC on Stellar testnet. */
-export const TESTNET_USDC_ISSUER =
-  "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
+import { expectedUsdcIssuer, USDC_CODE } from "./network.ts";
 
-/** Circle USDC on Stellar public network. */
-export const MAINNET_USDC_ISSUER =
-  "GA5ZSEJYB37JRC5JMCP5ZJYS4ENFSOFAKTOWYFCLJXSN5M5X3TMXCY4I";
+export { expectedUsdcIssuer };
 
-export function expectedUsdcIssuer(): string {
-  const override = process.env.USDC_ISSUER?.trim();
-  if (override) return override;
-  const key = process.env.NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY ?? "";
-  return key.startsWith("pub_mainnet_")
-    ? MAINNET_USDC_ISSUER
-    : TESTNET_USDC_ISSUER;
-}
-
+/**
+ * Is this Horizon operation a payment in the USDC we price tickets in?
+ *
+ * The issuer comes from lib/network.ts, which derives it from the same
+ * publishable key the SDK and Horizon are derived from — so "which USDC"
+ * can no longer disagree with "which network".
+ */
 export function isUsdcPayment(op: {
   asset_code?: string;
   asset_issuer?: string;
   asset_type?: string;
 }): boolean {
-  if (op.asset_code !== "USDC") return false;
+  if (op.asset_code !== USDC_CODE) return false;
   if (op.asset_type === "native") return false;
   return op.asset_issuer === expectedUsdcIssuer();
 }

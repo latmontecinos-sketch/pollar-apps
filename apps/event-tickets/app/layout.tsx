@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
+import { IS_MAINNET } from "@/lib/network";
 import { PollarAppProvider } from "@/lib/pollar";
 import { I18nProvider } from "@/lib/i18n/client";
 import { getDict, getTheme } from "@/lib/i18n/server";
@@ -44,7 +45,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <PollarAppProvider>{children}</PollarAppProvider>
           </ThemeProvider>
           <footer className="px-4 pb-6 pt-2 text-center text-xs leading-5 text-muted-light">
-            {t.footer.disclaimer}{" "}
+            {IS_MAINNET ? t.footer.disclaimerLive : t.footer.disclaimer}{" "}
             <Link href="/como-funciona" className="underline hover:text-primary">
               {t.footer.howItWorks}
             </Link>

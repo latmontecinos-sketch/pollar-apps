@@ -6,6 +6,7 @@ import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, formatTimestamp, shortAddress } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
+import { explorerTxUrl } from "@/lib/network";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/Card";
 import { RefundButton } from "@/components/RefundButton";
@@ -173,7 +174,7 @@ export default function SalesPage({
                     </span>
                     {sale.txHash && (
                       <a
-                        href={`https://stellar.expert/explorer/testnet/tx/${sale.txHash}`}
+                        href={explorerTxUrl(sale.txHash)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 text-xs font-medium text-primary underline"
