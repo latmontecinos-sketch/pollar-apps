@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AppHeader } from "@/components/AppHeader";
+import { AppShell } from "@/components/AppShell";
 import { buyerSteps, GuideSteps, organizerSteps } from "@/components/GuideSteps";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -168,9 +168,7 @@ export default function ComoFuncionaPage() {
   ];
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.guide.title} back={{ href: "/app", label: t.common.home }} />
-
+    <AppShell title={t.guide.title} back={{ href: "/app", label: t.common.home }}>
       <Card className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-bold tracking-tight">{t.guide.introTitle}</h2>
@@ -194,7 +192,7 @@ export default function ComoFuncionaPage() {
       <div
         role="tablist"
         aria-label={t.guide.title}
-        className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-surface p-1"
+        className="grid grid-cols-3 gap-1 rounded-full bg-tile-soft/70 p-1"
       >
         {tabs.map((item) => (
           <button
@@ -205,8 +203,8 @@ export default function ComoFuncionaPage() {
               setTab(item.id);
               history.replaceState(null, "", `#${item.id}`);
             }}
-            className={`rounded-xl px-2 py-2.5 text-sm font-semibold transition-colors ${
-              tab === item.id ? "bg-background text-primary shadow-sm" : "text-muted hover:text-foreground"
+            className={`rounded-full px-2 py-2.5 text-sm font-semibold leading-tight transition-colors ${
+              tab === item.id ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground/75 hover:text-primary"
             }`}
           >
             {item.label}
@@ -291,6 +289,6 @@ export default function ComoFuncionaPage() {
           ))}
         </div>
       )}
-    </main>
+    </AppShell>
   );
 }

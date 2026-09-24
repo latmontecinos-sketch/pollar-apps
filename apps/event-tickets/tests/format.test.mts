@@ -9,6 +9,7 @@ import {
   contactHref,
   formatAmount,
   formatEventDateTime,
+  formatEventMonth,
   formatTimestamp,
   laPazLocalToUtcIso,
   normalizeDecimalInput,
@@ -64,4 +65,11 @@ test("organizer contact becomes a tappable link when it can", () => {
   assert.equal(contactHref("@mi_evento"), "https://instagram.com/mi_evento");
   assert.equal(contactHref("https://example.com/evento"), "https://example.com/evento");
   assert.equal(contactHref("pregunta en la puerta"), null);
+});
+
+test("an event late on the 31st in La Paz is grouped in its own month, not UTC's", () => {
+  // 22:30 on 31 Oct in La Paz is already 1 Nov in UTC.
+  assert.equal(formatEventMonth("2026-11-01T02:30:00.000Z", "es"), "octubre de 2026");
+  assert.equal(formatEventMonth("2026-11-01T02:30:00.000Z", "en"), "October 2026");
+  assert.equal(formatEventMonth("not a date", "fr"), "not a date");
 });

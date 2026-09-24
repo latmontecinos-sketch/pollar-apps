@@ -26,7 +26,7 @@ export function Button({
   return (
     <button
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-150 enabled:active:scale-[0.97] disabled:opacity-50 ${variants[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-150 enabled:active:scale-[0.97] disabled:opacity-50 ${variants[variant]} ${className}`}
       {...rest}
     >
       {loading && <Spinner />}

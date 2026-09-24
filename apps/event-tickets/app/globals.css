@@ -43,6 +43,22 @@
 
   /* Official logo fill: brand blue on light (pollar-logo-light). */
   --logo: var(--primary);
+
+  /*
+   * App shell (components/AppShell.tsx): a brand band on top, the content on
+   * a lighter sheet that overlaps it, and a floating bottom nav. The icon
+   * tiles are three steps of the same brand blue, soft → strong.
+   */
+  --band: #005db4;
+  --band-foreground: #ffffff;
+  --sheet: #f2f7fc;
+  --nav: #e2edf8;
+  --field: #e8f0f9;
+  --tile-soft: #d3e5f7;
+  --tile-soft-foreground: #005db4;
+  --tile-mid: #3a86d4;
+  --tile-strong: #005db4;
+  --tile-foreground: #ffffff;
 }
 
 /*
@@ -82,6 +98,17 @@
     --warning-border: #57420f;
 
     --logo: var(--foreground);
+
+    --band: #0c2d52;
+    --band-foreground: #eef2f6;
+    --sheet: #0a0e14;
+    --nav: #111823;
+    --field: #151e2b;
+    --tile-soft: #14335a;
+    --tile-soft-foreground: #8cc0f5;
+    --tile-mid: #1f5fa8;
+    --tile-strong: #1668c1;
+    --tile-foreground: #ffffff;
   }
 }
 
@@ -118,6 +145,18 @@
 
   /* Near-white on dark, matching pollar-logo-dark. */
   --logo: var(--foreground);
+
+  /* A deeper band on dark: the light one's full blue would glare. */
+  --band: #0c2d52;
+  --band-foreground: #eef2f6;
+  --sheet: #0a0e14;
+  --nav: #111823;
+  --field: #151e2b;
+  --tile-soft: #14335a;
+  --tile-soft-foreground: #8cc0f5;
+  --tile-mid: #1f5fa8;
+  --tile-strong: #1668c1;
+  --tile-foreground: #ffffff;
 }
 
 /* Expose the tokens as Tailwind utilities (bg-primary, text-muted, border-border…). */
@@ -143,14 +182,33 @@
   --color-warning-light: var(--warning-light);
   --color-warning-border: var(--warning-border);
   --color-logo: var(--logo);
-  --font-sans: var(--font-geist-sans);
+  --color-band: var(--band);
+  --color-band-foreground: var(--band-foreground);
+  --color-sheet: var(--sheet);
+  --color-nav: var(--nav);
+  --color-field: var(--field);
+  --color-tile-soft: var(--tile-soft);
+  --color-tile-soft-foreground: var(--tile-soft-foreground);
+  --color-tile-mid: var(--tile-mid);
+  --color-tile-strong: var(--tile-strong);
+  --color-tile-foreground: var(--tile-foreground);
+  --font-sans: var(--font-poppins);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-poppins), system-ui, sans-serif;
+}
+
+/* Screens inside the app shell sit on the sheet all the way down, footer
+ * included, and leave room for the floating bottom nav. */
+body:has(.app-shell) {
+  background: var(--sheet);
+}
+body:has(.bottom-nav) {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
 }
 
 /*

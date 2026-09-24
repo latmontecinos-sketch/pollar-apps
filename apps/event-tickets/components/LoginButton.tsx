@@ -30,7 +30,7 @@ export function LoginButton({
           onClick={() => setAccountOpen(true)}
           aria-label={t.account.accountLabel}
           title={user.profile?.mail ?? user.address}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-sm font-bold text-primary transition-colors hover:bg-surface-hover"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-sm font-bold text-primary shadow-sm transition-colors hover:bg-primary-light"
         >
           {initial}
         </button>

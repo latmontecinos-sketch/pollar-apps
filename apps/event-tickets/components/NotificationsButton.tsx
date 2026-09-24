@@ -98,7 +98,7 @@ export function NotificationsButton() {
         onClick={openPanel}
         aria-label={t.notifications.title}
         title={t.notifications.title}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-primary"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-background text-foreground/80 shadow-sm transition-colors hover:text-primary"
       >
         <Icon name="bell" size={18} />
         {unread > 0 && (

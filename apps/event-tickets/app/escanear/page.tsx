@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QrScanner from "qr-scanner";
-import { AppHeader } from "@/components/AppHeader";
+import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { useT } from "@/lib/i18n/client";
@@ -71,9 +71,7 @@ export default function ScanPage() {
   }, []);
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.scan.title} back={{ href: "/app", label: t.common.home }} />
-
+    <AppShell title={t.scan.title} back={{ href: "/app", label: t.common.home }}>
       <p className="px-1 text-sm leading-6 text-muted">{t.scan.body}</p>
 
       <Card className="overflow-hidden p-0">
@@ -92,6 +90,6 @@ export default function ScanPage() {
           {message}
         </p>
       )}
-    </main>
+    </AppShell>
   );
 }

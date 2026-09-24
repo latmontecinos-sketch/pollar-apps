@@ -9,10 +9,11 @@ import type { Dict } from "@/lib/i18n";
 import { sweepExpiredSales } from "@/lib/sales";
 import { listTicketTypes, summarize, type TicketType } from "@/lib/ticket-types";
 import { stroopsToDecimal } from "@/lib/money";
-import { AppHeader } from "@/components/AppHeader";
+import { AppShell } from "@/components/AppShell";
 import { BuyButton } from "@/components/BuyButton";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import { IconTile } from "@/components/ui/ListRow";
 
 type EventRow = {
   id: string;
@@ -98,67 +99,66 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
   const buyable = !closed && !soldOut && !onlyHeld;
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader />
-
-      <Card className="flex flex-col gap-5">
-        <div className="flex flex-col gap-2">
-          <span className="w-fit rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary">
-            {t.tiers.from(formatAmount(stroopsToDecimal(totals.priceStroops), locale))}
-          </span>
-          <h1 className="text-2xl font-extrabold leading-tight tracking-tight">{event.name}</h1>
-          {event.description && <p className="text-sm leading-6 text-muted">{event.description}</p>}
-        </div>
-
-        <ul className="flex flex-col gap-3 text-sm">
-          <li className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface text-primary">
-              <Icon name="calendar" size={18} />
+    <AppShell
+      hero={
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <span className="w-fit rounded-full bg-background px-3 py-1 text-xs font-semibold text-primary shadow-sm">
+              {t.tiers.from(formatAmount(stroopsToDecimal(totals.priceStroops), locale))}
             </span>
-            <span className="font-medium first-letter:uppercase">
-              {formatEventDateTime(event.datetime_utc, locale)}
-            </span>
-          </li>
-          <li className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface text-primary">
-              <Icon name="pin" size={18} />
-            </span>
-            <span className="font-medium">{event.place}</span>
-          </li>
-          {(event.organizer_name || event.organizer_contact) && (
-            <li className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface text-primary">
-                <Icon name="users" size={18} />
+            <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight">{event.name}</h1>
+          </div>
+          {/* The two facts people come for, as the band's light stat cards. */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1.5 rounded-2xl bg-background px-3.5 py-3 text-foreground shadow-sm">
+              <Icon name="calendar" size={18} className="text-primary" />
+              <span className="text-sm font-semibold leading-5 first-letter:uppercase">
+                {formatEventDateTime(event.datetime_utc, locale)}
               </span>
+            </div>
+            <div className="flex flex-col gap-1.5 rounded-2xl bg-background px-3.5 py-3 text-foreground shadow-sm">
+              <Icon name="pin" size={18} className="text-primary" />
+              <span className="text-sm font-semibold leading-5">{event.place}</span>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      {/* Only when there's something to say: date and place already live in the band. */}
+      {(event.description || event.organizer_name || event.organizer_contact || !buyable) && (
+        <Card className="flex flex-col gap-5">
+          {event.description && <p className="text-sm leading-6 text-muted">{event.description}</p>}
+
+          {(event.organizer_name || event.organizer_contact) && (
+            <div className="flex items-center gap-3 text-sm">
+              <IconTile icon="users" tone="soft" size={40} />
               <span className="flex min-w-0 flex-col">
                 <span className="font-medium">
                   {t.event.organizedBy(event.organizer_name || t.event.organizerFallback)}
                 </span>
-                {event.organizer_contact && (
-                  <OrganizerContact contact={event.organizer_contact} t={t} />
-                )}
+                {event.organizer_contact && <OrganizerContact contact={event.organizer_contact} t={t} />}
               </span>
-            </li>
+            </div>
           )}
-        </ul>
 
-        {closed && (
-          <div className="rounded-xl bg-surface px-4 py-3 text-center text-sm font-semibold text-muted">
-            {t.event.closed}
-          </div>
-        )}
-        {!closed && soldOut && (
-          <div className="rounded-xl bg-error-light px-4 py-3 text-center text-sm font-semibold text-error">
-            {t.event.soldOut}
-          </div>
-        )}
-        {!closed && onlyHeld && (
-          <div className="flex flex-col gap-1 rounded-xl border border-warning-border bg-warning-light px-4 py-3 text-sm leading-6">
-            <span className="font-semibold text-warning">{t.hold.heldSeats(heldOverall)}</span>
-            <span className="text-muted">{t.hold.retryLater}</span>
-          </div>
-        )}
-      </Card>
+          {closed && (
+            <div className="rounded-xl bg-surface px-4 py-3 text-center text-sm font-semibold text-muted">
+              {t.event.closed}
+            </div>
+          )}
+          {!closed && soldOut && (
+            <div className="rounded-xl bg-error-light px-4 py-3 text-center text-sm font-semibold text-error">
+              {t.event.soldOut}
+            </div>
+          )}
+          {!closed && onlyHeld && (
+            <div className="flex flex-col gap-1 rounded-xl border border-warning-border bg-warning-light px-4 py-3 text-sm leading-6">
+              <span className="font-semibold text-warning">{t.hold.heldSeats(heldOverall)}</span>
+              <span className="text-muted">{t.hold.retryLater}</span>
+            </div>
+          )}
+        </Card>
+      )}
 
       {buyable && (
         <section className="flex flex-col gap-3">
@@ -169,11 +169,12 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
             const remaining = Math.max(0, type.capacity - type.reserved);
             const held = Math.max(0, type.reserved - type.paid);
             return (
-              <Card key={type.id} className="flex flex-col gap-3 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold">{type.name}</h3>
-                    <p className="text-xs text-muted">
+              <Card key={type.id} className="flex flex-col gap-4 p-5">
+                <div className="flex items-center gap-3.5">
+                  <IconTile icon="ticket" tone={remaining > 0 ? "strong" : "soft"} />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-semibold">{type.name}</h3>
+                    <p className={`text-xs font-medium ${remaining > 0 ? "text-primary" : "text-muted"}`}>
                       {remaining > 0
                         ? t.tiers.remaining(remaining)
                         : held > 0
@@ -181,9 +182,9 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
                           : t.tiers.soldOut}
                     </p>
                   </div>
-                  <span className="shrink-0 font-mono text-lg font-bold">
+                  <span className="shrink-0 border-l border-tile-soft pl-3 text-right font-mono text-lg font-bold">
                     {formatAmount(type.priceDecimal, locale)}
-                    <span className="ml-1 text-xs font-normal text-muted">USDC</span>
+                    <span className="block font-sans text-[11px] font-medium text-muted">USDC</span>
                   </span>
                 </div>
                 {remaining > 0 ? (
@@ -220,6 +221,6 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
           </Link>
         </Card>
       )}
-    </main>
+    </AppShell>
   );
 }

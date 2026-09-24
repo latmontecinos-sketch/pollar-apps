@@ -1,20 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
-import { formatAmount, formatEventDateTime, formatTimestamp, salesClosed } from "@/lib/format";
+import {
+  formatAmount,
+  formatEventDateTime,
+  formatEventMonth,
+  formatTimestamp,
+  salesClosed,
+} from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
 import { explorerTxUrl } from "@/lib/network";
-import { AppHeader } from "@/components/AppHeader";
+import { AppShell } from "@/components/AppShell";
 import { HoldCountdown } from "@/components/HoldCountdown";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Icon } from "@/components/ui/Icon";
+import { Icon, type IconName } from "@/components/ui/Icon";
+import { IconTile } from "@/components/ui/ListRow";
+import { Segmented } from "@/components/ui/Segmented";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { Spinner } from "@/components/ui/Spinner";
@@ -36,6 +44,21 @@ type LoadState = { step: "loading" } | { step: "loaded"; sales: Sale[] } | { ste
 
 type VerifyState = { busy: boolean; message?: string; tone?: "info" | "error" };
 
+type Filter = "upcoming" | "past";
+
+const byDate = (a: Sale, b: Sale) => a.event.datetimeUtc.localeCompare(b.event.datetimeUtc);
+
+/** One of the band's two light stat cards. */
+function Stat({ icon, label, value }: { icon: IconName; label: string; value: number }) {
+  return (
+    <div className="flex flex-col items-center gap-0.5 rounded-2xl bg-background px-3 py-3 text-foreground shadow-sm">
+      <Icon name={icon} size={20} className="text-primary" />
+      <span className="text-xs font-medium text-muted">{label}</span>
+      <span className="text-2xl font-bold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
 export default function MisPasesPage() {
   const { user, isLoading: authLoading } = usePollarAuth();
   const t = useT();
@@ -48,6 +71,8 @@ export default function MisPasesPage() {
 
   const [state, setState] = useState<LoadState>({ step: "loading" });
   const [verifying, setVerifying] = useState<Record<string, VerifyState>>({});
+  /** null until the reader picks: then it opens on whichever list has something. */
+  const [filter, setFilter] = useState<Filter | null>(null);
   const address = user?.address;
 
   const load = useCallback(async () => {
@@ -102,20 +127,38 @@ export default function MisPasesPage() {
 
   if (!user) {
     return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.tickets.title} back={{ href: "/app", label: t.common.home }} />
+      <AppShell title={t.tickets.title} back={{ href: "/app", label: t.common.home }}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.tickets.loginNote}</p>
           <LoginButton />
         </div>
-      </main>
+      </AppShell>
     );
   }
 
+  const sales = state.step === "loaded" ? state.sales : [];
+  // Next event first; for past ones, the most recent first.
+  const upcoming = sales.filter((sale) => !salesClosed(sale.event.datetimeUtc)).sort(byDate);
+  const past = sales.filter((sale) => salesClosed(sale.event.datetimeUtc)).sort((a, b) => byDate(b, a));
+  const shown: Filter = filter ?? (upcoming.length > 0 || past.length === 0 ? "upcoming" : "past");
+  const visible = shown === "upcoming" ? upcoming : past;
+  const activeCount = upcoming.filter((sale) => sale.ticket && !sale.ticket.usedAt).length;
+  const usedCount = sales.filter((sale) => sale.ticket?.usedAt).length;
+
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.tickets.title} back={{ href: "/app", label: t.common.home }} />
+    <AppShell
+      title={t.tickets.title}
+      back={{ href: "/app", label: t.common.home }}
+      hero={
+        sales.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            <Stat icon="ticket" label={t.tickets.statActive} value={activeCount} />
+            <Stat icon="check" label={t.tickets.statUsed} value={usedCount} />
+          </div>
+        ) : undefined
+      }
+    >
 
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
@@ -143,22 +186,46 @@ export default function MisPasesPage() {
         </Card>
       )}
 
-      {state.step === "loaded" &&
-        state.sales.map((sale) => {
-          const check = verifying[sale.id];
-          const past = salesClosed(sale.event.datetimeUtc);
-          return (
-            <Card key={sale.id} className="flex flex-col gap-4 overflow-hidden p-0">
-              <div className="flex items-start justify-between gap-3 px-5 pt-5">
-                <div className="min-w-0">
-                  <Link href={`/e/${sale.event.id}`} className="font-semibold hover:text-primary">
+      {sales.length > 0 && (
+        <Segmented
+          label={t.tickets.title}
+          value={shown}
+          onChange={setFilter}
+          options={[
+            { value: "upcoming", label: `${t.tickets.filterUpcoming} · ${upcoming.length}` },
+            { value: "past", label: `${t.tickets.filterPast} · ${past.length}` },
+          ]}
+        />
+      )}
+
+      {sales.length > 0 && visible.length === 0 && (
+        <p className="py-8 text-center text-sm text-muted">{t.tickets.emptyFilter}</p>
+      )}
+
+      {visible.map((sale, index) => {
+        const check = verifying[sale.id];
+        const past = salesClosed(sale.event.datetimeUtc);
+        const month = formatEventMonth(sale.event.datetimeUtc, locale);
+        const newMonth =
+          index === 0 || month !== formatEventMonth(visible[index - 1].event.datetimeUtc, locale);
+        return (
+          <Fragment key={sale.id}>
+            {newMonth && (
+              <h2 className="px-1 pt-1 text-sm font-semibold first-letter:uppercase">{month}</h2>
+            )}
+            <Card className="flex flex-col gap-4 overflow-hidden p-0">
+              <div className="flex items-center gap-3.5 px-5 pt-5">
+                <IconTile icon="ticket" tone={sale.ticket && !sale.ticket.usedAt && !past ? "strong" : "soft"} />
+                <div className="min-w-0 flex-1">
+                  <Link href={`/e/${sale.event.id}`} className="block truncate font-semibold hover:text-primary">
                     {sale.event.name}
                   </Link>
-                  <p className="text-sm text-muted first-letter:uppercase">
-                    {formatEventDateTime(sale.event.datetimeUtc, locale)} · {sale.event.place}
+                  <p className="text-xs font-medium text-primary first-letter:uppercase">
+                    {formatEventDateTime(sale.event.datetimeUtc, locale)}
                   </p>
+                  <p className="truncate text-xs text-muted">{sale.event.place}</p>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
+                <div className="flex shrink-0 flex-col items-end gap-1 border-l border-tile-soft pl-3">
                   <span className="whitespace-nowrap font-mono text-xs font-semibold text-muted">
                     {formatAmount(sale.amountDecimal, locale)} USDC
                   </span>
@@ -278,8 +345,9 @@ export default function MisPasesPage() {
                 </div>
               )}
             </Card>
-          );
-        })}
-    </main>
+          </Fragment>
+        );
+      })}
+    </AppShell>
   );
 }

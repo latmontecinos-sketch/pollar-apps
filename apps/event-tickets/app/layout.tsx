@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Poppins } from "next/font/google";
 import { IS_MAINNET } from "@/lib/network";
 import { PollarAppProvider } from "@/lib/pollar";
 import { I18nProvider } from "@/lib/i18n/client";
@@ -9,8 +9,11 @@ import { themeAttribute } from "@/lib/theme";
 import { ThemeProvider } from "@/lib/theme-client";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Poppins: the geometric sans of the app shell redesign, as in the kit it
+// takes after. Codes and amounts keep Geist Mono.
+const poppins = Poppins({
+  variable: "--font-poppins",
+  weight: ["400", "500", "600", "700", "800"],
   subsets: ["latin"],
 });
 
@@ -37,7 +40,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang={locale}
       data-theme={themeAttribute(theme)}
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${poppins.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider locale={locale}>

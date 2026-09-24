@@ -17,7 +17,7 @@ import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { MAX_TICKET_TYPES } from "@/lib/ticket-limits";
-import { AppHeader } from "@/components/AppHeader";
+import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -62,14 +62,13 @@ export default function CreateEventPage() {
 
   if (!user) {
     return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.create.title} back={{ href: "/app", label: t.common.home }} />
+      <AppShell title={t.create.title} back={{ href: "/app", label: t.common.home }}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.create.loginNote}</p>
           <LoginButton />
         </div>
-      </main>
+      </AppShell>
     );
   }
 
@@ -168,8 +167,7 @@ export default function CreateEventPage() {
       decimalToStroops(parsedTiers[0].priceDecimal)
     );
     return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-        <AppHeader title={t.preview.title} back={{ href: "/mis-eventos", label: t.myEvents.title }} />
+      <AppShell title={t.preview.title} back={{ href: "/mis-eventos", label: t.myEvents.title }}>
         <p className="px-1 text-sm leading-6 text-muted">{t.preview.body}</p>
 
         {/* Same shape as the public page, so there are no surprises after publishing. */}
@@ -250,14 +248,12 @@ export default function CreateEventPage() {
             {t.preview.confirm}
           </Button>
         </div>
-      </main>
+      </AppShell>
     );
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.create.title} back={{ href: "/mis-eventos", label: t.myEvents.title }} />
-
+    <AppShell title={t.create.title} back={{ href: "/mis-eventos", label: t.myEvents.title }}>
       <p className="px-1 text-sm leading-6 text-muted">{t.create.intro}</p>
 
       <Card>
@@ -409,6 +405,6 @@ export default function CreateEventPage() {
           </Button>
         </form>
       </Card>
-    </main>
+    </AppShell>
   );
 }

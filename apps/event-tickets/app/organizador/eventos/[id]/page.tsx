@@ -15,7 +15,7 @@ import {
 import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
-import { AppHeader } from "@/components/AppHeader";
+import { AppShell } from "@/components/AppShell";
 import { DoorStaffCard } from "@/components/DoorStaffCard";
 import { ShareEventCard } from "@/components/ShareEventCard";
 import { Button } from "@/components/ui/Button";
@@ -172,14 +172,13 @@ export default function OrganizerEventPage({
 
   if (!user) {
     return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.panel.title} back={{ href: "/app", label: t.common.home }} />
+      <AppShell title={t.panel.title} back={{ href: "/app", label: t.common.home }}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.panel.loginNote}</p>
           <LoginButton />
         </div>
-      </main>
+      </AppShell>
     );
   }
 
@@ -248,9 +247,7 @@ export default function OrganizerEventPage({
   const closed = event ? salesClosed(event.datetimeUtc) : false;
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.panel.title} back={{ href: "/mis-eventos", label: t.myEvents.title }} />
-
+    <AppShell title={t.panel.title} back={{ href: "/mis-eventos", label: t.myEvents.title }}>
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
           <Spinner />
@@ -475,6 +472,6 @@ export default function OrganizerEventPage({
           </Card>
         </>
       )}
-    </main>
+    </AppShell>
   );
 }

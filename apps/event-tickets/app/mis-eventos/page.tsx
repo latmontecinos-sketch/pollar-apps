@@ -7,7 +7,7 @@ import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, formatEventDateTime, salesClosed } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
-import { AppHeader } from "@/components/AppHeader";
+import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
@@ -73,21 +73,18 @@ export default function MisEventosPage() {
 
   if (!user) {
     return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.myEvents.title} back={{ href: "/app", label: t.common.home }} />
+      <AppShell title={t.myEvents.title} back={{ href: "/app", label: t.common.home }}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.myEvents.loginNote}</p>
           <LoginButton />
         </div>
-      </main>
+      </AppShell>
     );
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.myEvents.title} back={{ href: "/app", label: t.common.home }} />
-
+    <AppShell title={t.myEvents.title} back={{ href: "/app", label: t.common.home }}>
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
           <Spinner />
@@ -151,6 +148,6 @@ export default function MisEventosPage() {
           })}
         </>
       )}
-    </main>
+    </AppShell>
   );
 }

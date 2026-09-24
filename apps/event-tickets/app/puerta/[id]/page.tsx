@@ -30,37 +30,44 @@ export default function StaffDoorPage({ params }: PageProps<"/puerta/[id]">) {
   const [denied, setDenied] = useState<string | null>(null);
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <header className="flex items-center justify-between gap-3 py-2">
-        <div className="flex items-center gap-2.5">
-          <PollarLogo size={30} />
-          <h1 className="text-xl font-bold tracking-tight">{t.staff.pageTitle}</h1>
+    // The app shell's band and sheet, without its header: staff have no
+    // account here, so help, notifications and preferences have nothing to open.
+    <div className="app-shell flex w-full flex-1 flex-col">
+      <div className="bg-band text-band-foreground">
+        <header className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 pt-5 pb-14 lg:max-w-lg">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <PollarLogo size={30} colorClass="bg-band-foreground" />
+            <h1 className="truncate text-xl font-bold tracking-tight">{t.staff.pageTitle}</h1>
+          </div>
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-background px-3 py-1 text-xs font-semibold text-primary shadow-sm">
+            <Icon name="users" size={14} /> {t.staff.badge}
+          </span>
+        </header>
+      </div>
+      <main className="-mt-9 flex flex-1 flex-col rounded-t-[2.5rem] bg-sheet">
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 pt-7 pb-6 lg:max-w-lg">
+          {token === null ? null : !token || denied ? (
+            <Card className="flex flex-col items-center gap-2 text-center">
+              <Icon name="alert" size={28} className="text-error" />
+              <p className="font-semibold">{t.staff.invalidTitle}</p>
+              <p className="text-sm text-muted">
+                {denied || t.staff.missingToken} {t.staff.invalidBody}
+              </p>
+            </Card>
+          ) : (
+            <DoorScanner
+              eventId={id}
+              doorFetch={(path, init) =>
+                fetch(path, {
+                  ...init,
+                  headers: { "Content-Type": "application/json", [DOOR_TOKEN_HEADER]: token },
+                })
+              }
+              onDenied={setDenied}
+            />
+          )}
         </div>
-        <span className="flex items-center gap-1.5 rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary">
-          <Icon name="users" size={14} /> {t.staff.badge}
-        </span>
-      </header>
-
-      {token === null ? null : !token || denied ? (
-        <Card className="flex flex-col items-center gap-2 text-center">
-          <Icon name="alert" size={28} className="text-error" />
-          <p className="font-semibold">{t.staff.invalidTitle}</p>
-          <p className="text-sm text-muted">
-            {denied || t.staff.missingToken} {t.staff.invalidBody}
-          </p>
-        </Card>
-      ) : (
-        <DoorScanner
-          eventId={id}
-          doorFetch={(path, init) =>
-            fetch(path, {
-              ...init,
-              headers: { "Content-Type": "application/json", [DOOR_TOKEN_HEADER]: token },
-            })
-          }
-          onDenied={setDenied}
-        />
-      )}
-    </main>
+      </main>
+    </div>
   );
 }

@@ -2,12 +2,16 @@
 
 import { useEffect } from "react";
 import { usePollar } from "@pollar/react";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { Icon } from "@/components/ui/Icon";
 import { useBalance } from "@/hooks/useBalance";
 import { formatAmount } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 
-/** The wallet card: the app's primary balance on a branded Pollar-blue card. */
+/**
+ * The balance, laid on the app shell's brand band: a label, the amount in
+ * large type, and a quiet refresh. It sits in the band's `hero`, so it
+ * inherits the band's colors instead of painting its own card.
+ */
 export function BalanceCard() {
   const { balance, currency, isLoading, error, refresh } = useBalance();
   const { isAuthenticated, tx } = usePollar();
@@ -26,40 +30,29 @@ export function BalanceCard() {
   if (!isAuthenticated) return null;
 
   return (
-    <section className="relative w-full overflow-hidden rounded-2xl bg-primary p-6 text-primary-foreground shadow-md">
-      {/* subtle brand watermark */}
-      <div className="pointer-events-none absolute -right-4 -bottom-6">
-        <PollarLogo size={120} colorClass="bg-primary-foreground/10" />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-primary-foreground/75">
-          {t.account.balance}
-        </span>
+    <section className="flex flex-col gap-1">
+      <div className="flex items-center gap-2 text-sm font-medium text-band-foreground/80">
+        <Icon name="wallet" size={16} />
+        <span>{t.home.balanceLabel}</span>
         <button
           onClick={() => void refresh()}
           disabled={isLoading}
-          className="text-sm font-semibold text-primary-foreground/75 transition-colors hover:text-primary-foreground disabled:opacity-50"
+          aria-label={t.account.refresh}
+          title={t.account.refresh}
+          className="ml-auto rounded-full px-2 py-0.5 text-xs font-semibold text-band-foreground/80 transition-colors hover:bg-band-foreground/15 hover:text-band-foreground disabled:opacity-50"
         >
           {t.account.refresh}
         </button>
       </div>
 
       {error ? (
-        <p className="mt-3 max-w-[85%] text-sm leading-6 text-primary-foreground/90">
-          {error}
-        </p>
+        <p className="text-sm leading-6 text-band-foreground/90">{error}</p>
       ) : isLoading && balance === null ? (
-        <div className="mt-3 h-11 w-40 animate-pulse rounded-xl bg-primary-foreground/20" />
+        <div className="mt-1 h-11 w-44 animate-pulse rounded-xl bg-band-foreground/20" />
       ) : (
-        <p
-          className="mt-2 font-mono text-5xl font-semibold tabular-nums tracking-tight"
-          title={balance ?? undefined}
-        >
+        <p className="font-mono text-[2.6rem] font-semibold leading-tight tabular-nums tracking-tight" title={balance ?? undefined}>
           {formatAmount(balance, locale)}
-          <span className="ml-2 text-lg font-normal text-primary-foreground/75">
-            {currency}
-          </span>
+          <span className="ml-2 font-sans text-lg font-medium text-band-foreground/75">{currency}</span>
         </p>
       )}
     </section>

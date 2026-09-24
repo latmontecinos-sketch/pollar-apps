@@ -10,17 +10,22 @@ import { PollarLogo } from "@/components/ui/PollarLogo";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useT } from "@/lib/i18n/client";
 
+/** The round, light buttons that sit on the brand band. */
+export const bandButton =
+  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-foreground/80 shadow-sm transition-colors hover:text-primary";
+
 /**
- * One header for every screen: logo (home), the screen title, an optional
- * "back" link to the parent screen, and on the right the help button
- * (→ /como-funciona), preferences (language and theme) and, when logged in,
- * the account button.
+ * The header inside the app shell's band: back (or the logo, home) on the
+ * left; help, notifications, preferences and the account on the right; then
+ * the screen's title in large type, the way the band opens every screen.
  */
 export function AppHeader({
   title,
+  subtitle,
   back,
 }: {
   title?: string;
+  subtitle?: string;
   back?: { href: string; label: string };
 }) {
   const { user } = usePollarAuth();
@@ -28,51 +33,40 @@ export function AppHeader({
   const [preferencesOpen, setPreferencesOpen] = useState(false);
 
   return (
-    <header className="flex flex-col gap-1 py-2">
-      {back && (
-        <Link
-          href={back.href}
-          className="inline-flex w-fit items-center gap-1.5 rounded-lg py-1 text-sm font-medium text-muted transition-colors hover:text-primary"
-        >
-          <Icon name="back" size={16} />
-          {back.label}
-        </Link>
-      )}
+    <header className="flex flex-col gap-5">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Link href="/app" aria-label={t.common.home} className="shrink-0">
-            <PollarLogo size={30} />
+        {back ? (
+          <Link href={back.href} aria-label={back.label} title={back.label} className={bandButton}>
+            <Icon name="back" size={18} />
           </Link>
-          {title ? (
-            <h1 className="min-w-0 truncate text-xl font-bold tracking-tight">{title}</h1>
-          ) : (
-            <Link href="/app" className="text-base font-bold tracking-tight">
-              {t.common.appName}
-            </Link>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Link
-            href="/como-funciona"
-            aria-label={t.common.help}
-            title={t.common.help}
-            className="flex h-10 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-sm font-semibold text-muted transition-colors hover:bg-surface-hover hover:text-primary"
-          >
+        ) : (
+          <Link href="/app" aria-label={t.common.home} className="flex min-w-0 items-center gap-2">
+            <PollarLogo size={30} colorClass="bg-band-foreground" />
+            <span className="truncate text-base font-bold tracking-tight">{t.common.appName}</span>
+          </Link>
+        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href="/como-funciona" aria-label={t.common.help} title={t.common.help} className={bandButton}>
             <Icon name="help" size={18} />
-            <span className="hidden sm:inline">{t.common.help}</span>
           </Link>
           <NotificationsButton />
           <button
             onClick={() => setPreferencesOpen(true)}
             aria-label={t.common.preferences}
             title={t.common.preferences}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-primary"
+            className={bandButton}
           >
             <Icon name="settings" size={18} />
           </button>
           {user && <LoginButton />}
         </div>
       </div>
+      {title && (
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[1.65rem] font-bold leading-tight tracking-tight">{title}</h1>
+          {subtitle && <p className="text-sm text-band-foreground/80">{subtitle}</p>}
+        </div>
+      )}
       <PreferencesModal open={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
     </header>
   );

@@ -7,7 +7,7 @@ import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, formatTimestamp, shortAddress } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { explorerTxUrl } from "@/lib/network";
-import { AppHeader } from "@/components/AppHeader";
+import { AppShell } from "@/components/AppShell";
 import { Card } from "@/components/ui/Card";
 import { RefundButton } from "@/components/RefundButton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -88,14 +88,13 @@ export default function SalesPage({
 
   if (!user) {
     return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6">
-        <AppHeader title={t.sales.title} back={back} />
+      <AppShell title={t.sales.title} back={back}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
           <PollarLogo size={64} />
           <p className="max-w-sm text-muted">{t.sales.loginNote}</p>
           <LoginButton />
         </div>
-      </main>
+      </AppShell>
     );
   }
 
@@ -108,9 +107,7 @@ export default function SalesPage({
       : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-4 px-4 py-6 lg:max-w-lg lg:py-10">
-      <AppHeader title={t.sales.title} back={back} />
-
+    <AppShell title={t.sales.title} back={back}>
       {state.step === "loading" && (
         <div className="flex justify-center py-12">
           <Spinner />
@@ -206,6 +203,6 @@ export default function SalesPage({
           )}
         </>
       )}
-    </main>
+    </AppShell>
   );
 }

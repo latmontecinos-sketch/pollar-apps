@@ -117,3 +117,18 @@ export function formatEventDateTime(isoUtc: string, locale: Locale): string {
     minute: "2-digit",
   }).format(date);
 }
+
+/**
+ * "octubre de 2026": the heading a list of tickets is grouped under. In La
+ * Paz time like every other event date, so a 23:30 event on the 31st stays
+ * in its own month for a reader anywhere.
+ */
+export function formatEventMonth(isoUtc: string, locale: Locale): string {
+  const date = new Date(isoUtc);
+  if (Number.isNaN(date.getTime())) return isoUtc;
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    timeZone: BUSINESS_TIMEZONE,
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
