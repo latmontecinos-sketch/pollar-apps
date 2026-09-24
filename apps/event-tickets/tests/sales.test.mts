@@ -142,6 +142,45 @@ test("capacity grows, never shrinks, and only twice", async () => {
   assert.equal(type.capacityIncreasesLeft, 0);
 });
 
+test("racing capacity increases cannot get past the limit of two", async () => {
+  // The rule exists so an event can't keep inventing seats, and it used to be
+  // enforced between a SELECT and an UPDATE with nothing holding the row: five
+  // concurrent PATCHes all read the same counter, all passed the check, and all
+  // incremented it. A double tap was enough.
+  const { eventId, typeId } = await newEvent(10);
+
+  const results = await Promise.all(
+    [110, 120, 130, 140, 150].map((capacity) => extendCapacity(eventId, typeId, capacity))
+  );
+  const granted = results.filter((result) => result.ok).length;
+  assert.equal(granted, 2, "exactly two increases may be granted, no matter the interleaving");
+
+  const [type] = await listTicketTypes(eventId);
+  assert.equal(type.capacityIncreasesLeft, 0);
+  // Whoever won, capacity only ever moved up, and never past the highest ask.
+  assert.ok(type.capacity > 10 && type.capacity <= 150);
+  assert.deepEqual(await extendCapacity(eventId, typeId, 200), {
+    ok: false,
+    code: "capacity_limit",
+  });
+});
+
+test("a price with too many zeros is refused instead of bricking the event", () => {
+  // Above 2^53 stroops libSQL throws on read rather than rounding, and one
+  // such row makes every tier of the event unreadable, with no way back from
+  // inside the app. Reachable by a typo, so it needs a bound.
+  assert.throws(
+    () => parseTicketTypes([{ name: "VIP", priceDecimal: "1000000000", capacity: 1 }]),
+    /precio no puede pasar/
+  );
+  assert.throws(
+    () => parseTicketTypes([{ name: "VIP", priceDecimal: "1", capacity: 1_000_000 }]),
+    /cupo no puede pasar/
+  );
+  // The ceiling itself is still allowed.
+  assert.ok(parseTicketTypes([{ name: "VIP", priceDecimal: "1000000", capacity: 100000 }]));
+});
+
 test("tier input is validated before anything is written", () => {
   assert.throws(() => parseTicketTypes([]), /al menos un tipo/);
   assert.throws(() => parseTicketTypes([{ name: "", priceDecimal: "1", capacity: 1 }]), /nombre/);
