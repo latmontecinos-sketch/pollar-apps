@@ -67,6 +67,10 @@ const SCHEMA_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS sales_event_idx ON sales (event_id)`,
   `CREATE INDEX IF NOT EXISTS sales_status_idx ON sales (status)`,
   `CREATE INDEX IF NOT EXISTS sales_buyer_idx ON sales (buyer_pollar_id)`,
+  /** "Mis pases" sorts by date; without this it builds a temp B-tree each time. */
+  `CREATE INDEX IF NOT EXISTS sales_buyer_created_idx ON sales (buyer_pollar_id, created_at)`,
+  /** Finding an organizer's own events was a full scan of every event ever created. */
+  `CREATE INDEX IF NOT EXISTS events_organizer_idx ON events (organizer_pollar_id)`,
   /**
    * Ticket tiers (General, VIP, …). An event's seats live here, not on the
    * event: capacity and price are per tier, and so is the atomic
@@ -131,6 +135,19 @@ const ADDED_COLUMNS = [
 ];
 
 /**
+ * Indexes over columns that arrived by ALTER TABLE, so they can only be
+ * created once those columns exist — the rest live in SCHEMA_STATEMENTS.
+ *
+ * `sales.ticket_type_id` came later and never got one, which is why the
+ * per-tier "how many sold" subquery in listTicketTypes entered through
+ * `sales_status_idx` and then walked every paid sale on the platform, once
+ * per tier, on every view of a public event page.
+ */
+const POST_COLUMN_INDEXES = [
+  `CREATE INDEX IF NOT EXISTS sales_tier_status_idx ON sales (ticket_type_id, status)`,
+];
+
+/**
  * Events created before tiers existed carry their price and capacity on the
  * event row; give each one a single "General" tier holding exactly those
  * numbers, and point their sales at it. Idempotent: both statements skip
@@ -159,6 +176,9 @@ async function runMigrations(): Promise<void> {
     } catch (err) {
       if (!(err instanceof Error && /duplicate column/i.test(err.message))) throw err;
     }
+  }
+  for (const statement of POST_COLUMN_INDEXES) {
+    await db.execute(statement);
   }
   for (const statement of BACKFILL_STATEMENTS) {
     await db.execute(statement);

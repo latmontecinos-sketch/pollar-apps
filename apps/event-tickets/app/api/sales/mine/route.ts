@@ -23,7 +23,13 @@ type Row = {
   used_at: string | null;
 };
 
-/** "Mis pases": every sale the logged-in address has ever made, newest first. */
+/**
+ * "Mis pases": the logged-in address's most recent purchases, newest first.
+ *
+ * Bounded, and backed by an index on (buyer_pollar_id, created_at) — it used
+ * to return a buyer's entire history and sort it in a temp B-tree, growing
+ * with every purchase they ever made for a screen that shows a short list.
+ */
 export async function GET(request: Request) {
   const auth = requireSignedAddress(request);
   if (!auth.ok) return auth.response;
@@ -41,7 +47,8 @@ export async function GET(request: Request) {
           LEFT JOIN ticket_types ON ticket_types.id = sales.ticket_type_id
           LEFT JOIN tickets ON tickets.sale_id = sales.id
           WHERE sales.buyer_pollar_id = ?
-          ORDER BY sales.created_at DESC`,
+          ORDER BY sales.created_at DESC
+          LIMIT 100`,
     args: [auth.address],
   });
 

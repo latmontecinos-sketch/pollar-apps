@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
+import { purgeStaleBuyerEmails } from "@/lib/retention";
 import { sweepExpiredSales } from "@/lib/sales";
 import { enforce } from "@/lib/rate-limit";
-import { shortAddress } from "@/lib/security-log";
+import { shortAddressForLog } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,9 +29,20 @@ export async function POST(request: Request, ctx: Ctx) {
   const auth = requireAddress(request, String(eventRow.rows[0].organizer_pollar_id));
   if (!auth.ok) return auth.response;
 
-  const limited = await enforce("sweep", auth.address, { actor: shortAddress(auth.address) });
+  const limited = await enforce("sweep", auth.address, { actor: shortAddressForLog(auth.address) });
   if (limited) return limited;
 
   const expired = await sweepExpiredSales({ eventId });
+
+  // Retention rides here rather than inside the sweep helper, which also
+  // runs while rendering the public event page: a stranger opening a shared
+  // link should never be the one paying for a table-wide UPDATE. This route
+  // is an organizer deliberately asking for housekeeping, and it is already
+  // rate limited, so a low-odds pass is a good enough heartbeat for a
+  // 30-day window without a cron to maintain.
+  if (Math.floor(Math.random() * 20) === 0) {
+    await purgeStaleBuyerEmails().catch(() => {});
+  }
+
   return NextResponse.json({ expired });
 }

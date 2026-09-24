@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
@@ -15,7 +16,15 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { LoginButton } from "@/components/LoginButton";
 import { ReceiveModal } from "@/components/ReceiveModal";
-import { TicketQr } from "@/components/TicketQr";
+/**
+ * Loaded only once there is a ticket to draw. It pulls in the whole QR
+ * encoder (~9 KB gzipped), and this component renders on the public event
+ * page for every tier — so everyone who opened a shared link was paying for
+ * a library that only matters after they have already bought something.
+ */
+const TicketQr = dynamic(() => import("@/components/TicketQr").then((m) => m.TicketQr), {
+  ssr: false,
+});
 
 type Sale = {
   id: string;

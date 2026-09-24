@@ -2,8 +2,14 @@ import { randomBytes } from "node:crypto";
 import type { Transaction } from "@libsql/client";
 import { db, dbReady, withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
-import { purgeStaleBuyerEmails } from "./retention.ts";
 import { issueTicket, type Ticket } from "./tickets.ts";
+
+/**
+ * Ceiling on one sweep, so a backlog can't turn a page view into a
+ * transaction over thousands of rows. Whatever is left over gets picked up
+ * by the next call, which happens constantly.
+ */
+const MAX_SWEEP_PER_CALL = 200;
 
 /**
  * Goes in the Stellar payment memo (28-byte text memo limit), so it has to
@@ -208,6 +214,12 @@ export async function expireSale(saleId: string): Promise<{ expired: boolean }> 
  * "YYYY-MM-DD HH:MM:SS": compared as raw text, 'T' > ' ' means a sale never
  * reads as expired until the UTC date rolls over. `datetime()` normalizes
  * both sides first.
+ *
+ * Reads that find nothing stale now write nothing at all: the common case on
+ * a public page is one SELECT and no transaction. Forgetting old buyers'
+ * emails used to ride along here on a one-in-a-hundred coin flip, which put
+ * a full-table UPDATE on the critical path of an unlucky stranger's page
+ * view; it lives on the organizer's own sweep route now.
  */
 export async function sweepExpiredSales(
   scope: { eventId: string } | { organizerPollarId: string } | { buyerPollarId: string }
@@ -222,24 +234,48 @@ export async function sweepExpiredSales(
   const stale = await db.execute({
     sql: `SELECT sales.id FROM sales JOIN events ON events.id = sales.event_id
           WHERE ${filter} AND sales.status = 'pending'
-            AND datetime(sales.expires_at_utc) < datetime('now')`,
+            AND datetime(sales.expires_at_utc) < datetime('now')
+          LIMIT ${MAX_SWEEP_PER_CALL}`,
     args: [value],
   });
+  if (stale.rows.length === 0) return 0;
 
-  let expired = 0;
-  for (const row of stale.rows) {
-    if ((await expireSale(String(row.id))).expired) expired++;
-  }
+  /**
+   * One transaction for the whole batch, not one per sale.
+   *
+   * This used to call expireSale in a loop, and each of those opened its own
+   * transaction: BEGIN, two UPDATEs, COMMIT, times the number of abandoned
+   * checkouts — against a remote database, from inside the render of a page
+   * that anyone with the link can open. A busy event turned every visit into
+   * a burst of round trips.
+   *
+   * The transition is still the authority: only sales this UPDATE actually
+   * moves out of 'pending' give their seat back, so a concurrent sweep
+   * releasing the same seat can't decrement it twice.
+   */
+  const ids = stale.rows.map((row) => String(row.id));
+  return withTransaction(async (tx: Transaction) => {
+    const expired = await tx.execute({
+      sql: `UPDATE sales SET status = 'expired'
+            WHERE id IN (${ids.map(() => "?").join(", ")}) AND status = 'pending'
+            RETURNING ticket_type_id`,
+      args: ids,
+    });
+    if (expired.rows.length === 0) return 0;
 
-  // Housekeeping rides along with housekeeping. This is the one function
-  // every path already calls, and forgetting old buyers' emails needs a
-  // heartbeat, not a cron we'd have to remember to set up. One in a
-  // hundred sweeps is often enough for a 30-day window.
-  if (Math.floor(Math.random() * 100) === 0) {
-    await purgeStaleBuyerEmails().catch(() => {});
-  }
-
-  return expired;
+    const freedPerTier = new Map<string, number>();
+    for (const row of expired.rows) {
+      const tier = String(row.ticket_type_id);
+      freedPerTier.set(tier, (freedPerTier.get(tier) ?? 0) + 1);
+    }
+    for (const [tier, freed] of freedPerTier) {
+      await tx.execute({
+        sql: "UPDATE ticket_types SET reserved = max(0, reserved - ?) WHERE id = ?",
+        args: [freed, tier],
+      });
+    }
+    return expired.rows.length;
+  });
 }
 
 /**
