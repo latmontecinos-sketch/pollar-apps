@@ -173,6 +173,9 @@ export async function POST(request: Request, ctx: Ctx) {
     case "already_paid": {
       // Only on the first settlement: a replay (retry, "verificar" again)
       // must not send the buyer a second copy of the same ticket.
+      // `emailed` is what the buyer is told, so it's only true for a send
+      // that went out on this request. A replay says nothing either way.
+      let emailed = false;
       if (email && settled.outcome === "paid") {
         // Kept so we can tell this buyer (in their language) when their
         // ticket is accepted at the door. Never shown to the organizer.
@@ -192,6 +195,7 @@ export async function POST(request: Request, ctx: Ctx) {
           ticketCode: settled.ticket.code,
           doorCode: settled.ticket.doorCode,
         });
+        emailed = mailResult.sent;
         if (!mailResult.sent) {
           // Masked: which provider bounced is useful, who bought is not.
           console.error(`[mail] ticket email to ${maskEmail(email)} failed: ${mailResult.error}`);
@@ -200,6 +204,7 @@ export async function POST(request: Request, ctx: Ctx) {
       return NextResponse.json({
         status: "paid",
         ticket: { code: settled.ticket.code, doorCode: settled.ticket.doorCode },
+        emailed,
       });
     }
     case "unclaimed":

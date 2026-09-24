@@ -1,8 +1,14 @@
 import { formatEventDateTime, formatTimestamp } from "./format.ts";
 import { dictFor, type Locale } from "./i18n/index.ts";
+import { maskEmail } from "./security-log.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
-const FROM = "Pollar Pass <onboarding@resend.dev>";
+/**
+ * Resend's testing sender only delivers to the email that owns the Resend
+ * account; every other recipient gets a 403. Production needs a verified
+ * domain, set here without a code change.
+ */
+const DEFAULT_FROM = "Pollar Pass <onboarding@resend.dev>";
 
 /** Email can't read CSS variables; these mirror the tokens in app/globals.css. */
 const PRIMARY = "#005db4";
@@ -127,16 +133,35 @@ async function send(payload: {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: FROM,
+        from: process.env.MAIL_FROM?.trim() || DEFAULT_FROM,
         to: [payload.to],
         subject: payload.subject,
         html: payload.html,
         text: payload.text,
       }),
     });
-    return res.ok ? { sent: true } : { sent: false, error: `Resend respondió ${res.status}` };
+    if (res.ok) return { sent: true };
+    return { sent: false, error: `Resend respondió ${res.status}${await resendReason(res)}` };
   } catch (err) {
     return { sent: false, error: err instanceof Error ? err.message : "fetch falló" };
+  }
+}
+
+/**
+ * The status alone can't tell a testing-domain rejection from a revoked key —
+ * both are 403 — and that difference is the whole diagnosis. Resend's
+ * message quotes an address (the account owner's), so it's masked like
+ * every other email in our logs.
+ */
+async function resendReason(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { name?: unknown; message?: unknown };
+    const name = typeof body.name === "string" ? body.name : "";
+    const message = typeof body.message === "string" ? body.message : "";
+    const reason = [name, message].filter(Boolean).join(": ").slice(0, 300);
+    return reason ? ` (${reason.replace(/[^\s@(),;:<>"']+@[^\s@(),;:<>"']+/g, maskEmail)})` : "";
+  } catch {
+    return "";
   }
 }
 

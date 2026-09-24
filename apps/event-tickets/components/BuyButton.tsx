@@ -47,7 +47,8 @@ type State =
   | { step: "creating_sale" }
   | { step: "paying" }
   | { step: "verifying"; attempt: number }
-  | { step: "done"; ticket: Ticket }
+  /** `emailed`: the server says the copy went out, not that we asked for one. */
+  | { step: "done"; ticket: Ticket; emailed: boolean }
   /** Nothing was paid: trying again means a fresh purchase. */
   | { step: "error"; message: string }
   /** A payment may have been sent: trying again only re-checks it. */
@@ -143,7 +144,7 @@ export function BuyButton({
     for (let attempt = 1; attempt <= MAX_VERIFY_ATTEMPTS; attempt++) {
       setState({ step: "verifying", attempt });
       let res: Response;
-      let data: { ticket?: Ticket; error?: string; code?: string; status?: string };
+      let data: { ticket?: Ticket; emailed?: boolean; error?: string; code?: string; status?: string };
       try {
         res = await pollarFetch(client, address, `/api/sales/${inFlight.saleId}/confirm`, {
           method: "POST",
@@ -159,7 +160,7 @@ export function BuyButton({
       if (res.ok && data.ticket) {
         writeInFlight(flightKey, null);
         void refresh();
-        setState({ step: "done", ticket: data.ticket });
+        setState({ step: "done", ticket: data.ticket, emailed: data.emailed === true });
         return;
       }
       if (res.status === 409 && data.status === "unclaimed") {
@@ -334,7 +335,7 @@ export function BuyButton({
         </div>
         <p className="text-xs leading-5 text-muted">
           {t.buy.doneNote}
-          {user.profile?.mail ? t.buy.doneNoteMail(user.profile.mail) : ""}.
+          {state.emailed && user.profile?.mail ? t.buy.doneNoteMail(user.profile.mail) : ""}.
         </p>
         <Link
           href="/mis-pases"
