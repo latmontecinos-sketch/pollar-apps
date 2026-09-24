@@ -5,7 +5,6 @@ import { decimalToStroops, stroopsToDecimal } from "./money.ts";
 
 import {
   MAX_CAPACITY,
-  MAX_CAPACITY_INCREASES,
   MAX_DESCRIPTION_CHARS,
   MAX_NAME_CHARS,
   MAX_PRICE_USDC,
@@ -14,7 +13,6 @@ import {
 
 export {
   MAX_CAPACITY,
-  MAX_CAPACITY_INCREASES,
   MAX_DESCRIPTION_CHARS,
   MAX_NAME_CHARS,
   MAX_PRICE_USDC,
@@ -35,7 +33,6 @@ export type TicketType = {
   /** Seats actually sold. */
   paid: number;
   checkedIn: number;
-  capacityIncreasesLeft: number;
 };
 
 export class TicketTypeError extends Error {
@@ -158,14 +155,15 @@ export async function listTicketTypes(eventId: string): Promise<TicketType[]> {
     reserved: Number(row.reserved),
     paid: Number(row.paid),
     checkedIn: Number(row.checked_in),
-    capacityIncreasesLeft: Math.max(0, MAX_CAPACITY_INCREASES - Number(row.capacity_increases ?? 0)),
   }));
 }
 
 /**
- * Adds seats to one tier. Never removes them (someone already holds those)
- * and never more than twice per tier — an event that keeps "adding tickets"
- * isn't selling a capacity any more.
+ * Adds seats to one tier. Never removes them (someone already holds those),
+ * never past {@link MAX_CAPACITY}. How many times is no longer capped: real
+ * events kept needing a third batch, so each increase is instead confirmed
+ * with a code sent to the organizer's email (lib/capacity-code.ts), which is
+ * the only caller the API routes use.
  */
 export async function extendCapacity(
   eventId: string,
@@ -179,38 +177,29 @@ export async function extendCapacity(
 
   return withTransaction(async (tx: Transaction) => {
     /**
-     * Both rules live in the WHERE, and the UPDATE is the authority.
-     *
-     * This used to SELECT the current numbers, check them in JavaScript, then
-     * UPDATE — with nothing holding the row in between, and with
-     * `capacity_increases + 1` computed relative to the row rather than to
-     * the value that was checked. Two PATCHes racing (a double tap, a
-     * retried request) both read the same count, both passed the check, and
-     * both incremented: the "at most two increases" rule, which exists so an
-     * event can't keep inventing seats, could be walked straight past, and
-     * whichever request committed last silently decided the capacity.
+     * "Only upwards" lives in the WHERE, and the UPDATE is the authority: a
+     * SELECT-then-UPDATE let two racing requests both pass a JavaScript check
+     * (see rule 3 in CLAUDE.md). Two increases racing now can't lower the
+     * capacity either — the smaller one finds `capacity < ?` false.
+     * `capacity_increases` still counts, as a record of how often it grew.
      */
     const updated = await tx.execute({
       sql: `UPDATE ticket_types
             SET capacity = ?, capacity_increases = capacity_increases + 1
             WHERE id = ? AND event_id = ?
               AND capacity < ?
-              AND capacity_increases < ?
             RETURNING capacity`,
-      args: [capacity, ticketTypeId, eventId, capacity, MAX_CAPACITY_INCREASES],
+      args: [capacity, ticketTypeId, eventId, capacity],
     });
     if (updated.rows.length > 0) return { ok: true };
 
     // Nothing changed: read the row once to say *why*, inside the same
     // transaction so the answer matches what the UPDATE just saw.
     const current = await tx.execute({
-      sql: "SELECT capacity, capacity_increases FROM ticket_types WHERE id = ? AND event_id = ?",
+      sql: "SELECT 1 FROM ticket_types WHERE id = ? AND event_id = ?",
       args: [ticketTypeId, eventId],
     });
     if (current.rows.length === 0) return { ok: false, code: "not_found" };
-    if (Number(current.rows[0].capacity_increases ?? 0) >= MAX_CAPACITY_INCREASES) {
-      return { ok: false, code: "capacity_limit" };
-    }
     return { ok: false, code: "capacity_lower" };
   });
 }

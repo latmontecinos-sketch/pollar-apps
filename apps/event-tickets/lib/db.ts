@@ -109,6 +109,35 @@ const SCHEMA_STATEMENTS = [
      created_at TEXT NOT NULL DEFAULT (datetime('now')),
      UNIQUE (event_id, door_code)
    )`,
+  /**
+   * Where an organizer's confirmation codes go. Bound the first time a code
+   * sent there is actually confirmed — proof the organizer reads that inbox —
+   * and never replaced from a client after that. Purged with the rest of the
+   * personal data (lib/retention.ts).
+   */
+  `CREATE TABLE IF NOT EXISTS organizer_emails (
+     organizer_pollar_id TEXT PRIMARY KEY,
+     email TEXT NOT NULL,
+     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+  /**
+   * One row per capacity-increase code (lib/capacity-code.ts). The code is
+   * bound to the exact change it confirms — event, tier, new capacity — and
+   * only its hash is kept.
+   */
+  `CREATE TABLE IF NOT EXISTS capacity_codes (
+     id TEXT PRIMARY KEY,
+     event_id TEXT NOT NULL REFERENCES events(id),
+     ticket_type_id TEXT NOT NULL REFERENCES ticket_types(id),
+     organizer_pollar_id TEXT NOT NULL,
+     capacity INTEGER NOT NULL,
+     email TEXT NOT NULL,
+     code_hash TEXT NOT NULL,
+     attempts INTEGER NOT NULL DEFAULT 0,
+     expires_at_utc TEXT NOT NULL,
+     used_at TEXT,
+     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
 ];
 
 /**

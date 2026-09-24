@@ -130,39 +130,38 @@ test("each tier keeps its own price and its own capacity", async () => {
   assert.equal(await reserved(eventId), 3, "three seats held across both tiers");
 });
 
-test("capacity grows, never shrinks, and only twice", async () => {
+test("capacity grows as often as needed, never shrinks, never past the ceiling", async () => {
+  // It used to stop at two increases; real events kept needing a third batch.
+  // Each increase is now confirmed by email instead (tests/capacity-code.test.mts).
   const { eventId, typeId } = await newEvent(10);
   assert.deepEqual(await extendCapacity(eventId, typeId, 5), { ok: false, code: "capacity_lower" });
-  assert.deepEqual(await extendCapacity(eventId, typeId, 20), { ok: true });
-  assert.deepEqual(await extendCapacity(eventId, typeId, 30), { ok: true });
-  assert.deepEqual(await extendCapacity(eventId, typeId, 40), { ok: false, code: "capacity_limit" });
+  assert.deepEqual(await extendCapacity(eventId, typeId, 10), { ok: false, code: "capacity_lower" });
+  for (const capacity of [20, 30, 40, 50]) {
+    assert.deepEqual(await extendCapacity(eventId, typeId, capacity), { ok: true }, `to ${capacity}`);
+  }
+  assert.deepEqual(await extendCapacity(eventId, typeId, 100_001), { ok: false, code: "capacity_limit" });
 
   const [type] = await listTicketTypes(eventId);
-  assert.equal(type.capacity, 30);
-  assert.equal(type.capacityIncreasesLeft, 0);
+  assert.equal(type.capacity, 50);
 });
 
-test("racing capacity increases cannot get past the limit of two", async () => {
-  // The rule exists so an event can't keep inventing seats, and it used to be
-  // enforced between a SELECT and an UPDATE with nothing holding the row: five
-  // concurrent PATCHes all read the same counter, all passed the check, and all
-  // incremented it. A double tap was enough.
+test("racing capacity increases can only ever move it up", async () => {
+  // "Only upwards" is enforced in the UPDATE's WHERE, not between a SELECT and
+  // an UPDATE: whatever order these land in, a smaller ask that arrives after
+  // a bigger one is refused rather than shrinking the tier.
   const { eventId, typeId } = await newEvent(10);
 
   const results = await Promise.all(
-    [110, 120, 130, 140, 150].map((capacity) => extendCapacity(eventId, typeId, capacity))
+    [150, 110, 140, 120, 130].map((capacity) => extendCapacity(eventId, typeId, capacity))
   );
-  const granted = results.filter((result) => result.ok).length;
-  assert.equal(granted, 2, "exactly two increases may be granted, no matter the interleaving");
+  assert.ok(results.some((result) => result.ok));
+  for (const result of results) {
+    if (!result.ok) assert.equal(result.code, "capacity_lower");
+  }
 
   const [type] = await listTicketTypes(eventId);
-  assert.equal(type.capacityIncreasesLeft, 0);
-  // Whoever won, capacity only ever moved up, and never past the highest ask.
-  assert.ok(type.capacity > 10 && type.capacity <= 150);
-  assert.deepEqual(await extendCapacity(eventId, typeId, 200), {
-    ok: false,
-    code: "capacity_limit",
-  });
+  // The biggest ask always ends up applied: nothing smaller can overwrite it.
+  assert.equal(type.capacity, 150);
 });
 
 test("a price with too many zeros is refused instead of bricking the event", () => {

@@ -1,11 +1,11 @@
 import { db, dbReady } from "./db.ts";
 
 /**
- * The only personal data this app stores is the buyer's email, and it has
- * exactly two jobs: send them their ticket, and tell them the door let them
- * in. Both are over once the event is. Keeping it after that isn't caution,
- * it's a growing pile of other people's addresses waiting for the day
- * someone reads our database.
+ * The personal data this app stores is two kinds of email: the buyer's, which
+ * sends them their ticket and tells them the door let them in, and the
+ * organizer's, where capacity-increase codes go. Each is over once the events
+ * it serves are. Keeping them after that isn't caution, it's a growing pile of
+ * other people's addresses waiting for the day someone reads our database.
  */
 
 /** A month after the event: long enough for a late "I never got my ticket". */
@@ -31,4 +31,27 @@ export async function purgeStaleBuyerEmails(): Promise<number> {
     args: [`-${KEEP_DAYS} days`],
   });
   return purged.rowsAffected ?? 0;
+}
+
+/**
+ * The organizer's side of the same rule. Their confirmed email (where
+ * capacity codes go) is kept while they have an event that isn't long over,
+ * and forgotten {@link KEEP_DAYS} days after their last one. Codes are only
+ * useful for ten minutes; a day later they're just rows.
+ */
+export async function purgeStaleOrganizerData(): Promise<number> {
+  await dbReady();
+  const codes = await db.execute(
+    "DELETE FROM capacity_codes WHERE datetime(created_at) < datetime('now', '-1 day')"
+  );
+  const emails = await db.execute({
+    sql: `DELETE FROM organizer_emails
+          WHERE NOT EXISTS (
+            SELECT 1 FROM events
+            WHERE events.organizer_pollar_id = organizer_emails.organizer_pollar_id
+              AND datetime(events.datetime_utc) >= datetime('now', ?)
+          )`,
+    args: [`-${KEEP_DAYS} days`],
+  });
+  return (codes.rowsAffected ?? 0) + (emails.rowsAffected ?? 0);
 }

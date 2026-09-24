@@ -21,7 +21,9 @@ export type SecurityEvent =
   /** An organizer recorded a refund. */
   | "refund.recorded"
   /** A ticket was spent at a door. */
-  | "checkin.accepted";
+  | "checkin.accepted"
+  /** A capacity-increase code was wrong, expired or out of attempts. */
+  | "capacity.code_rejected";
 
 /** `GABC…WXYZ`: enough to follow one actor across lines, not enough to be an address. */
 export function shortAddressForLog(address: string): string {

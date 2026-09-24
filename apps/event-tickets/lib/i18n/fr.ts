@@ -203,7 +203,7 @@ export const fr: Dict = {
     organizerSteps: [
       {
         title: "Créez votre événement",
-        body: "Nom, lieu, date, prix en USDC et nombre de places. Le prix et le nombre de places sont figés après la publication, pour ne pas léser ceux qui ont déjà acheté.",
+        body: "Nom, lieu, date, prix en USDC et nombre de places. Le prix est figé après la publication, pour ne pas léser ceux qui ont déjà acheté, et le nombre de places ne peut qu'augmenter (confirmé par un code envoyé par e-mail).",
       },
       {
         title: "Partagez le lien",
@@ -411,7 +411,7 @@ export const fr: Dict = {
     capacityHint: "Le nombre maximum de billets vendables.",
     immutableStrong: "Le prix et le nombre de places ne peuvent pas être modifiés",
     immutableBody:
-      "après la publication : cela protège ceux qui ont déjà acheté. Le nom, la description, le lieu et la date, oui, et les places peuvent être augmentées 2 fois au maximum.",
+      "après la publication : cela protège ceux qui ont déjà acheté. Le nom, la description, le lieu et la date, oui, et les places peuvent être augmentées, avec un code reçu par e-mail.",
     maxRevenue: (amount: string) => ` Si tout est vendu, vous encaissez ${amount} USDC.`,
     submit: "Publier l'événement",
     errorPrice: "Écrivez le prix en chiffres, par exemple 2,50",
@@ -643,15 +643,19 @@ export const fr: Dict = {
   },
   capacity: {
     title: "Ajouter des billets",
-    body: (left: number) =>
-      left === 1
-        ? "Vous pouvez augmenter le nombre de places encore une fois (2 augmentations maximum par événement)."
-        : `Vous pouvez augmenter le nombre de places encore ${left} fois (2 augmentations maximum par événement).`,
-    exhausted: "Vous avez déjà utilisé les 2 augmentations de places de cet événement.",
+    body: "Chaque augmentation se confirme avec un code à 6 chiffres envoyé par e-mail.",
     field: "Nouveau nombre total de places",
-    submit: "Augmenter les places",
+    submit: "Envoyer le code",
     errorLower: "Le nouveau nombre de places doit être supérieur à l'actuel.",
-    errorLimit: "Plus d'augmentation disponible pour cet événement.",
+    errorLimit: "La jauge ne peut pas dépasser 100 000 billets.",
+    emailField: "E-mail pour le code",
+    emailHint: "Une seule fois : désormais, les codes arrivent toujours à cette adresse.",
+    codeSent: (to: string, capacity: number) =>
+      `Nous avons envoyé un code à ${to} pour passer la jauge à ${capacity}. Il expire dans 10 minutes.`,
+    codeField: "Code à 6 chiffres",
+    confirm: "Confirmer l'augmentation",
+    resend: "Envoyer un autre code",
+    done: (capacity: number) => `C'est fait : la jauge est maintenant de ${capacity}.`,
   },
   notFound: {
     title: "Page introuvable",
@@ -659,6 +663,13 @@ export const fr: Dict = {
     cta: "Retour à l'accueil",
   },
   email: {
+    codeSubject: (event: string) => `Votre code pour augmenter la jauge — ${event}`,
+    codeHeading: "Confirmez l'augmentation de jauge",
+    codeBody: (tier: string, capacity: number, event: string) =>
+      `Pour passer « ${tier} » de ${event} à ${capacity} billets, saisissez ce code dans votre tableau de bord :`,
+    codeFooter: "Il expire dans 10 minutes. Si ce n'était pas vous, ignorez cet e-mail : rien ne change sans le code.",
+    codeText: (code: string, tier: string, capacity: number, event: string) =>
+      `Votre code pour passer « ${tier} » de ${event} à ${capacity} billets : ${code}\n\nIl expire dans 10 minutes. Si ce n'était pas vous, ignorez cet e-mail : rien ne change sans le code.`,
     checkinSubject: (event: string) => `Entrée confirmée — ${event}`,
     checkinHeading: "Vous êtes entré !",
     checkinBody: (event: string) => `Votre billet pour ${event} a été accepté à l'entrée.`,
@@ -700,8 +711,14 @@ export const fr: Dict = {
       "Le réseau Stellar a rejeté la transaction, vous n'avez donc pas été débité. Vous pouvez réessayer.",
     settle_retry:
       "Votre paiement est confirmé sur le réseau, mais nous n'avons pas pu l'enregistrer pour le moment. Réessayez dans quelques secondes : vous ne serez pas débité deux fois.",
-    capacity_limit: "Vous avez déjà utilisé les 2 augmentations de jauge pour ce type de billet.",
+    capacity_limit: "La jauge ne peut pas dépasser 100 000 billets.",
     capacity_lower: "La nouvelle jauge doit être supérieure à l'actuelle.",
+    code_required: "Confirmez l'augmentation avec le code envoyé par e-mail.",
+    code_invalid: "Ce code n'est pas le bon.",
+    code_expired: "Le code a expiré. Demandez-en un nouveau.",
+    code_attempts: "Trop d'essais avec ce code. Demandez-en un nouveau.",
+    email_required: "Il nous faut un e-mail pour vous envoyer le code.",
+    email_failed: "Impossible de vous envoyer le code par e-mail. Réessayez dans un instant.",
     not_found: "Ce type de billet n'existe plus.",
     rate_limited: "Trop de tentatives d'affilée. Patientez un instant et réessayez.",
     payment_mismatch: "Ce paiement ne correspond pas à cette vente (destinataire, montant ou référence).",

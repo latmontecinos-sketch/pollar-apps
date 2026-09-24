@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { sendTicketEmail } from "../lib/mail.ts";
+import nodemailer from "nodemailer";
+
+import { sendCapacityCodeEmail, sendTicketEmail } from "../lib/mail.ts";
 
 /**
  * The ticket email is best-effort, so its failures are silent by design —
@@ -103,4 +105,71 @@ test("no API key: nothing is sent and nothing claims it was", async (t) => {
 
   assert.equal(result.sent, false);
   assert.equal(calls.length, 0);
+});
+
+const SMTP = { SMTP_HOST: "smtp.gmail.com", SMTP_USER: "organizer@gmail.com", SMTP_PASS: "app-password" };
+
+function stubSmtp(t: test.TestContext, fail?: Error) {
+  const sent: Record<string, unknown>[] = [];
+  const configs: Record<string, unknown>[] = [];
+  t.mock.method(nodemailer, "createTransport", (config: Record<string, unknown>) => {
+    configs.push(config);
+    return {
+      sendMail: async (message: Record<string, unknown>) => {
+        if (fail) throw fail;
+        sent.push(message);
+        return { messageId: "1" };
+      },
+    };
+  });
+  return { sent, configs };
+}
+
+test("with SMTP configured, mail goes out through it from the mailbox itself — not Resend", async (t) => {
+  withEnv(t, { ...SMTP, SMTP_PORT: undefined, MAIL_FROM: undefined, RESEND_API_KEY: "re_test" });
+  const resend = stubFetch(t, () => Response.json({ id: "never" }));
+  const { sent, configs } = stubSmtp(t);
+
+  assert.deepEqual(await sendTicketEmail(TICKET), { sent: true });
+  assert.equal(resend.length, 0, "Resend is the fallback, not a second copy");
+  assert.equal(sent[0].to, TICKET.to);
+  assert.equal(sent[0].from, "Pollar Pass <organizer@gmail.com>");
+  assert.equal(configs[0].port, 465);
+  assert.equal(configs[0].secure, true);
+});
+
+test("an SMTP failure is reported, with addresses masked", async (t) => {
+  withEnv(t, SMTP);
+  stubSmtp(t, new Error("550 5.1.1 <buyer+alias@gmail.com>: Recipient address rejected"));
+
+  const result = await sendTicketEmail(TICKET);
+
+  assert.equal(result.sent, false);
+  assert.match(result.error ?? "", /^SMTP: 550/);
+  assert.doesNotMatch(result.error ?? "", /buyer+alias@gmail.com/);
+});
+
+test("half an SMTP setup falls back to Resend instead of failing every send", async (t) => {
+  withEnv(t, { SMTP_HOST: "smtp.gmail.com", SMTP_USER: "organizer@gmail.com", SMTP_PASS: undefined, RESEND_API_KEY: "re_test" });
+  const calls = stubFetch(t, () => Response.json({ id: "email_1" }));
+  assert.deepEqual(await sendTicketEmail(TICKET), { sent: true });
+  assert.equal(calls.length, 1);
+});
+
+test("the capacity code email carries the code, in the organizer's language", async (t) => {
+  withEnv(t, SMTP);
+  const { sent } = stubSmtp(t);
+  const result = await sendCapacityCodeEmail({
+    to: "organizer@gmail.com",
+    locale: "en",
+    eventName: "Noche de prueba",
+    tierName: "VIP",
+    capacity: 80,
+    code: "042917",
+  });
+  assert.deepEqual(result, { sent: true });
+  assert.match(String(sent[0].subject), /capacity/);
+  assert.match(String(sent[0].text), /042917/);
+  assert.match(String(sent[0].html), /042917/);
+  assert.match(String(sent[0].text), /80 tickets/);
 });

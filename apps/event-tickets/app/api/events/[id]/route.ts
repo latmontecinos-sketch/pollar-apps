@@ -3,9 +3,9 @@ import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { enforce } from "@/lib/rate-limit";
-import { shortAddressForLog } from "@/lib/security-log";
+import { confirmCapacityCode } from "@/lib/capacity-code";
+import { securityLog, shortAddressForLog } from "@/lib/security-log";
 import {
-  extendCapacity,
   listTicketTypes,
   MAX_DESCRIPTION_CHARS,
   MAX_NAME_CHARS,
@@ -14,6 +14,16 @@ import {
 } from "@/lib/ticket-types";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+/** Spanish `error` for the logs; the UI shows `code`, translated (lib/i18n/errors.ts). */
+const CAPACITY_ERRORS = {
+  code_invalid: { status: 400, error: "El código no es correcto" },
+  code_expired: { status: 400, error: "El código venció" },
+  code_attempts: { status: 429, error: "Demasiados intentos con ese código" },
+  capacity_lower: { status: 400, error: "El cupo nuevo tiene que ser mayor al actual" },
+  capacity_limit: { status: 400, error: "El cupo no puede pasar de 100.000" },
+  not_found: { status: 404, error: "Ese tipo de entrada no existe", code: "ticket_type_not_found" },
+} as const;
 
 type EventRow = {
   id: string;
@@ -89,9 +99,14 @@ export async function GET(request: Request, ctx: Ctx) {
 type PatchBody = {
   organizerName?: string;
   organizerContact?: string;
-  /** Adds seats to one tier; only ever upwards, at most twice. */
+  /**
+   * Adds seats to one tier; only ever upwards. Needs the code emailed by
+   * POST /api/events/[id]/capacity-code for this exact change.
+   */
   ticketTypeId?: string;
   capacity?: number;
+  challengeId?: string;
+  code?: string;
   name?: string;
   description?: string;
   place?: string;
@@ -123,18 +138,30 @@ export async function PATCH(request: Request, ctx: Ctx) {
   }
 
   if (body.capacity !== undefined && body.ticketTypeId) {
-    const result = await extendCapacity(id, body.ticketTypeId, Number(body.capacity));
-    if (!result.ok) {
-      const status = result.code === "capacity_limit" ? 409 : 400;
+    // No code, no seats: the email step is the whole point of the change.
+    if (!body.challengeId || !body.code) {
       return NextResponse.json(
-        {
-          error:
-            result.code === "capacity_limit"
-              ? "Ya usaste las 2 ampliaciones de cupo de este tipo de entrada"
-              : "El cupo nuevo tiene que ser mayor al actual",
-          code: result.code,
-        },
-        { status }
+        { error: "Falta el código enviado por correo", code: "code_required" },
+        { status: 428 }
+      );
+    }
+    const result = await confirmCapacityCode({
+      eventId: id,
+      ticketTypeId: body.ticketTypeId,
+      capacity: Number(body.capacity),
+      organizer: auth.address,
+      challengeId: String(body.challengeId),
+      code: String(body.code),
+    });
+    if (!result.ok) {
+      const failure = CAPACITY_ERRORS[result.code];
+      securityLog("capacity.code_rejected", {
+        reason: result.code,
+        actor: shortAddressForLog(auth.address),
+      });
+      return NextResponse.json(
+        { error: failure.error, code: "code" in failure ? failure.code : result.code },
+        { status: failure.status }
       );
     }
   }

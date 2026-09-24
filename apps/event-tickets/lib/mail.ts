@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { formatEventDateTime, formatTimestamp } from "./format.ts";
 import { dictFor, type Locale } from "./i18n/index.ts";
 import { maskEmail } from "./security-log.ts";
@@ -5,10 +6,13 @@ import { maskEmail } from "./security-log.ts";
 const RESEND_API_URL = "https://api.resend.com/emails";
 /**
  * Resend's testing sender only delivers to the email that owns the Resend
- * account; every other recipient gets a 403. Production needs a verified
- * domain, set here without a code change.
+ * account — not even to that owner's `+alias` — and every other recipient
+ * gets a 403. Production needs SMTP or a verified domain (see `send`).
  */
 const DEFAULT_FROM = "Pollar Pass <onboarding@resend.dev>";
+
+/** An address inside a provider's error text, to be masked before it's logged. */
+const EMAIL_IN_TEXT = /[^\s@(),;:<>"']+@[^\s@(),;:<>"']+/g;
 
 /** Email can't read CSS variables; these mirror the tokens in app/globals.css. */
 const PRIMARY = "#005db4";
@@ -120,14 +124,62 @@ export function appOrigin(request: Request): string {
 
 type SendResult = { sent: boolean; error?: string };
 
-async function send(payload: {
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}): Promise<SendResult> {
+type Mail = { to: string; subject: string; html: string; text: string };
+
+/**
+ * Two ways out, picked by configuration:
+ *
+ * - SMTP (SMTP_HOST, SMTP_USER, SMTP_PASS): for sending without a domain of
+ *   our own. With Gmail and an app password the mail leaves from a real
+ *   mailbox through Google's servers, so it's signed as that mailbox and
+ *   reaches any recipient — which Resend's testing sender never does.
+ * - Resend (RESEND_API_KEY, MAIL_FROM on a verified domain): the better
+ *   option once there is a domain.
+ *
+ * SMTP wins when both are set: it's the one that was configured on purpose
+ * to reach real buyers.
+ */
+async function send(payload: Mail): Promise<SendResult> {
+  if (process.env.SMTP_HOST?.trim() && process.env.SMTP_USER?.trim() && process.env.SMTP_PASS) {
+    return sendSmtp(payload);
+  }
+  return sendResend(payload);
+}
+
+async function sendSmtp(payload: Mail): Promise<SendResult> {
+  const user = process.env.SMTP_USER!.trim();
+  const port = Number(process.env.SMTP_PORT) || 465;
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST!.trim(),
+      port,
+      // 465 is TLS from the first byte; 587 upgrades with STARTTLS.
+      secure: port === 465,
+      auth: { user, pass: process.env.SMTP_PASS },
+      // A slow relay must not hold a purchase confirmation hostage.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
+    });
+    await transporter.sendMail({
+      // Gmail rewrites any other sender to the authenticated mailbox anyway.
+      from: process.env.MAIL_FROM?.trim() || `Pollar Pass <${user}>`,
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+    });
+    return { sent: true };
+  } catch (err) {
+    // SMTP errors quote addresses too (the rejected recipient, the account).
+    const message = err instanceof Error ? err.message : "SMTP falló";
+    return { sent: false, error: `SMTP: ${message.slice(0, 300).replace(EMAIL_IN_TEXT, maskEmail)}` };
+  }
+}
+
+async function sendResend(payload: Mail): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return { sent: false, error: "RESEND_API_KEY no está configurada" };
+  if (!apiKey) return { sent: false, error: "No hay correo configurado (ni SMTP_* ni RESEND_API_KEY)" };
   try {
     const res = await fetch(RESEND_API_URL, {
       method: "POST",
@@ -159,7 +211,7 @@ async function resendReason(res: Response): Promise<string> {
     const name = typeof body.name === "string" ? body.name : "";
     const message = typeof body.message === "string" ? body.message : "";
     const reason = [name, message].filter(Boolean).join(": ").slice(0, 300);
-    return reason ? ` (${reason.replace(/[^\s@(),;:<>"']+@[^\s@(),;:<>"']+/g, maskEmail)})` : "";
+    return reason ? ` (${reason.replace(EMAIL_IN_TEXT, maskEmail)})` : "";
   } catch {
     return "";
   }
@@ -215,5 +267,36 @@ export async function sendCheckinEmail(opts: {
     subject: t.email.checkinSubject(opts.eventName),
     html: checkinEmailHtml(opts),
     text: t.email.checkinText(opts.eventName, formatTimestamp(opts.checkedInAt, opts.locale)),
+  });
+}
+
+/** The code that confirms a capacity increase, sent to the organizer's bound email. */
+export async function sendCapacityCodeEmail(opts: {
+  to: string;
+  locale: Locale;
+  eventName: string;
+  tierName: string;
+  capacity: number;
+  code: string;
+}): Promise<SendResult> {
+  const t = dictFor(opts.locale);
+  const html = shell(`
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:20px;padding:28px 24px;text-align:center;">
+      <h1 style="margin:0 0 10px;font-size:20px;line-height:1.3;color:${INK};">${escapeHtml(t.email.codeHeading)}</h1>
+      <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:${MUTED};">
+        ${escapeHtml(t.email.codeBody(opts.tierName, opts.capacity, opts.eventName))}
+      </p>
+      <p style="margin:0;font-size:34px;font-weight:700;letter-spacing:8px;font-family:'SFMono-Regular',Consolas,Menlo,monospace;color:${PRIMARY};">
+        ${escapeHtml(opts.code)}
+      </p>
+    </div>
+    <p style="text-align:center;margin:18px 0 0;font-size:12px;line-height:1.6;color:#9ca3af;">
+      ${escapeHtml(t.email.codeFooter)}
+    </p>`);
+  return send({
+    to: opts.to,
+    subject: t.email.codeSubject(opts.eventName),
+    html,
+    text: t.email.codeText(opts.code, opts.tierName, opts.capacity, opts.eventName),
   });
 }

@@ -7,9 +7,6 @@
 /** Enough for "General / VIP / Estudiantes / Early bird"; more is a different product. */
 export const MAX_TICKET_TYPES = 6;
 
-/** Events routinely add a second batch of tickets; twice is enough to stay honest about "cupo". */
-export const MAX_CAPACITY_INCREASES = 2;
-
 /**
  * Upper bounds, which matter more than they look.
  *

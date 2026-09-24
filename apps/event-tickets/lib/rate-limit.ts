@@ -33,6 +33,12 @@ export const QUOTAS = {
    * nothing slowing down an attempt to race it.
    */
   editEvent: { limit: 60, windowSeconds: 60 * 60 },
+  /**
+   * Each capacity code is an email sent and five fresh guesses. An organizer
+   * adding a batch or two never comes close; ten an hour also keeps guessing
+   * a six-digit code at 50 tries in a million.
+   */
+  capacityCode: { limit: 10, windowSeconds: 60 * 60 },
   /** Rotating a door link is a once-in-a-while act. */
   doorLink: { limit: 10, windowSeconds: 60 * 60 },
   /** Per event: a busy door scans fast, and a wrong scan is retried. */

@@ -16,6 +16,7 @@ import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { AppShell } from "@/components/AppShell";
+import { CapacityIncrease } from "@/components/CapacityIncrease";
 import { DoorStaffCard } from "@/components/DoorStaffCard";
 import { ShareEventCard } from "@/components/ShareEventCard";
 import { Button } from "@/components/ui/Button";
@@ -52,7 +53,6 @@ type TicketTypeView = {
   reserved: number;
   paid: number;
   checkedIn: number;
-  capacityIncreasesLeft: number;
 };
 
 type LoadState =
@@ -130,10 +130,6 @@ export default function OrganizerEventPage({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  /** Keyed by tier id: each tier extends its own capacity. */
-  const [newCapacity, setNewCapacity] = useState<Record<string, string>>({});
-  const [capacityBusy, setCapacityBusy] = useState(false);
-  const [capacityError, setCapacityError] = useState<string | null>(null);
 
   // `usePollarAuth()` builds a new `user` object every render, so depending
   // on `user` itself would refire this on every render forever — depend on
@@ -213,32 +209,6 @@ export default function OrganizerEventPage({
       setSaveError(err instanceof Error ? err.message : t.panel.saveError);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function extendCapacity(type: TicketTypeView) {
-    setCapacityError(null);
-    const wanted = Number(newCapacity[type.id] ?? "");
-    if (!Number.isInteger(wanted) || wanted <= type.capacity) {
-      setCapacityError(t.capacity.errorLower);
-      return;
-    }
-    setCapacityBusy(true);
-    try {
-      const res = await patch({ ticketTypeId: type.id, capacity: wanted });
-      const data = (await res.json()) as EventDetails & { error?: string; code?: string };
-      if (!res.ok) {
-        setCapacityError(
-          data.code === "capacity_limit" ? t.capacity.errorLimit : apiErrorMessage(t, data, t.panel.saveError)
-        );
-        return;
-      }
-      setState({ step: "loaded", event: data });
-      setNewCapacity((current) => ({ ...current, [type.id]: "" }));
-    } catch (err) {
-      setCapacityError(err instanceof Error ? err.message : t.panel.saveError);
-    } finally {
-      setCapacityBusy(false);
     }
   }
 
@@ -366,44 +336,16 @@ export default function OrganizerEventPage({
                     <span className="ml-1 text-xs font-normal text-muted">USDC</span>
                   </span>
                 </div>
-                {!closed &&
-                  (type.capacityIncreasesLeft > 0 ? (
-                    <>
-                      <p className="text-xs leading-5 text-muted">
-                        {t.capacity.body(type.capacityIncreasesLeft)}
-                      </p>
-                      <div className="flex items-end gap-2">
-                        <Input
-                          label={t.capacity.field}
-                          type="number"
-                          inputMode="numeric"
-                          min={type.capacity + 1}
-                          placeholder={String(type.capacity + 10)}
-                          value={newCapacity[type.id] ?? ""}
-                          onChange={(e) =>
-                            setNewCapacity((current) => ({ ...current, [type.id]: e.target.value }))
-                          }
-                          className="flex-1"
-                        />
-                        <Button
-                          loading={capacityBusy}
-                          disabled={!(newCapacity[type.id] ?? "").trim()}
-                          onClick={() => void extendCapacity(type)}
-                        >
-                          {t.capacity.submit}
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-xs leading-5 text-muted">{t.capacity.exhausted}</p>
-                  ))}
+                {!closed && (
+                  <CapacityIncrease
+                    eventId={event.id}
+                    ticketTypeId={type.id}
+                    currentCapacity={type.capacity}
+                    onRaised={(updated) => setState({ step: "loaded", event: updated as EventDetails })}
+                  />
+                )}
               </div>
             ))}
-            {capacityError && (
-              <p className="rounded-xl border border-error-border bg-error-light px-3 py-2 text-sm text-error">
-                {capacityError}
-              </p>
-            )}
           </Card>
 
           <Card className="flex flex-col gap-4">

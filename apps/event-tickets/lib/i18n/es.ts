@@ -209,7 +209,7 @@ export const es = {
     organizerSteps: [
       {
         title: "Crea tu evento",
-        body: "Nombre, lugar, fecha, precio en USDC y cupo total. El precio y el cupo quedan fijos después de publicar, para no afectar a quien ya compró.",
+        body: "Nombre, lugar, fecha, precio en USDC y cupo total. El precio queda fijo después de publicar, para no afectar a quien ya compró, y el cupo solo puede crecer (con un código que te llega por correo).",
       },
       {
         title: "Comparte el link",
@@ -415,7 +415,7 @@ export const es = {
     capacityHint: "Cuántas entradas se pueden vender como máximo.",
     immutableStrong: "El precio y el cupo no se pueden cambiar",
     immutableBody:
-      "después de publicar: protege a quien ya compró. Nombre, descripción, lugar y fecha sí, y el cupo se puede ampliar hasta 2 veces.",
+      "después de publicar: protege a quien ya compró. Nombre, descripción, lugar y fecha sí, y el cupo se puede ampliar, confirmando con un código por correo.",
     maxRevenue: (amount: string) => ` Si vendes todo, recaudas ${amount} USDC.`,
     submit: "Publicar evento",
     errorPrice: "Escribe el precio como número, por ejemplo 2,50",
@@ -651,15 +651,19 @@ export const es = {
   },
   capacity: {
     title: "Agregar entradas",
-    body: (left: number) =>
-      left === 1
-        ? "Puedes ampliar el cupo una vez más (máximo 2 ampliaciones por evento)."
-        : `Puedes ampliar el cupo ${left} veces más (máximo 2 ampliaciones por evento).`,
-    exhausted: "Ya usaste las 2 ampliaciones de cupo de este evento.",
+    body: "Cada ampliación se confirma con un código de 6 dígitos que te mandamos por correo.",
     field: "Nuevo cupo total",
-    submit: "Ampliar cupo",
+    submit: "Enviar código",
     errorLower: "El cupo nuevo tiene que ser mayor al actual.",
-    errorLimit: "Ya no quedan ampliaciones disponibles para este evento.",
+    errorLimit: "El cupo no puede pasar de 100.000 entradas.",
+    emailField: "Correo para el código",
+    emailHint: "Solo esta vez: desde ahora los códigos llegan siempre a este correo.",
+    codeSent: (to: string, capacity: number) =>
+      `Te mandamos un código a ${to} para subir el cupo a ${capacity}. Vence en 10 minutos.`,
+    codeField: "Código de 6 dígitos",
+    confirm: "Confirmar ampliación",
+    resend: "Enviar otro código",
+    done: (capacity: number) => `Listo: el cupo ahora es ${capacity}.`,
   },
   notFound: {
     title: "Página no encontrada",
@@ -667,6 +671,13 @@ export const es = {
     cta: "Volver al inicio",
   },
   email: {
+    codeSubject: (event: string) => `Tu código para ampliar el cupo — ${event}`,
+    codeHeading: "Confirma la ampliación de cupo",
+    codeBody: (tier: string, capacity: number, event: string) =>
+      `Para subir "${tier}" de ${event} a ${capacity} entradas, ingresa este código en tu panel:`,
+    codeFooter: "Vence en 10 minutos. Si no fuiste tú, ignora este correo: sin el código no cambia nada.",
+    codeText: (code: string, tier: string, capacity: number, event: string) =>
+      `Tu código para subir "${tier}" de ${event} a ${capacity} entradas: ${code}\n\nVence en 10 minutos. Si no fuiste tú, ignora este correo: sin el código no cambia nada.`,
     checkinSubject: (event: string) => `Ingreso confirmado — ${event}`,
     checkinHeading: "¡Ingreso confirmado!",
     checkinBody: (event: string) => `Tu entrada para ${event} fue aceptada en la puerta.`,
@@ -715,8 +726,14 @@ export const es = {
       "La red de Stellar rechazó la transacción, así que no se te cobró. Puedes intentar de nuevo.",
     settle_retry:
       "Tu pago está confirmado en la red, pero no pudimos registrarlo en este momento. Vuelve a intentar en unos segundos: no se te va a cobrar de nuevo.",
-    capacity_limit: "Ya usaste las 2 ampliaciones de cupo de este tipo de entrada.",
+    capacity_limit: "El cupo no puede pasar de 100.000 entradas.",
     capacity_lower: "El cupo nuevo tiene que ser mayor al actual.",
+    code_required: "Confirma la ampliación con el código que te mandamos por correo.",
+    code_invalid: "Ese código no es correcto.",
+    code_expired: "El código venció. Pide uno nuevo.",
+    code_attempts: "Demasiados intentos con ese código. Pide uno nuevo.",
+    email_required: "Necesitamos un correo para mandarte el código.",
+    email_failed: "No pudimos enviarte el código por correo. Intenta de nuevo en un rato.",
     not_found: "Ese tipo de entrada ya no existe.",
     rate_limited: "Demasiados intentos seguidos. Espera un momento y vuelve a intentar.",
     payment_mismatch: "El pago no coincide con esta venta (destinatario, monto o referencia).",

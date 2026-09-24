@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
-import { purgeStaleBuyerEmails } from "@/lib/retention";
+import { purgeStaleBuyerEmails, purgeStaleOrganizerData } from "@/lib/retention";
 import { sweepExpiredSales } from "@/lib/sales";
 import { enforce } from "@/lib/rate-limit";
 import { shortAddressForLog } from "@/lib/security-log";
@@ -42,6 +42,7 @@ export async function POST(request: Request, ctx: Ctx) {
   // 30-day window without a cron to maintain.
   if (Math.floor(Math.random() * 20) === 0) {
     await purgeStaleBuyerEmails().catch(() => {});
+    await purgeStaleOrganizerData().catch(() => {});
   }
 
   return NextResponse.json({ expired });

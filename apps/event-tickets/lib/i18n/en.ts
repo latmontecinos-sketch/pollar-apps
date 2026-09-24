@@ -203,7 +203,7 @@ export const en: Dict = {
     organizerSteps: [
       {
         title: "Create your event",
-        body: "Name, place, date, price in USDC and total seats. Price and capacity are locked once published, so buyers can trust them.",
+        body: "Name, place, date, price in USDC and total seats. The price is locked once published, so buyers can trust it, and capacity can only grow (confirmed with a code we email you).",
       },
       {
         title: "Share the link",
@@ -409,7 +409,7 @@ export const en: Dict = {
     capacityHint: "The most tickets that can be sold.",
     immutableStrong: "Price and capacity can't be changed",
     immutableBody:
-      "after publishing: it protects whoever already bought. Name, description, place and date can, and capacity can be extended up to twice.",
+      "after publishing: it protects whoever already bought. Name, description, place and date can, and capacity can be raised, confirmed with an emailed code.",
     maxRevenue: (amount: string) => ` If you sell out, you make ${amount} USDC.`,
     submit: "Publish event",
     errorPrice: "Write the price as a number, for example 2.50",
@@ -638,15 +638,19 @@ export const en: Dict = {
   },
   capacity: {
     title: "Add tickets",
-    body: (left: number) =>
-      left === 1
-        ? "You can extend capacity one more time (2 extensions per event, max)."
-        : `You can extend capacity ${left} more times (2 extensions per event, max).`,
-    exhausted: "You've already used both capacity extensions for this event.",
+    body: "Each increase is confirmed with a 6-digit code we email you.",
     field: "New total capacity",
-    submit: "Extend capacity",
+    submit: "Send code",
     errorLower: "The new capacity has to be higher than the current one.",
-    errorLimit: "No capacity extensions left for this event.",
+    errorLimit: "Capacity can't go above 100,000 tickets.",
+    emailField: "Email for the code",
+    emailHint: "Just this once: from now on, codes always go to this email.",
+    codeSent: (to: string, capacity: number) =>
+      `We sent a code to ${to} to raise capacity to ${capacity}. It expires in 10 minutes.`,
+    codeField: "6-digit code",
+    confirm: "Confirm increase",
+    resend: "Send another code",
+    done: (capacity: number) => `Done: capacity is now ${capacity}.`,
   },
   notFound: {
     title: "Page not found",
@@ -654,6 +658,13 @@ export const en: Dict = {
     cta: "Back to home",
   },
   email: {
+    codeSubject: (event: string) => `Your code to increase capacity — ${event}`,
+    codeHeading: "Confirm the capacity increase",
+    codeBody: (tier: string, capacity: number, event: string) =>
+      `To raise "${tier}" for ${event} to ${capacity} tickets, enter this code in your dashboard:`,
+    codeFooter: "It expires in 10 minutes. If this wasn't you, ignore this email: nothing changes without the code.",
+    codeText: (code: string, tier: string, capacity: number, event: string) =>
+      `Your code to raise "${tier}" for ${event} to ${capacity} tickets: ${code}\n\nIt expires in 10 minutes. If this wasn't you, ignore this email: nothing changes without the code.`,
     checkinSubject: (event: string) => `Checked in — ${event}`,
     checkinHeading: "You're in!",
     checkinBody: (event: string) => `Your ticket for ${event} was accepted at the door.`,
@@ -694,8 +705,14 @@ export const en: Dict = {
       "The Stellar network rejected the transaction, so you weren't charged. You can try again.",
     settle_retry:
       "Your payment is confirmed on the network, but we couldn't record it right now. Try again in a few seconds — you won't be charged twice.",
-    capacity_limit: "You've already used both capacity increases for this ticket type.",
+    capacity_limit: "Capacity can't go above 100,000 tickets.",
     capacity_lower: "The new capacity has to be higher than the current one.",
+    code_required: "Confirm the increase with the code we emailed you.",
+    code_invalid: "That code isn't right.",
+    code_expired: "The code expired. Ask for a new one.",
+    code_attempts: "Too many tries with that code. Ask for a new one.",
+    email_required: "We need an email to send you the code.",
+    email_failed: "We couldn't email you the code. Try again in a bit.",
     not_found: "That ticket type no longer exists.",
     rate_limited: "Too many attempts in a row. Wait a moment and try again.",
     payment_mismatch: "That payment doesn't match this sale (recipient, amount, or reference).",
