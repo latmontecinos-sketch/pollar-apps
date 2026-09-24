@@ -132,3 +132,26 @@ export function formatEventMonth(isoUtc: string, locale: Locale): string {
     year: "numeric",
   }).format(date);
 }
+
+/** "sábado, 24 de octubre": the day alone, for sentences like the link preview's. */
+export function formatEventDay(isoUtc: string, locale: Locale): string {
+  const date = new Date(isoUtc);
+  if (Number.isNaN(date.getTime())) return isoUtc;
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    timeZone: BUSINESS_TIMEZONE,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(date);
+}
+
+/** "19:00" / "7:00 PM": the door time alone, in La Paz like every event time. */
+export function formatEventTime(isoUtc: string, locale: Locale): string {
+  const date = new Date(isoUtc);
+  if (Number.isNaN(date.getTime())) return isoUtc;
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    timeZone: BUSINESS_TIMEZONE,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}

@@ -9,7 +9,9 @@ import {
   contactHref,
   formatAmount,
   formatEventDateTime,
+  formatEventDay,
   formatEventMonth,
+  formatEventTime,
   formatTimestamp,
   laPazLocalToUtcIso,
   normalizeDecimalInput,
@@ -72,4 +74,14 @@ test("an event late on the 31st in La Paz is grouped in its own month, not UTC's
   assert.equal(formatEventMonth("2026-11-01T02:30:00.000Z", "es"), "octubre de 2026");
   assert.equal(formatEventMonth("2026-11-01T02:30:00.000Z", "en"), "October 2026");
   assert.equal(formatEventMonth("not a date", "fr"), "not a date");
+});
+
+test("the link preview says the day and the time apart, in La Paz", () => {
+  // 23:00 UTC on 24 Oct is 19:00 on Saturday 24 Oct in La Paz (UTC-4).
+  const iso = "2026-10-24T23:00:00.000Z";
+  assert.match(formatEventDay(iso, "es"), /^sábado,? 24 de octubre$/);
+  assert.match(formatEventDay(iso, "en"), /^Saturday, October 24$/);
+  assert.match(formatEventTime(iso, "fr"), /^19:00$/);
+  // ICU puts a narrow no-break space before "PM"; \s covers it and a plain one.
+  assert.match(formatEventTime(iso, "en"), /^7:00\sPM$/);
 });

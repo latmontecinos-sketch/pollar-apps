@@ -32,10 +32,9 @@ export const en: Dict = {
     guideDescription:
       "Step-by-step guide to Pollar Pass: how to buy a ticket, how to run an event, and frequently asked questions.",
     eventNotFound: "Event not found",
-    eventDescription: (when: string, place: string, price: string) =>
-      `${when} · ${place} · ${price} USDC. Get your ticket with Pollar Pass.`,
-    ogTicket: "TICKET",
-    ogCta: "Get your ticket",
+    eventDescription: (name: string, day: string, time: string, place: string, price: string) =>
+      `Get your tickets for ${name}. It's on ${day} at ${time}, at ${place}. From ${price} USDC.`,
+    ogCta: "Get your tickets",
     ogAlt: "Ticket for an event on Pollar Pass",
   },
   landing: {
@@ -603,6 +602,23 @@ export const en: Dict = {
     back: "Back to editing",
     confirm: "Confirm and publish",
   },
+  eventImage: {
+    title: "Event photo",
+    hint: "Recommended: 1080 × 1350 px, portrait 4:5 (like an Instagram post). JPG or PNG. You'll be able to frame it.",
+    choose: "Upload photo",
+    change: "Change photo",
+    remove: "Remove photo",
+    cropTitle: "Frame your photo",
+    cropHelp: "Drag to move and use zoom (or pinch) to get closer. This is how it will look on a phone.",
+    zoom: "Zoom",
+    use: "Use this photo",
+    lowRes: "This photo is small for the frame and may look blurry. Better one at least 1080 px wide.",
+    unreadable: "We couldn't open that image. Try a JPG or PNG.",
+    saved: "Photo saved.",
+    saveError: "We couldn't save the photo. Try again.",
+    alt: (event: string) => `Photo for ${event}`,
+    uploadLater: "The event is published, but the photo didn't upload. Upload it again from here.",
+  },
   capacity: {
     title: "Add tickets",
     body: "Each increase is confirmed with a 6-digit code we email you.",
@@ -674,6 +690,8 @@ export const en: Dict = {
       "Your payment is confirmed on the network, but we couldn't record it right now. Try again in a few seconds — you won't be charged twice.",
     capacity_limit: "Capacity can't go above 100,000 tickets.",
     capacity_lower: "The new capacity has to be higher than the current one.",
+    image_invalid: "The photo has to be a JPG in 4:5 portrait. Pick it again and frame it.",
+    image_too_large: "The photo is too large. Try another one.",
     code_required: "Confirm the increase with the code we emailed you.",
     code_invalid: "That code isn't right.",
     code_expired: "The code expired. Ask for a new one.",

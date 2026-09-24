@@ -37,10 +37,9 @@ export const es = {
     guideDescription:
       "Guía paso a paso de Pollar Pass: cómo comprar una entrada, cómo organizar un evento y preguntas frecuentes.",
     eventNotFound: "Evento no encontrado",
-    eventDescription: (when: string, place: string, price: string) =>
-      `${when} · ${place} · ${price} USDC. Compra tu entrada con Pollar Pass.`,
-    ogTicket: "ENTRADA",
-    ogCta: "Compra tu entrada",
+    eventDescription: (name: string, day: string, time: string, place: string, price: string) =>
+      `Compra tus entradas para ${name}. Será el ${day} a las ${time}, en ${place}. Desde ${price} USDC.`,
+    ogCta: "Compra tus entradas",
     ogAlt: "Entrada para un evento en Pollar Pass",
   },
   landing: {
@@ -616,6 +615,23 @@ export const es = {
     back: "Volver a editar",
     confirm: "Confirmar y publicar",
   },
+  eventImage: {
+    title: "Foto del evento",
+    hint: "Recomendado: 1080 × 1350 px, vertical 4:5 (como un post de Instagram). JPG o PNG. La vas a poder encuadrar.",
+    choose: "Subir foto",
+    change: "Cambiar foto",
+    remove: "Quitar foto",
+    cropTitle: "Encuadra tu foto",
+    cropHelp: "Arrastra para mover y usa el zoom (o pellizca) para acercar. Así se va a ver en el teléfono.",
+    zoom: "Zoom",
+    use: "Usar esta foto",
+    lowRes: "La foto es chica para este encuadre y puede verse borrosa. Mejor una de al menos 1080 px de ancho.",
+    unreadable: "No pudimos abrir esa imagen. Prueba con un JPG o PNG.",
+    saved: "Foto guardada.",
+    saveError: "No pudimos guardar la foto. Intenta de nuevo.",
+    alt: (event: string) => `Foto de ${event}`,
+    uploadLater: "El evento se publicó, pero la foto no se pudo subir. Súbela de nuevo desde aquí.",
+  },
   capacity: {
     title: "Agregar entradas",
     body: "Cada ampliación se confirma con un código de 6 dígitos que te mandamos por correo.",
@@ -695,6 +711,8 @@ export const es = {
       "Tu pago está confirmado en la red, pero no pudimos registrarlo en este momento. Vuelve a intentar en unos segundos: no se te va a cobrar de nuevo.",
     capacity_limit: "El cupo no puede pasar de 100.000 entradas.",
     capacity_lower: "El cupo nuevo tiene que ser mayor al actual.",
+    image_invalid: "La foto tiene que ser JPG en formato vertical 4:5. Vuelve a elegirla y encuadrarla.",
+    image_too_large: "La foto pesa demasiado. Prueba con otra.",
     code_required: "Confirma la ampliación con el código que te mandamos por correo.",
     code_invalid: "Ese código no es correcto.",
     code_expired: "El código venció. Pide uno nuevo.",

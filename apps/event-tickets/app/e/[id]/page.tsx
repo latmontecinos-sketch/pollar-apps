@@ -3,7 +3,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, dbReady } from "@/lib/db";
-import { contactHref, formatAmount, formatEventDateTime, salesClosed } from "@/lib/format";
+import Image from "next/image";
+import { eventImageVersion } from "@/lib/event-image";
+import { eventImagePath } from "@/lib/event-image-path";
+import {
+  contactHref,
+  formatAmount,
+  formatEventDateTime,
+  formatEventDay,
+  formatEventTime,
+  salesClosed,
+} from "@/lib/format";
 import { getDict } from "@/lib/i18n/server";
 import type { Dict } from "@/lib/i18n";
 import { sweepExpiredSales } from "@/lib/sales";
@@ -27,7 +37,9 @@ type EventRow = {
 
 /** Shared by generateMetadata and the page (one DB read per request). */
 const loadPublicEvent = cache(
-  async (id: string): Promise<{ event: EventRow; types: TicketType[] } | null> => {
+  async (
+    id: string
+  ): Promise<{ event: EventRow; types: TicketType[]; imageVersion: string | null } | null> => {
     await dbReady();
     // Release seats held by abandoned checkouts, so the counts are honest.
     await sweepExpiredSales({ eventId: id });
@@ -40,25 +52,34 @@ const loadPublicEvent = cache(
     return {
       event: result.rows[0] as unknown as EventRow,
       types: await listTicketTypes(id),
+      imageVersion: await eventImageVersion(id),
     };
   }
 );
 
-/** What WhatsApp/Telegram/etc. show when the organizer shares the link. */
+/**
+ * What WhatsApp/Telegram/etc. show when the organizer shares the link: the
+ * name as the title, a sentence that sells it ("Compra tus entradas para…
+ * Será el sábado 24 de octubre a las 19:00, en…"), and the image from
+ * ./opengraph-image.tsx, which carries the event's photo when it has one.
+ */
 export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promise<Metadata> {
   const { id } = await params;
   const [data, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
   if (!data) return { title: t.meta.eventNotFound };
   const price = formatAmount(stroopsToDecimal(summarize(data.types).priceStroops), locale);
   const description = t.meta.eventDescription(
-    formatEventDateTime(data.event.datetime_utc, locale),
+    data.event.name,
+    formatEventDay(data.event.datetime_utc, locale),
+    formatEventTime(data.event.datetime_utc, locale),
     data.event.place,
     price
   );
   return {
     title: data.event.name,
     description,
-    openGraph: { title: data.event.name, description },
+    openGraph: { title: data.event.name, description, type: "website" },
+    twitter: { card: "summary_large_image", title: data.event.name, description },
   };
 }
 
@@ -86,7 +107,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
   const { id } = await params;
   const [data, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
   if (!data) notFound();
-  const { event, types } = data;
+  const { event, types, imageVersion } = data;
 
   const closed = salesClosed(event.datetime_utc);
   const totals = summarize(types);
@@ -124,6 +145,21 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
         </div>
       }
     >
+      {imageVersion && (
+        // The poster, as the organizer framed it: 4:5, the full width of a phone.
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl bg-surface shadow-md">
+          <Image
+            src={eventImagePath(event.id, imageVersion)}
+            alt={t.eventImage.alt(event.name)}
+            fill
+            priority
+            unoptimized
+            sizes="(min-width: 1024px) 32rem, 100vw"
+            className="object-cover"
+          />
+        </div>
+      )}
+
       {/* Only when there's something to say: date and place already live in the band. */}
       {(event.description || event.organizer_name || event.organizer_contact || !buyable) && (
         <Card className="flex flex-col gap-5">

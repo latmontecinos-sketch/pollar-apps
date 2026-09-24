@@ -39,6 +39,8 @@ export const QUOTAS = {
    * a six-digit code at 50 tries in a million.
    */
   capacityCode: { limit: 10, windowSeconds: 60 * 60 },
+  /** Replacing the event photo: a few tries to get the crop right, not a stream of megabytes. */
+  eventImage: { limit: 20, windowSeconds: 60 * 60 },
   /** Rotating a door link is a once-in-a-while act. */
   doorLink: { limit: 10, windowSeconds: 60 * 60 },
   /** Per event: a busy door scans fast, and a wrong scan is retried. */

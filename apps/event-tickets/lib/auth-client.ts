@@ -52,6 +52,7 @@ export async function pollarFetch(
   const proof = await proofFor(client, address, method, path);
   const headers = new Headers(init.headers);
   headers.set(POLLAR_PROOF_HEADER, JSON.stringify(proof));
-  headers.set("Content-Type", "application/json");
+  // JSON unless the caller says otherwise: the event photo goes up as raw JPEG bytes.
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   return fetch(input, { ...init, headers });
 }

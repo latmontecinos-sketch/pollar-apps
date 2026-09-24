@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
@@ -18,6 +19,8 @@ import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { MAX_TICKET_TYPES } from "@/lib/ticket-limits";
 import { AppShell } from "@/components/AppShell";
+import { EventImagePicker } from "@/components/EventImagePicker";
+import { uploadEventPhoto } from "@/components/EventPhotoCard";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -57,6 +60,12 @@ export default function CreateEventPage() {
   const [submitting, setSubmitting] = useState(false);
   /** Nothing is published until the organizer has seen it as a buyer will. */
   const [preview, setPreview] = useState(false);
+  /** Framed in the form, shown in the preview, uploaded once the event exists. */
+  const [photo, setPhoto] = useState<{ jpeg: Blob; url: string } | null>(null);
+  // Object URLs hold the whole image in memory until revoked.
+  useEffect(() => () => {
+    if (photo) URL.revokeObjectURL(photo.url);
+  }, [photo]);
 
   if (authLoading) return null;
 
@@ -151,7 +160,16 @@ export default function CreateEventPage() {
         setError(apiErrorMessage(t, data, t.create.errorGeneric));
         return;
       }
-      router.push(`/organizador/eventos/${data.id}?nuevo=1`);
+      // The event exists either way; a photo that didn't make it can be
+      // uploaded again from the panel, which is told so.
+      let photoFailed = false;
+      if (photo) {
+        const uploaded = await uploadEventPhoto(getClient(), user!.address, data.id, photo.jpeg).catch(
+          () => ({ ok: false as const })
+        );
+        photoFailed = !uploaded.ok;
+      }
+      router.push(`/organizador/eventos/${data.id}?nuevo=1${photoFailed ? "&foto=error" : ""}`);
     } catch (err) {
       setPreview(false);
       setError(err instanceof Error ? err.message : t.create.errorGeneric);
@@ -171,6 +189,11 @@ export default function CreateEventPage() {
         <p className="px-1 text-sm leading-6 text-muted">{t.preview.body}</p>
 
         {/* Same shape as the public page, so there are no surprises after publishing. */}
+        {photo && (
+          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl bg-surface shadow-md">
+            <Image src={photo.url} alt={t.eventImage.alt(name)} fill unoptimized className="object-cover" />
+          </div>
+        )}
         <Card className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <span className="w-fit rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary">
@@ -293,6 +316,17 @@ export default function CreateEventPage() {
               required
             />
             <Hint>{t.create.datetimeHint}</Hint>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-4 border-t border-border pt-5">
+            <legend className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
+              {t.eventImage.title}
+            </legend>
+            <EventImagePicker
+              imageUrl={photo?.url ?? null}
+              onCropped={(jpeg) => setPhoto({ jpeg, url: URL.createObjectURL(jpeg) })}
+              onRemove={() => setPhoto(null)}
+            />
           </fieldset>
 
           <fieldset className="flex flex-col gap-4 border-t border-border pt-5">

@@ -4,6 +4,7 @@ import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { enforce } from "@/lib/rate-limit";
 import { confirmCapacityCode } from "@/lib/capacity-code";
+import { eventImageVersion } from "@/lib/event-image";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
 import {
   listTicketTypes,
@@ -57,7 +58,7 @@ async function checkedInTotal(id: string): Promise<number> {
   return Number(result.rows[0].n);
 }
 
-function toJson(row: EventRow, types: TicketType[], checkedIn: number) {
+function toJson(row: EventRow, types: TicketType[], checkedIn: number, imageVersion: string | null) {
   const totals = summarize(types);
   return {
     id: row.id,
@@ -78,6 +79,8 @@ function toJson(row: EventRow, types: TicketType[], checkedIn: number) {
     // Owner-only route, so the staff door secret is shown to its owner only.
     doorToken: row.door_token,
     ticketTypes: types,
+    /** Null when the event has no photo; else part of its URL (lib/event-image-path.ts). */
+    imageVersion,
   };
 }
 
@@ -93,7 +96,9 @@ export async function GET(request: Request, ctx: Ctx) {
   const auth = requireAddress(request, event.organizer_pollar_id);
   if (!auth.ok) return auth.response;
 
-  return NextResponse.json(toJson(event, await listTicketTypes(id), await checkedInTotal(id)));
+  return NextResponse.json(
+    toJson(event, await listTicketTypes(id), await checkedInTotal(id), await eventImageVersion(id))
+  );
 }
 
 type PatchBody = {
@@ -203,5 +208,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
   });
 
   const updated = await loadEvent(id);
-  return NextResponse.json(toJson(updated!, types, await checkedInTotal(id)));
+  return NextResponse.json(
+    toJson(updated!, types, await checkedInTotal(id), await eventImageVersion(id))
+  );
 }

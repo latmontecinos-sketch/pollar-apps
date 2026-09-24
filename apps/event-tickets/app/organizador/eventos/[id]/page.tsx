@@ -18,6 +18,7 @@ import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { AppShell } from "@/components/AppShell";
 import { CapacityIncrease } from "@/components/CapacityIncrease";
 import { DoorStaffCard } from "@/components/DoorStaffCard";
+import { EventPhotoCard } from "@/components/EventPhotoCard";
 import { ShareEventCard } from "@/components/ShareEventCard";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -43,6 +44,7 @@ type EventDetails = {
   organizerContact: string;
   doorToken: string | null;
   ticketTypes: TicketTypeView[];
+  imageVersion: string | null;
 };
 
 type TicketTypeView = {
@@ -104,7 +106,10 @@ export default function OrganizerEventPage({
   searchParams,
 }: PageProps<"/organizador/eventos/[id]">) {
   const { id } = use(params);
-  const justCreated = use(searchParams).nuevo === "1";
+  const query = use(searchParams);
+  const justCreated = query.nuevo === "1";
+  /** Set by the create flow when publishing worked but the photo upload didn't. */
+  const photoFailed = query.foto === "error";
   const { user, isLoading: authLoading } = usePollarAuth();
   const t = useT();
   const locale = useLocale();
@@ -291,6 +296,8 @@ export default function OrganizerEventPage({
               {t.panel.publicLink}
             </Link>
           </Card>
+
+          <EventPhotoCard eventId={event.id} initialVersion={event.imageVersion} uploadFailed={photoFailed} />
 
           {!closed && (
             <ShareEventCard eventId={event.id} eventName={event.name} datetimeUtc={event.datetimeUtc} />

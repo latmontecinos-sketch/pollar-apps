@@ -121,6 +121,20 @@ const SCHEMA_STATEMENTS = [
      created_at TEXT NOT NULL DEFAULT (datetime('now'))
    )`,
   /**
+   * The event's photo (lib/event-image.ts): one JPEG per event, already
+   * cropped to 4:5 by the browser. `version` changes on every replace, so
+   * the URL that embeds it can be cached forever.
+   */
+  `CREATE TABLE IF NOT EXISTS event_images (
+     event_id TEXT PRIMARY KEY REFERENCES events(id),
+     data BLOB NOT NULL,
+     width INTEGER NOT NULL,
+     height INTEGER NOT NULL,
+     bytes INTEGER NOT NULL,
+     version TEXT NOT NULL,
+     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+  /**
    * One row per capacity-increase code (lib/capacity-code.ts). The code is
    * bound to the exact change it confirms — event, tier, new capacity — and
    * only its hash is kept.

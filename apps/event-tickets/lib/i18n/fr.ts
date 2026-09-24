@@ -32,10 +32,9 @@ export const fr: Dict = {
     guideDescription:
       "Guide pas à pas de Pollar Pass : acheter un billet, organiser un événement et questions fréquentes.",
     eventNotFound: "Événement introuvable",
-    eventDescription: (when: string, place: string, price: string) =>
-      `${when} · ${place} · ${price} USDC. Prenez votre billet avec Pollar Pass.`,
-    ogTicket: "BILLET",
-    ogCta: "Prenez votre billet",
+    eventDescription: (name: string, day: string, time: string, place: string, price: string) =>
+      `Réservez vos billets pour ${name}. Rendez-vous le ${day} à ${time}, ${place}. À partir de ${price} USDC.`,
+    ogCta: "Réservez vos billets",
     ogAlt: "Billet pour un événement sur Pollar Pass",
   },
   landing: {
@@ -608,6 +607,23 @@ export const fr: Dict = {
     back: "Revenir à la saisie",
     confirm: "Confirmer et publier",
   },
+  eventImage: {
+    title: "Photo de l'événement",
+    hint: "Recommandé : 1080 × 1350 px, format portrait 4:5 (comme un post Instagram). JPG ou PNG. Vous pourrez la recadrer.",
+    choose: "Ajouter une photo",
+    change: "Changer la photo",
+    remove: "Retirer la photo",
+    cropTitle: "Cadrez votre photo",
+    cropHelp: "Faites glisser pour déplacer et utilisez le zoom (ou pincez) pour rapprocher. C'est ainsi qu'elle s'affichera sur un téléphone.",
+    zoom: "Zoom",
+    use: "Utiliser cette photo",
+    lowRes: "Cette photo est petite pour ce cadrage et risque d'être floue. Mieux vaut au moins 1080 px de large.",
+    unreadable: "Impossible d'ouvrir cette image. Essayez un JPG ou un PNG.",
+    saved: "Photo enregistrée.",
+    saveError: "Impossible d'enregistrer la photo. Réessayez.",
+    alt: (event: string) => `Photo de ${event}`,
+    uploadLater: "L'événement est publié, mais la photo n'a pas pu être envoyée. Réessayez depuis ici.",
+  },
   capacity: {
     title: "Ajouter des billets",
     body: "Chaque augmentation se confirme avec un code à 6 chiffres envoyé par e-mail.",
@@ -680,6 +696,8 @@ export const fr: Dict = {
       "Votre paiement est confirmé sur le réseau, mais nous n'avons pas pu l'enregistrer pour le moment. Réessayez dans quelques secondes : vous ne serez pas débité deux fois.",
     capacity_limit: "La jauge ne peut pas dépasser 100 000 billets.",
     capacity_lower: "La nouvelle jauge doit être supérieure à l'actuelle.",
+    image_invalid: "La photo doit être un JPG au format portrait 4:5. Choisissez-la à nouveau et recadrez-la.",
+    image_too_large: "La photo est trop lourde. Essayez-en une autre.",
     code_required: "Confirmez l'augmentation avec le code envoyé par e-mail.",
     code_invalid: "Ce code n'est pas le bon.",
     code_expired: "Le code a expiré. Demandez-en un nouveau.",
