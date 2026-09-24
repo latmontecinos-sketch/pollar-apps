@@ -1,5 +1,5 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { Keypair } from "@stellar/stellar-base";
+import { createHash, randomBytes, timingSafeEqual, verify as verifySignature } from "node:crypto";
+import { ed25519PublicKeyFrom } from "./strkey.ts";
 import { authMessage, normalizeRoute, POLLAR_PROOF_HEADER } from "./auth-message.ts";
 import { securityLog, shortAddressForLog } from "./security-log.ts";
 
@@ -59,7 +59,10 @@ export function verifySep53(opts: {
   ]);
   const digest = createHash("sha256").update(payload).digest();
   try {
-    return Keypair.fromPublicKey(opts.address).verify(digest, sig);
+    // ed25519 straight from node: the address *is* the public key, once it
+    // is out of its base32 envelope (lib/strkey.ts). No library in the path
+    // that decides who the caller is.
+    return verifySignature(null, digest, ed25519PublicKeyFrom(opts.address), sig);
   } catch {
     return false;
   }
