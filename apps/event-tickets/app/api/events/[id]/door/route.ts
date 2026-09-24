@@ -5,7 +5,7 @@ import { sqlUtcToIso } from "@/lib/format";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/locales";
 import { sendCheckinEmail } from "@/lib/mail";
 import { enforce } from "@/lib/rate-limit";
-import { securityLog, shortAddress } from "@/lib/security-log";
+import { securityLog, shortAddressForLog } from "@/lib/security-log";
 import { validateAtDoor } from "@/lib/tickets";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -109,7 +109,7 @@ export async function POST(request: Request, ctx: Ctx) {
       securityLog("checkin.accepted", {
         event: id,
         ticket: result.ticket.id,
-        by: shortAddress(access.actor),
+        by: shortAddressForLog(access.actor),
       });
       await notifyBuyer(result.ticket.saleId, event.name);
       return NextResponse.json({ result: "VALID", checkedIn: (await doorCounts(id)).checkedIn });

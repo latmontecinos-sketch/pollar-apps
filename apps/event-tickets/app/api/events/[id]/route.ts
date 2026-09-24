@@ -3,7 +3,7 @@ import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { enforce } from "@/lib/rate-limit";
-import { shortAddress } from "@/lib/security-log";
+import { shortAddressForLog } from "@/lib/security-log";
 import {
   extendCapacity,
   listTicketTypes,
@@ -107,7 +107,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
   if (!auth.ok) return auth.response;
 
   const limited = await enforce("editEvent", auth.address, {
-    actor: shortAddress(auth.address),
+    actor: shortAddressForLog(auth.address),
   });
   if (limited) return limited;
 

@@ -24,7 +24,7 @@ export type SecurityEvent =
   | "checkin.accepted";
 
 /** `GABC…WXYZ`: enough to follow one actor across lines, not enough to be an address. */
-export function shortAddress(address: string): string {
+export function shortAddressForLog(address: string): string {
   return address.length <= 12 ? address : `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 

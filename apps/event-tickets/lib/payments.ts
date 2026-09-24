@@ -56,8 +56,3 @@ export function paymentAssetFrom(
 export function currencyOf(asset: PaymentAsset): string {
   return asset.type === "native" ? "XLM" : asset.code;
 }
-
-/** Loose G-address sanity check; the server does the real validation. */
-export function looksLikeAddress(value: string): boolean {
-  return /^G[A-Z2-7]{55}$/.test(value.trim());
-}

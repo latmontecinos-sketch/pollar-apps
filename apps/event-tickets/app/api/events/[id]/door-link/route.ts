@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { newDoorToken, requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { enforce } from "@/lib/rate-limit";
-import { shortAddress } from "@/lib/security-log";
+import { shortAddressForLog } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,7 +23,7 @@ export async function POST(request: Request, ctx: Ctx) {
   const auth = requireAddress(request, organizer);
   if (!auth.ok) return auth.response;
 
-  const limited = await enforce("doorLink", auth.address, { actor: shortAddress(auth.address) });
+  const limited = await enforce("doorLink", auth.address, { actor: shortAddressForLog(auth.address) });
   if (limited) return limited;
 
   const token = newDoorToken();
@@ -42,7 +42,7 @@ export async function DELETE(request: Request, ctx: Ctx) {
   // Same quota as issuing one: revoking is the other half of the same act,
   // and this was the only organizer write on the app with no ceiling at all.
   const limited = await enforce("doorLink", auth.address, {
-    actor: shortAddress(auth.address),
+    actor: shortAddressForLog(auth.address),
   });
   if (limited) return limited;
 

@@ -15,7 +15,7 @@ export function BalanceCard() {
   const locale = useLocale();
 
   // `tx` is the SDK's global transaction state machine, so this catches every
-  // payment made anywhere in the app (PayButton, Pollar's send modal, …).
+  // payment made anywhere in the app (via Pollar's SDK methods).
   // 'submitted' covers payments the network accepted but hasn't confirmed yet.
   useEffect(() => {
     if (tx.step === "success" || tx.step === "submitted") {

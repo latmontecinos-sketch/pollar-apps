@@ -7,7 +7,7 @@ import { usdcAsset } from "@/lib/network";
 import { generateReference, reserveAndCreateSale, sweepExpiredSales } from "@/lib/sales";
 import { listTicketTypes } from "@/lib/ticket-types";
 import { enforce } from "@/lib/rate-limit";
-import { shortAddress } from "@/lib/security-log";
+import { shortAddressForLog } from "@/lib/security-log";
 
 /** How long a seat stays held while the buyer pays (mirrors `t.hold.minutes`). */
 const SALE_TTL_MS = 10 * 60 * 1000;
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const limited = await enforce("createSale", auth.address, {
-    actor: shortAddress(auth.address),
+    actor: shortAddressForLog(auth.address),
   });
   if (limited) return limited;
 

@@ -83,7 +83,13 @@ export default function CreateEventPage() {
       name: tier.name.trim(),
       priceDecimal: price,
       capacity,
-      priceValid: /^\d+(\.\d{1,7})?$/.test(price) && Number(price) > 0,
+      priceValid: (() => {
+        try {
+          return decimalToStroops(price) > 0n;
+        } catch {
+          return false;
+        }
+      })(),
       capacityValid: Number.isInteger(capacity) && capacity > 0,
     };
   });

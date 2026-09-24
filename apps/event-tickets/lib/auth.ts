@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Keypair } from "@stellar/stellar-base";
 import { authMessage, normalizeRoute, POLLAR_PROOF_HEADER } from "./auth-message.ts";
-import { securityLog, shortAddress } from "./security-log.ts";
+import { securityLog, shortAddressForLog } from "./security-log.ts";
 
 /**
  * Server-side identity for a Pollar user, without an "Authorization: Bearer".
@@ -103,7 +103,7 @@ export function requireSignedAddress(request: Request): AuthOutcome {
     securityLog("auth.rejected", {
       reason: "expired",
       route: routeOf(request),
-      actor: shortAddress(address),
+      actor: shortAddressForLog(address),
     });
     return fail(401, "La sesión expiró. Recarga la página e intenta de nuevo.");
   }
@@ -132,7 +132,7 @@ function reject(request: Request, reason: string, address?: string): AuthOutcome
   securityLog("auth.rejected", {
     reason,
     route: routeOf(request),
-    actor: address && shortAddress(address),
+    actor: address && shortAddressForLog(address),
   });
   return fail(
     401,

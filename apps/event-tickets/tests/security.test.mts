@@ -21,7 +21,7 @@ const { DOOR_TOKEN_HEADER, doorTokenExpired, newDoorToken, requireDoorAccess, re
   await import("../lib/auth.ts");
 const { isDeliverableEmail } = await import("../lib/mail.ts");
 const { QUOTAS, consume } = await import("../lib/rate-limit.ts");
-const { maskEmail, shortAddress } = await import("../lib/security-log.ts");
+const { maskEmail, shortAddressForLog } = await import("../lib/security-log.ts");
 
 const ORIGIN = "https://pollarpass.vercel.app";
 const SEP53_PREFIX = "Stellar Signed Message:\n";
@@ -209,7 +209,7 @@ test("a quota lets the honest case through and stops the loop", async () => {
 
 test("addresses and emails are shortened before they reach a log", () => {
   const address = Keypair.random().publicKey();
-  const short = shortAddress(address);
+  const short = shortAddressForLog(address);
   assert.ok(!short.includes(address.slice(8, 40)));
   assert.match(short, /^G[A-Z2-7]{3}…[A-Z2-7]{4}$/);
 

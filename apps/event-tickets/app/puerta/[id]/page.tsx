@@ -6,8 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { useT } from "@/lib/i18n/client";
-
-const DOOR_TOKEN_HEADER = "x-door-token";
+import { DOOR_TOKEN_HEADER } from "@/lib/auth";
 
 function subscribeToHash(onChange: () => void) {
   window.addEventListener("hashchange", onChange);

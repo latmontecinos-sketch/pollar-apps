@@ -3,7 +3,7 @@ import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { newId } from "@/lib/ids";
 import { enforce } from "@/lib/rate-limit";
-import { shortAddress } from "@/lib/security-log";
+import { shortAddressForLog } from "@/lib/security-log";
 import {
   createTicketTypes,
   MAX_DESCRIPTION_CHARS,
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const limited = await enforce("createEvent", auth.address, {
-    actor: shortAddress(auth.address),
+    actor: shortAddressForLog(auth.address),
   });
   if (limited) return limited;
 

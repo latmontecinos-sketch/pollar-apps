@@ -7,7 +7,7 @@ import { settlePayment } from "@/lib/sales";
 import { appOrigin, isDeliverableEmail, sendTicketEmail } from "@/lib/mail";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/locales";
 import { enforce } from "@/lib/rate-limit";
-import { maskEmail, securityLog, shortAddress } from "@/lib/security-log";
+import { maskEmail, securityLog, shortAddressForLog } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -41,7 +41,7 @@ export async function POST(request: Request, ctx: Ctx) {
   // Every confirm can fan out up to three requests to Horizon, so a loop
   // from one account would get us throttled and break everyone's checkout.
   const limited = await enforce("confirmSale", auth.address, {
-    actor: shortAddress(auth.address),
+    actor: shortAddressForLog(auth.address),
   });
   if (limited) return limited;
 
@@ -125,7 +125,7 @@ export async function POST(request: Request, ctx: Ctx) {
       // worth helping with, or someone trying to pass off a payment.
       securityLog("payment.mismatch", {
         sale: sale.id,
-        actor: shortAddress(auth.address),
+        actor: shortAddressForLog(auth.address),
         hash: hash.slice(0, 12),
       });
     }

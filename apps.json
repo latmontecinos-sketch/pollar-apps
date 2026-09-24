@@ -46,7 +46,7 @@
       "slug": "event-tickets",
       "category": "community",
       "issue": "https://github.com/pollar-xyz/pollar-apps/issues/13",
-      "deploy": null,
+      "deploy": "https://pollarpass.vercel.app",
       "author": "latmontecinos-sketch"
     },
     {
