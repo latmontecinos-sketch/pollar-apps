@@ -98,7 +98,7 @@ export function WelcomeGiftCard() {
             <button
               onClick={() => void claim()}
               disabled={state.step === "claiming"}
-              className="inline-flex w-fit items-center gap-2 rounded-full bg-background px-4 py-2 text-sm font-semibold text-primary shadow-sm transition-all enabled:active:scale-[0.97] disabled:opacity-70"
+              className="inline-flex w-fit items-center gap-2 rounded-full bg-primary-foreground px-4 py-2 text-sm font-semibold text-primary shadow-sm transition-all enabled:active:scale-[0.97] disabled:opacity-70"
             >
               {state.step === "claiming" && <Spinner />}
               {t.welcome.claim(amount, rule.assetCode)}

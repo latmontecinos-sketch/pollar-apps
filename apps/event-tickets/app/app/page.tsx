@@ -76,11 +76,11 @@ export default function AppHome() {
           <BalanceCard />
           <div className="flex gap-2">
             <button onClick={() => setReceiveOpen(true)} className={bandPill}>
-              <Icon name="wallet" size={17} className="text-primary" />
+              <Icon name="wallet" size={17} className="text-primary-text" />
               {t.home.receive}
             </button>
             <Link href="/como-funciona#usdc" className={bandPill}>
-              <Icon name="plus" size={17} className="text-primary" />
+              <Icon name="plus" size={17} className="text-primary-text" />
               {t.home.testUsdc}
             </Link>
           </div>
@@ -132,7 +132,7 @@ export default function AppHome() {
         href="/como-funciona"
         className="flex items-center gap-3 rounded-3xl border border-dashed border-tile-soft p-4 text-sm transition-colors hover:border-primary/40 hover:bg-background"
       >
-        <Icon name="help" size={20} className="text-primary" />
+        <Icon name="help" size={20} className="text-primary-text" />
         <span className="flex-1">
           <span className="font-semibold">{t.home.firstTimeStrong}</span>{" "}
           <span className="text-muted">{t.home.firstTimeBody}</span>

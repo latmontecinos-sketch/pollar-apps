@@ -59,6 +59,9 @@
   --tile-mid: #3a86d4;
   --tile-strong: #005db4;
   --tile-foreground: #ffffff;
+  /* The brand blue as small text: primary on light, lifted on dark, where
+   * #1668c1 on near-black is too dim for an xs line. */
+  --primary-text: #005db4;
 }
 
 /*
@@ -109,6 +112,7 @@
     --tile-mid: #1f5fa8;
     --tile-strong: #1668c1;
     --tile-foreground: #ffffff;
+    --primary-text: #8cc0f5;
   }
 }
 
@@ -157,6 +161,7 @@
   --tile-mid: #1f5fa8;
   --tile-strong: #1668c1;
   --tile-foreground: #ffffff;
+  --primary-text: #8cc0f5;
 }
 
 /* Expose the tokens as Tailwind utilities (bg-primary, text-muted, border-border…). */
@@ -192,6 +197,7 @@
   --color-tile-mid: var(--tile-mid);
   --color-tile-strong: var(--tile-strong);
   --color-tile-foreground: var(--tile-foreground);
+  --color-primary-text: var(--primary-text);
   --font-sans: var(--font-poppins);
   --font-mono: var(--font-geist-mono);
 }

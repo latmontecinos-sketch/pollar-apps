@@ -46,7 +46,7 @@ export function ListRow({
       <IconTile icon={icon} tone={tone} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-semibold">{title}</span>
-        {subtitle && <span className="text-xs font-medium text-primary">{subtitle}</span>}
+        {subtitle && <span className="text-xs font-medium text-primary-text">{subtitle}</span>}
       </span>
       {meta && (
         <span className="shrink-0 border-l border-tile-soft pl-3 text-right text-sm font-semibold">{meta}</span>

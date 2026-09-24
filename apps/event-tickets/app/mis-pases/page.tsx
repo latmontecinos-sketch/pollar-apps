@@ -52,7 +52,7 @@ const byDate = (a: Sale, b: Sale) => a.event.datetimeUtc.localeCompare(b.event.d
 function Stat({ icon, label, value }: { icon: IconName; label: string; value: number }) {
   return (
     <div className="flex flex-col items-center gap-0.5 rounded-2xl bg-background px-3 py-3 text-foreground shadow-sm">
-      <Icon name={icon} size={20} className="text-primary" />
+      <Icon name={icon} size={20} className="text-primary-text" />
       <span className="text-xs font-medium text-muted">{label}</span>
       <span className="text-2xl font-bold tabular-nums">{value}</span>
     </div>
@@ -220,7 +220,7 @@ export default function MisPasesPage() {
                   <Link href={`/e/${sale.event.id}`} className="block truncate font-semibold hover:text-primary">
                     {sale.event.name}
                   </Link>
-                  <p className="text-xs font-medium text-primary first-letter:uppercase">
+                  <p className="text-xs font-medium text-primary-text first-letter:uppercase">
                     {formatEventDateTime(sale.event.datetimeUtc, locale)}
                   </p>
                   <p className="truncate text-xs text-muted">{sale.event.place}</p>

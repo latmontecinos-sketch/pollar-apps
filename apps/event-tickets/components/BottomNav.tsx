@@ -62,7 +62,7 @@ export function BottomNav() {
                 </span>
                 <span
                   className={`text-[11px] leading-none ${
-                    active ? "font-semibold text-primary" : "font-medium text-muted"
+                    active ? "font-semibold text-primary-text" : "font-medium text-muted"
                   }`}
                 >
                   {t.nav[item.label]}

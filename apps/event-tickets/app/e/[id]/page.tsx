@@ -103,7 +103,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
       hero={
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <span className="w-fit rounded-full bg-background px-3 py-1 text-xs font-semibold text-primary shadow-sm">
+            <span className="w-fit rounded-full bg-background px-3 py-1 text-xs font-semibold text-primary-text shadow-sm">
               {t.tiers.from(formatAmount(stroopsToDecimal(totals.priceStroops), locale))}
             </span>
             <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight">{event.name}</h1>
@@ -111,13 +111,13 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
           {/* The two facts people come for, as the band's light stat cards. */}
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1.5 rounded-2xl bg-background px-3.5 py-3 text-foreground shadow-sm">
-              <Icon name="calendar" size={18} className="text-primary" />
+              <Icon name="calendar" size={18} className="text-primary-text" />
               <span className="text-sm font-semibold leading-5 first-letter:uppercase">
                 {formatEventDateTime(event.datetime_utc, locale)}
               </span>
             </div>
             <div className="flex flex-col gap-1.5 rounded-2xl bg-background px-3.5 py-3 text-foreground shadow-sm">
-              <Icon name="pin" size={18} className="text-primary" />
+              <Icon name="pin" size={18} className="text-primary-text" />
               <span className="text-sm font-semibold leading-5">{event.place}</span>
             </div>
           </div>
@@ -174,7 +174,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
                   <IconTile icon="ticket" tone={remaining > 0 ? "strong" : "soft"} />
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate font-semibold">{type.name}</h3>
-                    <p className={`text-xs font-medium ${remaining > 0 ? "text-primary" : "text-muted"}`}>
+                    <p className={`text-xs font-medium ${remaining > 0 ? "text-primary-text" : "text-muted"}`}>
                       {remaining > 0
                         ? t.tiers.remaining(remaining)
                         : held > 0
