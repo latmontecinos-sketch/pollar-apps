@@ -61,11 +61,6 @@ export const fr: Dict = {
   product: {
     openApp: "Ouvrir l'application",
     badge: "Stellar · USDC · Bolivie",
-    stats: {
-      currency: "Des dollars numériques, directement à l'organisateur",
-      hold: "Votre place, réservée le temps de payer",
-      entry: "Un code par billet, valable une seule fois",
-    },
     heroTitle: "Des billets QR, encaissés en USDC.",
     heroSubtitle:
       "Publiez votre événement, partagez un lien, encaissez tout de suite. L'acheteur reçoit un QR valable une seule fois à l'entrée. Sans carte, sans portefeuille externe, sans intermédiaire qui retient votre argent.",
@@ -77,34 +72,6 @@ export const fr: Dict = {
     solutionTitle: "Ce que fait Pollar Pass",
     solutionBody:
       "Il transforme cette vente en un lien et un QR : l'argent arrive directement sur le compte de l'organisateur et chaque billet n'est validé qu'une fois, vérifié sur le réseau Stellar.",
-    featuresTitle: "Ce qu'il contient",
-    features: [
-      {
-        title: "Paiement direct, sans intermédiaire",
-        body: "Chaque achat est un paiement en USDC de l'acheteur vers l'organisateur, vérifié sur Stellar avant l'émission du billet.",
-      },
-      {
-        title: "Un billet, une entrée",
-        body: "Le QR est marqué comme utilisé à l'instant de la validation : une capture transférée s'affiche en rouge.",
-      },
-      {
-        title: "Se partage sur WhatsApp",
-        body: "Un lien avec aperçu, un QR pour les affiches et une page publique qui s'ouvre sans rien installer.",
-      },
-      {
-        title: "L'entrée, à plusieurs",
-        body: "Un lien secret permet à quelqu'un d'autre de valider les billets sans voir vos ventes ni votre compte.",
-      },
-      {
-        title: "Des places qui ne mentent pas",
-        body: "Les réservations durent 10 minutes avec un compte à rebours visible et se libèrent seules : personne ne voit « complet » à cause d'un paiement à moitié fait.",
-      },
-      {
-        title: "Dans votre langue",
-        body: "Espagnol, anglais et français, en clair et en sombre, dans l'application comme dans les e-mails.",
-      },
-    ],
-    stepsTitle: "Comment ça marche",
     audienceOrganizerTitle: "Si vous organisez",
     audienceOrganizerBody:
       "Créez l'événement en une minute, partagez le lien et suivez chaque paiement avec son justificatif. Le jour J, scannez depuis votre téléphone.",

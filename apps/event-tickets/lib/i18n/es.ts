@@ -67,11 +67,6 @@ export const es = {
   product: {
     openApp: "Abrir la app",
     badge: "Stellar · USDC · Bolivia",
-    stats: {
-      currency: "Pagos en dólares digitales, directo al organizador",
-      hold: "Tu cupo, reservado mientras pagas",
-      entry: "Un código por entrada, válido una sola vez",
-    },
     heroTitle: "Entradas con QR, cobradas en USDC.",
     heroSubtitle:
       "Publica tu evento, comparte un link y cobra al instante. Quien compra recibe un QR que vale una sola vez en la puerta. Sin tarjetas, sin billeteras externas, sin intermediarios que retengan tu dinero.",
@@ -83,34 +78,6 @@ export const es = {
     solutionTitle: "Qué hace Pollar Pass",
     solutionBody:
       "Convierte esa venta en un link y un QR: el dinero llega directo a la cuenta del organizador y cada entrada se valida una sola vez, verificada en la red de Stellar.",
-    featuresTitle: "Lo que incluye",
-    features: [
-      {
-        title: "Pago directo, sin intermediarios",
-        body: "Cada compra es un pago en USDC del comprador a la cuenta del organizador, verificado en Stellar antes de emitir la entrada.",
-      },
-      {
-        title: "Una entrada, un ingreso",
-        body: "El QR se marca como usado en el mismo instante en que se valida: una captura reenviada sale en rojo.",
-      },
-      {
-        title: "Se comparte por WhatsApp",
-        body: "Link con vista previa, QR para afiches y una página pública que se abre sin instalar nada.",
-      },
-      {
-        title: "Puerta con tu equipo",
-        body: "Un link secreto deja que otra persona valide entradas sin ver tus ventas ni tu cuenta.",
-      },
-      {
-        title: "Cupos que no mienten",
-        body: "Las reservas duran 10 minutos con contador a la vista y se liberan solas: nadie ve “agotado” por un pago a medias.",
-      },
-      {
-        title: "En tu idioma",
-        body: "Español, inglés y francés, con modo claro y oscuro, en toda la app y también en los correos.",
-      },
-    ],
-    stepsTitle: "Cómo funciona",
     audienceOrganizerTitle: "Si organizas",
     audienceOrganizerBody:
       "Creas el evento en un minuto, compartes el link y ves cada pago con su comprobante. El día del evento, escaneas desde tu celular.",

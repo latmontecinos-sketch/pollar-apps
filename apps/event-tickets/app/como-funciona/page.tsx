@@ -11,6 +11,8 @@ import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useT } from "@/lib/i18n/client";
 import type { Dict } from "@/lib/i18n";
 
+const REPO_URL = "https://github.com/pollar-xyz/pollar-apps/pull/32";
+
 type Tab = "comprador" | "organizador" | "preguntas";
 
 const TAB_IDS: Tab[] = ["comprador", "organizador", "preguntas"];
@@ -289,6 +291,23 @@ export default function ComoFuncionaPage() {
           ))}
         </div>
       )}
+
+      {/* Moved here from the product page: it's for the curious, not the pitch. */}
+      <Card className="flex flex-col gap-3">
+        <h2 className="flex items-center gap-2 font-bold">
+          <Icon name="shield" size={18} className="text-primary-text" />
+          {t.product.techTitle}
+        </h2>
+        <p className="text-sm leading-6 text-muted">{t.product.techBody}</p>
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex w-fit items-center gap-1.5 text-sm font-semibold text-primary-text"
+        >
+          {t.product.linkRepo} <Icon name="external" size={13} />
+        </a>
+      </Card>
     </AppShell>
   );
 }

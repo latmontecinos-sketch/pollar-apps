@@ -1,22 +1,9 @@
 import Link from "next/link";
-import { buyerSteps, GuideSteps } from "@/components/GuideSteps";
 import { ProductHeader } from "@/components/ProductHeader";
-import { Icon, type IconName } from "@/components/ui/Icon";
-import { IconTile } from "@/components/ui/ListRow";
+import { Icon } from "@/components/ui/Icon";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { getDict } from "@/lib/i18n/server";
 import { IS_MAINNET } from "@/lib/network";
-
-const FEATURE_ICONS: IconName[] = ["wallet", "shield", "share", "users", "clock", "settings"];
-const TILE_TONES = ["soft", "mid", "strong"] as const;
-const REPO_URL = "https://github.com/pollar-xyz/pollar-apps/pull/32";
-
-/** The three numbers that say what this is, before any prose. */
-const STATS: { value: string; icon: IconName }[] = [
-  { value: "USDC", icon: "wallet" },
-  { value: "10 min", icon: "clock" },
-  { value: "1 QR", icon: "qr" },
-];
 
 /** "solid" on the sheet; "light" is the white pill that reads on the brand band. */
 function OpenApp({ label, tone = "solid" }: { label: string; tone?: "solid" | "light" }) {
@@ -46,7 +33,6 @@ function OpenApp({ label, tone = "solid" }: { label: string; tone?: "solid" | "l
  */
 export default async function ProductPage() {
   const { t } = await getDict();
-  const statLabels = [t.product.stats.currency, t.product.stats.hold, t.product.stats.entry];
 
   return (
     // .app-shell: the page sits on the sheet color, like every in-app screen.
@@ -90,26 +76,9 @@ export default async function ProductPage() {
         </div>
       </section>
 
-      {/* The sheet rides up over the band, opening with the whole model in three numbers. */}
+      {/* The sheet rides up over the band. How it works and how it's built live on /como-funciona. */}
       <div className="relative -mt-9 flex flex-1 flex-col rounded-t-[2.5rem] bg-sheet">
-        <section className="pt-7">
-          <div className="mx-auto grid w-full max-w-3xl grid-cols-3 gap-2 px-5">
-            {STATS.map((stat, index) => (
-              <div
-                key={stat.value}
-                className="flex flex-col items-center gap-1.5 rounded-3xl bg-background px-2 py-5 text-center shadow-sm"
-              >
-                <IconTile icon={stat.icon} tone={index === 1 ? "strong" : "soft"} size={40} />
-                <span className="font-mono text-xl font-bold tracking-tight sm:text-2xl">
-                  {stat.value}
-                </span>
-                <span className="px-1 text-xs leading-4 text-muted">{statLabels[index]}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <main className="mx-auto flex w-full max-w-3xl flex-col gap-20 px-5 py-16">
+        <main className="mx-auto flex w-full max-w-3xl flex-col gap-14 px-5 pt-10 pb-14">
           <section className="grid gap-8 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-muted">
@@ -119,7 +88,7 @@ export default async function ProductPage() {
               <p className="text-base leading-7">{t.product.problemBody}</p>
             </div>
             <div className="flex flex-col gap-2">
-              <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-primary">
+              <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-primary-text">
                 <Icon name="ticket" size={15} />
                 {t.product.solutionTitle}
               </h2>
@@ -127,56 +96,20 @@ export default async function ProductPage() {
             </div>
           </section>
 
-          <section className="flex flex-col gap-8">
-            <h2 className="text-3xl font-bold tracking-tight">{t.product.featuresTitle}</h2>
-            <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-              {t.product.features.map((feature, index) => (
-                <div key={feature.title} className="flex flex-col gap-3">
-                  <IconTile icon={FEATURE_ICONS[index]} tone={TILE_TONES[index % TILE_TONES.length]} />
-                  <h3 className="font-semibold leading-6">{feature.title}</h3>
-                  <p className="text-sm leading-6 text-muted">{feature.body}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-8">
-            <h2 className="text-3xl font-bold tracking-tight">{t.product.stepsTitle}</h2>
-            <div className="rounded-3xl bg-background p-6 shadow-sm sm:p-8">
-              <GuideSteps steps={buyerSteps(t)} />
-            </div>
-          </section>
-
           <section className="grid gap-8 sm:grid-cols-2">
             <div className="flex flex-col gap-2 border-t border-border pt-5">
               <h2 className="flex items-center gap-2 font-bold">
-                <Icon name="calendar" size={18} className="text-primary" />
+                <Icon name="calendar" size={18} className="text-primary-text" />
                 {t.product.audienceOrganizerTitle}
               </h2>
               <p className="text-sm leading-6 text-muted">{t.product.audienceOrganizerBody}</p>
             </div>
             <div className="flex flex-col gap-2 border-t border-border pt-5">
               <h2 className="flex items-center gap-2 font-bold">
-                <Icon name="ticket" size={18} className="text-primary" />
+                <Icon name="ticket" size={18} className="text-primary-text" />
                 {t.product.audienceBuyerTitle}
               </h2>
               <p className="text-sm leading-6 text-muted">{t.product.audienceBuyerBody}</p>
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-4 border-t border-border pt-6">
-            <h2 className="flex items-center gap-2 font-bold">
-              <Icon name="shield" size={18} className="text-primary" />
-              {t.product.techTitle}
-            </h2>
-            <p className="max-w-2xl text-sm leading-6 text-muted">{t.product.techBody}</p>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-primary">
-              <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5">
-                {t.product.linkRepo} <Icon name="external" size={13} />
-              </a>
-              <Link href="/como-funciona" className="flex items-center gap-1.5">
-                {t.product.linkGuide} <Icon name="chevron" size={13} />
-              </Link>
             </div>
           </section>
         </main>
