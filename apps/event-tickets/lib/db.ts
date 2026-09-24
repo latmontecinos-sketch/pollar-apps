@@ -212,7 +212,38 @@ const BUSY_RETRY_BASE_MS = 20;
  * remote Turso DB didn't hit this, since Hrana-over-HTTP serializes writes
  * server-side, but the retry is cheap insurance either way).
  */
-export async function withTransaction<T>(
+/**
+ * Write transactions run one at a time within this process.
+ *
+ * `db` is a single connection shared by every request here, and two
+ * transactions interleaved on one connection do not queue politely — they
+ * block against each other until the lock timeout, and the retry loop below
+ * then burns its whole budget against a lock that cannot clear while the
+ * other transaction is also waiting. Two people validating the same ticket at
+ * the same door at the same moment was enough to hit it: 28 seconds, then
+ * SQLITE_BUSY, on an operation whose whole point is to be atomic.
+ *
+ * Remote libSQL hands each transaction its own stream and serializes writes
+ * server-side, so chaining costs nothing there; on the local file database —
+ * the mode a fresh clone runs in — it is the difference between "the second
+ * person reads USED" and "the second person gets a 500".
+ *
+ * The retry loop stays: it covers contention this queue cannot see, from
+ * another process holding the same file.
+ */
+let writeQueue: Promise<unknown> = Promise.resolve();
+
+export function withTransaction<T>(fn: (tx: Transaction) => Promise<T>): Promise<T> {
+  // `.then` on both paths so one caller's failure never poisons the queue.
+  const result = writeQueue.then(
+    () => runTransaction(fn),
+    () => runTransaction(fn)
+  );
+  writeQueue = result.catch(() => {});
+  return result;
+}
+
+async function runTransaction<T>(
   fn: (tx: Transaction) => Promise<T>
 ): Promise<T> {
   await dbReady();
