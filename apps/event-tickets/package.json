@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "db:probe": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/db-probe.mjs",
     "spike:capacity": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/spike-capacity.mts",
     "spike:door": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/spike-door.mts",

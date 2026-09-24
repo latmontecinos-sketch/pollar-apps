@@ -100,6 +100,17 @@ not from a style guide. Breaking one has cost something here before.
     not merge without a unit test** with its I/O mocked. A manual spike is
     not coverage.
 
+13. **Types are checked with `pnpm typecheck`, never a bare `tsc`.** Page
+    props use `PageProps`, which Next generates into `.next/types`; a bare
+    `tsc` passes only on a machine that happens to have an old build, and
+    fails on a fresh clone. The same goes for any check: "it passed" means
+    it passed from a clean tree, the way CI runs it.
+
+14. **A best-effort side effect never gets reported as done.** When a send,
+    a notification or a sync may fail silently, the user hears about it
+    only from the result of the attempt (like `emailed` from the confirm
+    route), and the log keeps the provider's reason, not just a status.
+
 ## Definition of done (bounty)
 
 1. App deployed (production URL live, e.g. Vercel).
