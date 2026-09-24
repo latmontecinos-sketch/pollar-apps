@@ -74,8 +74,14 @@ type AuthOutcome =
   | { ok: true; address: string }
   | { ok: false; response: Response };
 
-function fail(status: number, error: string): AuthOutcome {
-  return { ok: false, response: Response.json({ error }, { status }) };
+/**
+ * `code` so the client can say this in the reader's language. These are the
+ * errors people actually hit — an expired session above all — and they were
+ * the one group still answering in Spanish whatever the locale, because this
+ * module is the one every route goes through.
+ */
+function fail(status: number, error: string, code: string): AuthOutcome {
+  return { ok: false, response: Response.json({ error, code }, { status }) };
 }
 
 /**
@@ -85,7 +91,7 @@ function fail(status: number, error: string): AuthOutcome {
  */
 export function requireSignedAddress(request: Request): AuthOutcome {
   const raw = request.headers.get(POLLAR_PROOF_HEADER);
-  if (!raw) return fail(401, "Sesión Pollar requerida");
+  if (!raw) return fail(401, "Sesión Pollar requerida", "session_required");
 
   let proof: ProofPayload;
   try {
@@ -108,7 +114,11 @@ export function requireSignedAddress(request: Request): AuthOutcome {
       route: routeOf(request),
       actor: shortAddressForLog(address),
     });
-    return fail(401, "La sesión expiró. Recarga la página e intenta de nuevo.");
+    return fail(
+      401,
+      "La sesión expiró. Recarga la página e intenta de nuevo.",
+      "session_expired"
+    );
   }
 
   // The signature covers the endpoint being called, so a proof lifted from
@@ -139,7 +149,8 @@ function reject(request: Request, reason: string, address?: string): AuthOutcome
   });
   return fail(
     401,
-    "No se pudo verificar la sesión Pollar. Recarga la página e intenta de nuevo."
+    "No se pudo verificar la sesión Pollar. Recarga la página e intenta de nuevo.",
+    "session_invalid"
   );
 }
 
@@ -193,7 +204,10 @@ export function requireDoorAccess(
     return {
       ok: false,
       response: Response.json(
-        { error: "Este link de puerta ya no es válido. Pide uno nuevo al organizador." },
+        {
+          error: "Este link de puerta ya no es válido. Pide uno nuevo al organizador.",
+          code: "door_link_invalid",
+        },
         { status: 403 }
       ),
     };
@@ -207,7 +221,7 @@ export function requireAddress(request: Request, expected: string): AuthOutcome 
   const got = requireSignedAddress(request);
   if (!got.ok) return got;
   if (got.address !== expected) {
-    return fail(403, "Esta sesión no corresponde a esa cuenta");
+    return fail(403, "Esta sesión no corresponde a esa cuenta", "wrong_account");
   }
   return got;
 }

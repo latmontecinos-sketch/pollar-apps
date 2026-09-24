@@ -655,6 +655,58 @@ export const es = {
     text: (event: string, when: string, place: string, code: string, doorCode: string) =>
       `Tu entrada para "${event}" está confirmada.\n\n${when} · ${place}\n\nCódigo de la entrada (QR): ${code}\nCódigo de puerta: ${doorCode}\n\nMuestra tu QR (o dicta tu código de puerta) en la puerta del evento.`,
   },
+  /**
+   * One entry per stable `code` a route handler in `app/api/**` can send on
+   * error. The server's `error` field stays in Spanish for logs — this is
+   * what the UI actually shows, in the reader's language. See
+   * `apiErrorMessage` in `lib/i18n/errors.ts`.
+   */
+  apiErrors: {
+    // From lib/auth.ts — the guard every route goes through, so these are the
+    // errors a real user meets most often.
+    session_required: "Necesitas iniciar sesión para hacer esto.",
+    session_expired: "Tu sesión expiró. Recarga la página e intenta de nuevo.",
+    session_invalid: "No pudimos verificar tu sesión. Recarga la página e intenta de nuevo.",
+    wrong_account: "Esta sesión no corresponde a esa cuenta.",
+    door_link_invalid: "Este link de puerta ya no es válido. Pide uno nuevo al organizador.",
+    event_not_found: "No encontramos ese evento.",
+    sale_not_found: "No encontramos esa venta.",
+    ticket_type_not_found: "Ese tipo de entrada no existe.",
+    forbidden: "No tienes acceso a esta venta.",
+    invalid_json: "No pudimos leer tu solicitud. Intenta de nuevo.",
+    missing_code: "Falta el código de la entrada.",
+    invalid_date: "La fecha no es válida.",
+    name_required: "El nombre es obligatorio.",
+    place_required: "El lugar es obligatorio.",
+    event_date_past: "La fecha del evento ya pasó. Elige una fecha futura.",
+    missing_event_id: "Falta indicar el evento.",
+    missing_idempotency_key: "Falta un dato de la solicitud. Recarga la página e intenta de nuevo.",
+    sale_closed: "La venta de este evento ya cerró.",
+    sold_out: "Este evento está agotado.",
+    key_taken: "Esa reserva ya se usó. Recarga la página e intenta de nuevo.",
+    reference_generation_failed: "No se pudo generar tu reserva. Intenta de nuevo.",
+    no_payment: "Todavía no vemos ese pago en la red.",
+    tx_failed:
+      "La red de Stellar rechazó la transacción, así que no se te cobró. Puedes intentar de nuevo.",
+    settle_retry:
+      "Tu pago está confirmado en la red, pero no pudimos registrarlo en este momento. Vuelve a intentar en unos segundos: no se te va a cobrar de nuevo.",
+    capacity_limit: "Ya usaste las 2 ampliaciones de cupo de este tipo de entrada.",
+    capacity_lower: "El cupo nuevo tiene que ser mayor al actual.",
+    not_found: "Ese tipo de entrada ya no existe.",
+    rate_limited: "Demasiados intentos seguidos. Espera un momento y vuelve a intentar.",
+    payment_mismatch: "El pago no coincide con esta venta (destinatario, monto o referencia).",
+    horizon_unreachable: "No pudimos consultar la red de Stellar. Intenta de nuevo en un momento.",
+    sale_unclaimed:
+      "Tu pago llegó, pero la reserva ya había expirado. Contacta al organizador con el comprobante de la transacción.",
+    sale_invalid_state: "Esta venta no está en un estado válido.",
+    sale_not_unclaimed: "Esta venta no tiene un pago pendiente de devolución.",
+    types_required: "Falta al menos un tipo de entrada.",
+    types_too_many: "Tienes demasiados tipos de entrada.",
+    type_name: "Cada tipo de entrada necesita un nombre.",
+    type_duplicate: "Hay dos tipos de entrada con el mismo nombre.",
+    type_price: "El precio de un tipo de entrada no es válido.",
+    type_capacity: "El cupo de un tipo de entrada no es válido.",
+  },
 };
 
 /** Shape every other locale must fill in (no `as const`: values are plain strings). */

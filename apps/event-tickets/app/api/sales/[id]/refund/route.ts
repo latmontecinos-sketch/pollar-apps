@@ -35,11 +35,16 @@ async function loadSale(id: string): Promise<SaleRow | null> {
 export async function GET(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const sale = await loadSale(id);
-  if (!sale) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!sale) {
+    return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
+  }
   const auth = requireAddress(request, sale.organizer_pollar_id);
   if (!auth.ok) return auth.response;
   if (sale.status !== "unclaimed") {
-    return NextResponse.json({ error: "Esta venta no tiene un pago para devolver" }, { status: 409 });
+    return NextResponse.json(
+      { error: "Esta venta no tiene un pago para devolver", code: "sale_not_unclaimed" },
+      { status: 409 }
+    );
   }
   return NextResponse.json({
     destination: sale.buyer_pollar_id,
@@ -58,7 +63,9 @@ export async function GET(request: Request, ctx: Ctx) {
 export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const sale = await loadSale(id);
-  if (!sale) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!sale) {
+    return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
+  }
   const auth = requireAddress(request, sale.organizer_pollar_id);
   if (!auth.ok) return auth.response;
 
@@ -71,7 +78,10 @@ export async function POST(request: Request, ctx: Ctx) {
     return NextResponse.json({ status: "refunded", refundTxHash: sale.refund_tx_hash });
   }
   if (sale.status !== "unclaimed") {
-    return NextResponse.json({ error: "Esta venta no tiene un pago para devolver" }, { status: 409 });
+    return NextResponse.json(
+      { error: "Esta venta no tiene un pago para devolver", code: "sale_not_unclaimed" },
+      { status: 409 }
+    );
   }
 
   let body: { hash?: string } = {};
@@ -85,7 +95,10 @@ export async function POST(request: Request, ctx: Ctx) {
   if (!hash) {
     const found = await findPaymentHashByMemo({ account: sale.buyer_pollar_id, memo });
     if (found === undefined) {
-      return NextResponse.json({ error: "No pudimos consultar la red de Stellar." }, { status: 503 });
+      return NextResponse.json(
+        { error: "No pudimos consultar la red de Stellar.", code: "horizon_unreachable" },
+        { status: 503 }
+      );
     }
     if (found === null) {
       return NextResponse.json(
@@ -105,7 +118,9 @@ export async function POST(request: Request, ctx: Ctx) {
   });
   if (!check.ok) {
     const status = check.code === "mismatch" ? 400 : check.code === "failed" ? 422 : 503;
-    return NextResponse.json({ error: check.error }, { status });
+    const code =
+      check.code === "mismatch" ? "payment_mismatch" : check.code === "failed" ? "tx_failed" : "horizon_unreachable";
+    return NextResponse.json({ error: check.error, code }, { status });
   }
 
   await markRefunded(sale.id, hash);

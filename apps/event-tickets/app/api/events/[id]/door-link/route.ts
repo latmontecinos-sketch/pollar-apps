@@ -19,7 +19,9 @@ async function organizerOf(id: string): Promise<string | null> {
 export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const organizer = await organizerOf(id);
-  if (!organizer) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!organizer) {
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
+  }
   const auth = requireAddress(request, organizer);
   if (!auth.ok) return auth.response;
 
@@ -35,7 +37,9 @@ export async function POST(request: Request, ctx: Ctx) {
 export async function DELETE(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const organizer = await organizerOf(id);
-  if (!organizer) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!organizer) {
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
+  }
   const auth = requireAddress(request, organizer);
   if (!auth.ok) return auth.response;
 

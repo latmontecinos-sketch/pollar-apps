@@ -26,10 +26,13 @@ export async function POST(request: Request, ctx: Ctx) {
     args: [id],
   });
   if (result.rows.length === 0) {
-    return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
   }
   if (String(result.rows[0].buyer_pollar_id) !== auth.address) {
-    return NextResponse.json({ error: "No tienes acceso a esta venta" }, { status: 403 });
+    return NextResponse.json(
+      { error: "No tienes acceso a esta venta", code: "forbidden" },
+      { status: 403 }
+    );
   }
 
   const { expired } = await expireSale(id);

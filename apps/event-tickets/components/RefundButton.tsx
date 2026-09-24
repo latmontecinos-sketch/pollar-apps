@@ -7,6 +7,7 @@ import { useBalance } from "@/hooks/useBalance";
 import { pollarFetch } from "@/lib/auth-client";
 import { formatAmount, shortAddress } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
+import { apiErrorMessage } from "@/lib/i18n/errors";
 import { paymentAssetFrom } from "@/lib/payments";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
@@ -51,8 +52,8 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
       user.address,
       `/api/sales/${saleId}/refund`
     );
-    const data = (await res.json()) as RefundPlan & { error?: string };
-    if (!res.ok) return setState({ step: "error", message: data.error ?? t.refund.errorPrepare });
+    const data = (await res.json()) as RefundPlan & { error?: string; code?: string };
+    if (!res.ok) return setState({ step: "error", message: apiErrorMessage(t, data, t.refund.errorPrepare) });
     setState({ step: "confirm", plan: data });
   }
 
@@ -65,7 +66,7 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
       `/api/sales/${saleId}/refund`,
       { method: "POST", body: JSON.stringify({ hash }) }
     );
-    const data = (await res.json()) as { status?: string; error?: string };
+    const data = (await res.json()) as { status?: string; error?: string; code?: string };
     if (res.ok && data.status === "refunded") {
       setState({ step: "done" });
       onRefunded();
@@ -73,9 +74,7 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
     }
     setState({
       step: "unverified",
-      message:
-        data.error ??
-        t.refund.errorNotSeen,
+      message: apiErrorMessage(t, data, t.refund.errorNotSeen),
     });
   }
 

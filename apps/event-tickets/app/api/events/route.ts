@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Partial<CreateEventBody>;
   } catch {
-    return badRequest("JSON inválido");
+    return badRequest("JSON inválido", "invalid_json");
   }
 
   // Capped like the two organizer fields below, which already were. See
@@ -56,13 +56,13 @@ export async function POST(request: Request) {
   const organizerContact = (body.organizerContact?.trim() ?? "").slice(0, 120);
   const datetimeUtc = body.datetimeUtc ?? "";
 
-  if (!name) return badRequest("El nombre es obligatorio");
-  if (!place) return badRequest("El lugar es obligatorio");
+  if (!name) return badRequest("El nombre es obligatorio", "name_required");
+  if (!place) return badRequest("El lugar es obligatorio", "place_required");
   if (!datetimeUtc || Number.isNaN(new Date(datetimeUtc).getTime())) {
-    return badRequest("La fecha no es válida");
+    return badRequest("La fecha no es válida", "invalid_date");
   }
   if (new Date(datetimeUtc).getTime() < Date.now()) {
-    return badRequest("La fecha del evento ya pasó — elige una fecha futura");
+    return badRequest("La fecha del evento ya pasó — elige una fecha futura", "event_date_past");
   }
 
   let ticketTypes: TicketTypeInput[];

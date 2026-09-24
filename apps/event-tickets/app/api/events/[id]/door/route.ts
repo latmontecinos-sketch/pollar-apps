@@ -62,7 +62,9 @@ async function notifyBuyer(saleId: string, eventName: string): Promise<void> {
 export async function GET(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const event = await loadEvent(id);
-  if (!event) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!event) {
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
+  }
 
   const access = requireDoorAccess(request, event);
   if (!access.ok) return access.response;
@@ -83,7 +85,9 @@ export async function GET(request: Request, ctx: Ctx) {
 export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const event = await loadEvent(id);
-  if (!event) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!event) {
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
+  }
 
   const access = requireDoorAccess(request, event);
   if (!access.ok) return access.response;
@@ -97,10 +101,12 @@ export async function POST(request: Request, ctx: Ctx) {
   try {
     body = (await request.json()) as { code?: string };
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    return NextResponse.json({ error: "JSON inválido", code: "invalid_json" }, { status: 400 });
   }
   const code = body.code?.trim() ?? "";
-  if (!code) return NextResponse.json({ error: "Falta el código" }, { status: 400 });
+  if (!code) {
+    return NextResponse.json({ error: "Falta el código", code: "missing_code" }, { status: 400 });
+  }
 
   const result = await validateAtDoor(id, code, access.actor);
   switch (result.result) {

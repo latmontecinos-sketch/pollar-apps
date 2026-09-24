@@ -5,6 +5,7 @@ import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { useT } from "@/lib/i18n/client";
+import { apiErrorMessage } from "@/lib/i18n/errors";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -45,8 +46,8 @@ export function DoorStaffCard({
     setError(null);
     try {
       const res = await pollarFetch(getClient(), user.address, `/api/events/${eventId}/door-link`, { method });
-      const data = (await res.json()) as { doorToken?: string | null; error?: string };
-      if (!res.ok) throw new Error(data.error ?? t.staff.error);
+      const data = (await res.json()) as { doorToken?: string | null; error?: string; code?: string };
+      if (!res.ok) throw new Error(apiErrorMessage(t, data, t.staff.error));
       setToken(data.doorToken ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.staff.error);

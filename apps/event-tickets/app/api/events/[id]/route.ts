@@ -76,7 +76,9 @@ export async function GET(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   await dbReady();
   const event = await loadEvent(id);
-  if (!event) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!event) {
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
+  }
 
   const auth = requireAddress(request, event.organizer_pollar_id);
   if (!auth.ok) return auth.response;
@@ -101,7 +103,9 @@ export async function PATCH(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   await dbReady();
   const event = await loadEvent(id);
-  if (!event) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!event) {
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
+  }
 
   const auth = requireAddress(request, event.organizer_pollar_id);
   if (!auth.ok) return auth.response;
@@ -115,7 +119,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
   try {
     body = (await request.json()) as PatchBody;
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    return NextResponse.json({ error: "JSON inválido", code: "invalid_json" }, { status: 400 });
   }
 
   if (body.capacity !== undefined && body.ticketTypeId) {
@@ -149,7 +153,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
   if (body.datetimeUtc) {
     const parsed = new Date(body.datetimeUtc);
     if (Number.isNaN(parsed.getTime())) {
-      return NextResponse.json({ error: "La fecha no es válida" }, { status: 400 });
+      return NextResponse.json({ error: "La fecha no es válida", code: "invalid_date" }, { status: 400 });
     }
     datetimeUtc = parsed.toISOString();
   }

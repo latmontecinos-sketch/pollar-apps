@@ -37,9 +37,14 @@ export async function GET(request: Request, ctx: Ctx) {
 
   await dbReady();
   const sale = await loadSale(id);
-  if (!sale) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  if (!sale) {
+    return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
+  }
   if (auth.address !== sale.buyer_pollar_id && auth.address !== sale.organizer_pollar_id) {
-    return NextResponse.json({ error: "No tienes acceso a esta venta" }, { status: 403 });
+    return NextResponse.json(
+      { error: "No tienes acceso a esta venta", code: "forbidden" },
+      { status: 403 }
+    );
   }
 
   let ticket: TicketRow | null = null;

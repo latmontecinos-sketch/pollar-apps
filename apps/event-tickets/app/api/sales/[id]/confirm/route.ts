@@ -54,18 +54,21 @@ export async function POST(request: Request, ctx: Ctx) {
     args: [id],
   });
   if (result.rows.length === 0) {
-    return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
   }
   const sale = result.rows[0] as unknown as SaleRow;
   if (auth.address !== sale.buyer_pollar_id) {
-    return NextResponse.json({ error: "No tienes acceso a esta venta" }, { status: 403 });
+    return NextResponse.json(
+      { error: "No tienes acceso a esta venta", code: "forbidden" },
+      { status: 403 }
+    );
   }
 
   let body: { hash?: string; email?: string; locale?: string };
   try {
     body = (await request.json()) as { hash?: string; email?: string; locale?: string };
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    return NextResponse.json({ error: "JSON inválido", code: "invalid_json" }, { status: 400 });
   }
   // An unvalidated address goes straight into our Resend "to" and into the
   // database forever; anything that isn't a mailbox is simply dropped, and
@@ -90,7 +93,10 @@ export async function POST(request: Request, ctx: Ctx) {
     });
     if (found === undefined) {
       return NextResponse.json(
-        { error: "No pudimos consultar la red de Stellar. Intenta de nuevo en un momento." },
+        {
+          error: "No pudimos consultar la red de Stellar. Intenta de nuevo en un momento.",
+          code: "horizon_unreachable",
+        },
         { status: 503 }
       );
     }
@@ -130,7 +136,8 @@ export async function POST(request: Request, ctx: Ctx) {
       });
     }
     const status = check.code === "mismatch" ? 400 : 503;
-    return NextResponse.json({ error: check.error }, { status });
+    const code = check.code === "mismatch" ? "payment_mismatch" : "horizon_unreachable";
+    return NextResponse.json({ error: check.error, code }, { status });
   }
 
   // The payment is verified on-chain by this point: the money is gone and
@@ -201,10 +208,14 @@ export async function POST(request: Request, ctx: Ctx) {
           status: "unclaimed",
           error:
             "El pago llegó, pero la reserva ya había expirado. Contacta al organizador con el comprobante de la transacción.",
+          code: "sale_unclaimed",
         },
         { status: 409 }
       );
     case "no_match":
-      return NextResponse.json({ error: "La venta no está en un estado válido" }, { status: 409 });
+      return NextResponse.json(
+        { error: "La venta no está en un estado válido", code: "sale_invalid_state" },
+        { status: 409 }
+      );
   }
 }

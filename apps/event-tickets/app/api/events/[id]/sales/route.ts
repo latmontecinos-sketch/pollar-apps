@@ -31,7 +31,7 @@ export async function GET(request: Request, ctx: Ctx) {
     args: [id],
   });
   if (eventResult.rows.length === 0) {
-    return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
   }
   const event = eventResult.rows[0] as unknown as EventRow;
 

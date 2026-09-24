@@ -39,14 +39,19 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as CreateSaleBody;
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    return NextResponse.json({ error: "JSON inválido", code: "invalid_json" }, { status: 400 });
   }
 
   const eventId = body.eventId?.trim() ?? "";
   const idempotencyKey = body.idempotencyKey?.trim() ?? "";
-  if (!eventId) return NextResponse.json({ error: "Falta eventId" }, { status: 400 });
+  if (!eventId) {
+    return NextResponse.json({ error: "Falta eventId", code: "missing_event_id" }, { status: 400 });
+  }
   if (!idempotencyKey) {
-    return NextResponse.json({ error: "Falta idempotencyKey" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Falta idempotencyKey", code: "missing_idempotency_key" },
+      { status: 400 }
+    );
   }
 
   await dbReady();
@@ -55,11 +60,14 @@ export async function POST(request: Request) {
     args: [eventId],
   });
   if (eventResult.rows.length === 0) {
-    return NextResponse.json({ error: "Evento no encontrado" }, { status: 404 });
+    return NextResponse.json({ error: "Evento no encontrado", code: "event_not_found" }, { status: 404 });
   }
   const event = eventResult.rows[0] as unknown as EventRow;
   if (salesClosed(event.datetime_utc)) {
-    return NextResponse.json({ error: "La venta de este evento ya cerró" }, { status: 409 });
+    return NextResponse.json(
+      { error: "La venta de este evento ya cerró", code: "sale_closed" },
+      { status: 409 }
+    );
   }
 
   // The tier decides the price — never a number the client sends.
@@ -68,7 +76,10 @@ export async function POST(request: Request) {
     ? types.find((type) => type.id === body.ticketTypeId)
     : types[0];
   if (!ticketType) {
-    return NextResponse.json({ error: "Tipo de entrada no encontrado" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Tipo de entrada no encontrado", code: "ticket_type_not_found" },
+      { status: 404 }
+    );
   }
   const amountStroops = decimalToStroops(ticketType.priceDecimal);
 
@@ -97,7 +108,10 @@ export async function POST(request: Request) {
     }
   }
   if (!result) {
-    return NextResponse.json({ error: "No se pudo generar una referencia única" }, { status: 500 });
+    return NextResponse.json(
+      { error: "No se pudo generar una referencia única", code: "reference_generation_failed" },
+      { status: 500 }
+    );
   }
   if (!result.ok) {
     return result.reason === "key_taken"
@@ -105,7 +119,7 @@ export async function POST(request: Request) {
           { error: "Esa reserva ya se usó. Recarga la página e intenta de nuevo.", code: "key_taken" },
           { status: 409 }
         )
-      : NextResponse.json({ error: "Evento agotado" }, { status: 409 });
+      : NextResponse.json({ error: "Evento agotado", code: "sold_out" }, { status: 409 });
   }
 
   return NextResponse.json(

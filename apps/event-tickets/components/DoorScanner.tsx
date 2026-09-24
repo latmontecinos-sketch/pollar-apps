@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import QrScanner from "qr-scanner";
 import { formatEventDateTime, formatTimestamp } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
+import { apiErrorMessage } from "@/lib/i18n/errors";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -13,7 +14,7 @@ type CheckResult =
   | { result: "VALID"; doorCode: string }
   | { result: "USED"; usedAt?: string }
   | { result: "UNKNOWN" }
-  | { error: string };
+  | { error: string; code?: string };
 
 type Feedback = { kind: "VALID" | "USED" | "UNKNOWN" | "ERROR"; title: string; detail: string };
 
@@ -79,14 +80,16 @@ export function DoorScanner({
     (async () => {
       const res = await fetchRef.current(`/api/events/${eventId}/door`);
       if (cancelled) return;
-      const data = (await res.json()) as EventSummary & { error?: string };
-      if (res.status === 401 || res.status === 403) return deniedRef.current(data.error ?? "");
+      const data = (await res.json()) as EventSummary & { error?: string; code?: string };
+      if (res.status === 401 || res.status === 403) {
+        return deniedRef.current(apiErrorMessage(t, data, data.error ?? ""));
+      }
       if (res.ok) setEvent(data);
     })();
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [eventId, t]);
 
   function show(next: Feedback) {
     setFeedback(next);
@@ -129,11 +132,11 @@ export function DoorScanner({
       });
       const data = (await res.json()) as CheckResult;
       if (res.status === 401 || res.status === 403) {
-        deniedRef.current("error" in data ? data.error : "");
+        deniedRef.current("error" in data ? apiErrorMessage(t, data, data.error) : "");
         return;
       }
       if ("error" in data) {
-        show({ kind: "ERROR", title: t.door.errorTitle, detail: data.error });
+        show({ kind: "ERROR", title: t.door.errorTitle, detail: apiErrorMessage(t, data, data.error) });
       } else if (data.result === "VALID") {
         // Stays on screen until someone decides; no auto-clear here.
         setReviewNow({ code, doorCode: data.doorCode });
@@ -180,9 +183,9 @@ export function DoorScanner({
         | { result: "VALID"; checkedIn?: number }
         | { result: "USED"; usedAt?: string }
         | { result: "UNKNOWN" }
-        | { error: string };
+        | { error: string; code?: string };
       if ("error" in data) {
-        show({ kind: "ERROR", title: t.door.errorTitle, detail: data.error });
+        show({ kind: "ERROR", title: t.door.errorTitle, detail: apiErrorMessage(t, data, data.error) });
       } else if (data.result === "VALID") {
         if (typeof data.checkedIn === "number") {
           const checkedIn = data.checkedIn;

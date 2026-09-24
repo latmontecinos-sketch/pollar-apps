@@ -13,6 +13,7 @@ import {
   utcIsoToLaPazLocal,
 } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
+import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { AppHeader } from "@/components/AppHeader";
 import { DoorStaffCard } from "@/components/DoorStaffCard";
@@ -202,9 +203,9 @@ export default function OrganizerEventPage({
         organizerContact: form.organizerContact,
         datetimeUtc: form.datetimeLocal ? laPazLocalToUtcIso(form.datetimeLocal) : undefined,
       });
-      const data = (await res.json()) as EventDetails & { error?: string };
+      const data = (await res.json()) as EventDetails & { error?: string; code?: string };
       if (!res.ok) {
-        setSaveError(data.error ?? t.panel.saveError);
+        setSaveError(apiErrorMessage(t, data, t.panel.saveError));
         return;
       }
       setState({ step: "loaded", event: data });
@@ -228,7 +229,9 @@ export default function OrganizerEventPage({
       const res = await patch({ ticketTypeId: type.id, capacity: wanted });
       const data = (await res.json()) as EventDetails & { error?: string; code?: string };
       if (!res.ok) {
-        setCapacityError(data.code === "capacity_limit" ? t.capacity.errorLimit : (data.error ?? t.panel.saveError));
+        setCapacityError(
+          data.code === "capacity_limit" ? t.capacity.errorLimit : apiErrorMessage(t, data, t.panel.saveError)
+        );
         return;
       }
       setState({ step: "loaded", event: data });

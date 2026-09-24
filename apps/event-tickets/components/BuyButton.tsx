@@ -11,6 +11,7 @@ import { creditAsset } from "@/lib/payments";
 import { USDC_CODE } from "@/lib/network";
 import { formatAmount } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
+import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
@@ -163,12 +164,12 @@ export function BuyButton({
       }
       if (res.status === 409 && data.status === "unclaimed") {
         writeInFlight(flightKey, null);
-        setState({ step: "unclaimed", message: data.error ?? t.buy.errorExpired });
+        setState({ step: "unclaimed", message: apiErrorMessage(t, data, t.buy.errorExpired) });
         return;
       }
       if (res.status === 422 && data.code === "tx_failed") {
         writeInFlight(flightKey, null);
-        setState({ step: "error", message: data.error ?? t.buy.errorTxFailed });
+        setState({ step: "error", message: apiErrorMessage(t, data, t.buy.errorTxFailed) });
         return;
       }
       if (res.status === 404 && data.code === "no_payment" && opts.fromReload && !inFlight.hash) {
@@ -181,7 +182,7 @@ export function BuyButton({
         await sleep(1500 * attempt);
         continue;
       }
-      setState({ step: "unverified", message: data.error ?? t.buy.errorVerify });
+      setState({ step: "unverified", message: apiErrorMessage(t, data, t.buy.errorVerify) });
       return;
     }
     setState({ step: "unverified", message: t.buy.errorNetworkLag });
@@ -256,9 +257,9 @@ export function BuyButton({
         method: "POST",
         body: JSON.stringify({ eventId, ticketTypeId, idempotencyKey: crypto.randomUUID() }),
       });
-      const created = (await createRes.json()) as Sale & { error?: string };
+      const created = (await createRes.json()) as Sale & { error?: string; code?: string };
       if (!createRes.ok) {
-        setState({ step: "error", message: created.error ?? t.buy.errorReserve });
+        setState({ step: "error", message: apiErrorMessage(t, created, t.buy.errorReserve) });
         return;
       }
       sale = created;

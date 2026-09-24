@@ -14,6 +14,7 @@ import {
   utcIsoToLaPazLocal,
 } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
+import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { MAX_TICKET_TYPES } from "@/lib/ticket-limits";
 import { AppHeader } from "@/components/AppHeader";
@@ -145,10 +146,10 @@ export default function CreateEventPage() {
           })),
         }),
       });
-      const data = (await res.json()) as { id?: string; error?: string };
+      const data = (await res.json()) as { id?: string; error?: string; code?: string };
       if (!res.ok || !data.id) {
         setPreview(false);
-        setError(data.error ?? t.create.errorGeneric);
+        setError(apiErrorMessage(t, data, t.create.errorGeneric));
         return;
       }
       router.push(`/organizador/eventos/${data.id}?nuevo=1`);

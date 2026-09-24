@@ -23,7 +23,7 @@ export async function POST(request: Request, ctx: Ctx) {
     args: [eventId],
   });
   if (eventRow.rows.length === 0) {
-    return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
   }
 
   const auth = requireAddress(request, String(eventRow.rows[0].organizer_pollar_id));

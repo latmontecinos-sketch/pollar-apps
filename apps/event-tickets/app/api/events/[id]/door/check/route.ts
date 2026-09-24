@@ -28,7 +28,7 @@ export async function POST(request: Request, ctx: Ctx) {
     args: [id],
   });
   if (eventResult.rows.length === 0) {
-    return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
   }
 
   const access = requireDoorAccess(request, eventResult.rows[0] as unknown as EventRow);
@@ -43,10 +43,12 @@ export async function POST(request: Request, ctx: Ctx) {
   try {
     body = (await request.json()) as { code?: string };
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+    return NextResponse.json({ error: "JSON inválido", code: "invalid_json" }, { status: 400 });
   }
   const code = body.code?.trim() ?? "";
-  if (!code) return NextResponse.json({ error: "Falta el código" }, { status: 400 });
+  if (!code) {
+    return NextResponse.json({ error: "Falta el código", code: "missing_code" }, { status: 400 });
+  }
 
   const result = await peekAtDoor(id, code);
   switch (result.result) {
