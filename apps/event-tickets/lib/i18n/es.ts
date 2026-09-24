@@ -142,6 +142,26 @@ export const es = {
     createTileBody: "Publica tu evento y empieza a vender",
     firstTimeStrong: "¿Primera vez?",
     firstTimeBody: "Mira cómo funciona Pollar Pass, paso a paso.",
+    greeting: "Hola de nuevo",
+    balanceLabel: "Saldo disponible",
+    activeTicketsLabel: "Entradas activas",
+  },
+  nav: {
+    label: "Navegación principal",
+    home: "Inicio",
+    tickets: "Entradas",
+    scan: "Escanear",
+    events: "Eventos",
+    create: "Crear",
+  },
+  welcome: {
+    title: "Regalo de bienvenida",
+    body: (amount: string, asset: string) =>
+      `Te regalamos ${amount} ${asset} para tu primera entrada. Una sola vez por cuenta.`,
+    claim: (amount: string, asset: string) => `Reclamar ${amount} ${asset}`,
+    claimed: (amount: string, asset: string) => `¡Listo! Recibiste ${amount} ${asset}.`,
+    exhausted: "Los regalos de bienvenida se agotaron por ahora. Vuelve a intentarlo más tarde.",
+    error: "No pudimos entregarte el regalo en este momento. Intenta de nuevo en un rato.",
   },
   guide: {
     title: "Cómo funciona",
@@ -319,6 +339,11 @@ export const es = {
   },
   tickets: {
     title: "Mis entradas",
+    filterUpcoming: "Próximas",
+    filterPast: "Pasadas",
+    statActive: "Activas",
+    statUsed: "Usadas",
+    emptyFilter: "No hay entradas en esta lista.",
     loginNote: "Ingresa para ver las entradas que compraste.",
     loadError: "No se pudieron cargar tus entradas. Recarga la página.",
     emptyTitle: "Todavía no tienes entradas",

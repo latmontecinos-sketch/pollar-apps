@@ -136,6 +136,26 @@ export const en: Dict = {
     createTileBody: "Publish your event and start selling",
     firstTimeStrong: "First time here?",
     firstTimeBody: "See how Pollar Pass works, step by step.",
+    greeting: "Welcome back",
+    balanceLabel: "Available balance",
+    activeTicketsLabel: "Active tickets",
+  },
+  nav: {
+    label: "Main navigation",
+    home: "Home",
+    tickets: "Tickets",
+    scan: "Scan",
+    events: "Events",
+    create: "Create",
+  },
+  welcome: {
+    title: "Welcome gift",
+    body: (amount: string, asset: string) =>
+      `Here's ${amount} ${asset} on us for your first ticket. Once per account.`,
+    claim: (amount: string, asset: string) => `Claim ${amount} ${asset}`,
+    claimed: (amount: string, asset: string) => `Done! You received ${amount} ${asset}.`,
+    exhausted: "Welcome gifts have run out for now. Try again later.",
+    error: "We couldn't send your gift right now. Try again in a bit.",
   },
   guide: {
     title: "How it works",
@@ -313,6 +333,11 @@ export const en: Dict = {
   },
   tickets: {
     title: "My tickets",
+    filterUpcoming: "Upcoming",
+    filterPast: "Past",
+    statActive: "Active",
+    statUsed: "Used",
+    emptyFilter: "No tickets in this list.",
     loginNote: "Sign in to see the tickets you've bought.",
     loadError: "We couldn't load your tickets. Reload the page.",
     emptyTitle: "No tickets yet",

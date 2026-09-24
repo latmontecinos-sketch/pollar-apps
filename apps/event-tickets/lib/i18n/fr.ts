@@ -136,6 +136,26 @@ export const fr: Dict = {
     createTileBody: "Publiez votre événement et commencez à vendre",
     firstTimeStrong: "C'est votre première fois ?",
     firstTimeBody: "Découvrez comment fonctionne Pollar Pass, étape par étape.",
+    greeting: "Bon retour",
+    balanceLabel: "Solde disponible",
+    activeTicketsLabel: "Billets actifs",
+  },
+  nav: {
+    label: "Navigation principale",
+    home: "Accueil",
+    tickets: "Billets",
+    scan: "Scanner",
+    events: "Événements",
+    create: "Créer",
+  },
+  welcome: {
+    title: "Cadeau de bienvenue",
+    body: (amount: string, asset: string) =>
+      `Nous vous offrons ${amount} ${asset} pour votre premier billet. Une seule fois par compte.`,
+    claim: (amount: string, asset: string) => `Réclamer ${amount} ${asset}`,
+    claimed: (amount: string, asset: string) => `C'est fait ! Vous avez reçu ${amount} ${asset}.`,
+    exhausted: "Les cadeaux de bienvenue sont épuisés pour le moment. Réessayez plus tard.",
+    error: "Impossible d'envoyer votre cadeau pour le moment. Réessayez dans un instant.",
   },
   guide: {
     title: "Comment ça marche",
@@ -315,6 +335,11 @@ export const fr: Dict = {
   },
   tickets: {
     title: "Mes billets",
+    filterUpcoming: "À venir",
+    filterPast: "Passés",
+    statActive: "Actifs",
+    statUsed: "Utilisés",
+    emptyFilter: "Aucun billet dans cette liste.",
     loginNote: "Connectez-vous pour voir les billets que vous avez achetés.",
     loadError: "Impossible de charger vos billets. Rechargez la page.",
     emptyTitle: "Pas encore de billets",
