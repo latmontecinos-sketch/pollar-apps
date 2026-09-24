@@ -1,10 +1,27 @@
-import { db, dbReady } from "./db.ts";
+import type { Transaction } from "@libsql/client";
+import { db, dbReady, withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
 import { decimalToStroops, stroopsToDecimal } from "./money.ts";
 
-import { MAX_CAPACITY_INCREASES, MAX_TICKET_TYPES } from "./ticket-limits.ts";
+import {
+  MAX_CAPACITY,
+  MAX_CAPACITY_INCREASES,
+  MAX_DESCRIPTION_CHARS,
+  MAX_NAME_CHARS,
+  MAX_PRICE_USDC,
+  MAX_TICKET_TYPES,
+} from "./ticket-limits.ts";
 
-export { MAX_CAPACITY_INCREASES, MAX_TICKET_TYPES };
+export {
+  MAX_CAPACITY,
+  MAX_CAPACITY_INCREASES,
+  MAX_DESCRIPTION_CHARS,
+  MAX_NAME_CHARS,
+  MAX_PRICE_USDC,
+  MAX_TICKET_TYPES,
+};
+
+const MAX_PRICE_STROOPS = decimalToStroops(String(MAX_PRICE_USDC));
 
 export type TicketTypeInput = { name: string; priceDecimal: string; capacity: number };
 
@@ -60,10 +77,25 @@ export function parseTicketTypes(raw: unknown): TicketTypeInput[] {
     if (priceStroops <= 0n) {
       throw new TicketTypeError("El precio debe ser mayor a 0", "type_price");
     }
+    // See MAX_PRICE_USDC: without a ceiling, a price with too many zeros is
+    // stored fine and then makes the entire event unreadable on every later
+    // SELECT, with no way back from inside the app.
+    if (priceStroops > MAX_PRICE_STROOPS) {
+      throw new TicketTypeError(
+        `El precio no puede pasar de ${MAX_PRICE_USDC.toLocaleString("es")} USDC`,
+        "type_price"
+      );
+    }
 
     const capacity = Number(candidate.capacity);
     if (!Number.isInteger(capacity) || capacity < 1) {
       throw new TicketTypeError("El cupo debe ser un entero mayor a 0", "type_capacity");
+    }
+    if (capacity > MAX_CAPACITY) {
+      throw new TicketTypeError(
+        `El cupo no puede pasar de ${MAX_CAPACITY.toLocaleString("es")} entradas`,
+        "type_capacity"
+      );
     }
     return { name, priceDecimal: stroopsToDecimal(priceStroops), capacity };
   });
@@ -140,23 +172,47 @@ export async function extendCapacity(
   ticketTypeId: string,
   capacity: number
 ): Promise<{ ok: true } | { ok: false; code: "capacity_lower" | "capacity_limit" | "not_found" }> {
-  await dbReady();
-  const current = await db.execute({
-    sql: "SELECT capacity, capacity_increases FROM ticket_types WHERE id = ? AND event_id = ?",
-    args: [ticketTypeId, eventId],
-  });
-  if (current.rows.length === 0) return { ok: false, code: "not_found" };
-  if (!Number.isInteger(capacity) || capacity <= Number(current.rows[0].capacity)) {
+  if (!Number.isInteger(capacity) || capacity < 1) {
     return { ok: false, code: "capacity_lower" };
   }
-  if (Number(current.rows[0].capacity_increases ?? 0) >= MAX_CAPACITY_INCREASES) {
-    return { ok: false, code: "capacity_limit" };
-  }
-  await db.execute({
-    sql: "UPDATE ticket_types SET capacity = ?, capacity_increases = capacity_increases + 1 WHERE id = ?",
-    args: [capacity, ticketTypeId],
+  if (capacity > MAX_CAPACITY) return { ok: false, code: "capacity_limit" };
+
+  return withTransaction(async (tx: Transaction) => {
+    /**
+     * Both rules live in the WHERE, and the UPDATE is the authority.
+     *
+     * This used to SELECT the current numbers, check them in JavaScript, then
+     * UPDATE — with nothing holding the row in between, and with
+     * `capacity_increases + 1` computed relative to the row rather than to
+     * the value that was checked. Two PATCHes racing (a double tap, a
+     * retried request) both read the same count, both passed the check, and
+     * both incremented: the "at most two increases" rule, which exists so an
+     * event can't keep inventing seats, could be walked straight past, and
+     * whichever request committed last silently decided the capacity.
+     */
+    const updated = await tx.execute({
+      sql: `UPDATE ticket_types
+            SET capacity = ?, capacity_increases = capacity_increases + 1
+            WHERE id = ? AND event_id = ?
+              AND capacity < ?
+              AND capacity_increases < ?
+            RETURNING capacity`,
+      args: [capacity, ticketTypeId, eventId, capacity, MAX_CAPACITY_INCREASES],
+    });
+    if (updated.rows.length > 0) return { ok: true };
+
+    // Nothing changed: read the row once to say *why*, inside the same
+    // transaction so the answer matches what the UPDATE just saw.
+    const current = await tx.execute({
+      sql: "SELECT capacity, capacity_increases FROM ticket_types WHERE id = ? AND event_id = ?",
+      args: [ticketTypeId, eventId],
+    });
+    if (current.rows.length === 0) return { ok: false, code: "not_found" };
+    if (Number(current.rows[0].capacity_increases ?? 0) >= MAX_CAPACITY_INCREASES) {
+      return { ok: false, code: "capacity_limit" };
+    }
+    return { ok: false, code: "capacity_lower" };
   });
-  return { ok: true };
 }
 
 /** What the event row shows as a summary: cheapest price and the seats across every tier. */

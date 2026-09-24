@@ -39,6 +39,13 @@ export async function DELETE(request: Request, ctx: Ctx) {
   const auth = requireAddress(request, organizer);
   if (!auth.ok) return auth.response;
 
+  // Same quota as issuing one: revoking is the other half of the same act,
+  // and this was the only organizer write on the app with no ceiling at all.
+  const limited = await enforce("doorLink", auth.address, {
+    actor: shortAddress(auth.address),
+  });
+  if (limited) return limited;
+
   await db.execute({ sql: "UPDATE events SET door_token = NULL WHERE id = ?", args: [id] });
   return NextResponse.json({ doorToken: null });
 }

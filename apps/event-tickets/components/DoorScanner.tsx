@@ -67,6 +67,8 @@ export function DoorScanner({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [review, setReview] = useState<Review | null>(null);
+  /** See setReviewNow: the scanner's callback can only trust a ref, not state. */
+  const reviewRef = useRef<Review | null>(null);
   const [approving, setApproving] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const [manualBusy, setManualBusy] = useState(false);
@@ -95,14 +97,30 @@ export function DoorScanner({
     clearTimer.current = setTimeout(() => setFeedback(null), FEEDBACK_MS);
   }
 
+  /**
+   * Both the ref and the state, always together.
+   *
+   * `check` runs inside the QrScanner callback, which is created once and
+   * therefore closes over the first render's `review` forever — so the guard
+   * that is supposed to hold the camera while someone decides was reading a
+   * value frozen at `null`. A ref fixes the staleness, but only if it's
+   * written synchronously: `setReview` followed by the `finally` block would
+   * still see the old ref, because React hasn't re-rendered yet. The ref is
+   * the authority for the guard; the state only drives the render.
+   */
+  function setReviewNow(next: Review | null) {
+    reviewRef.current = next;
+    setReview(next);
+  }
+
   function clearReview() {
-    setReview(null);
+    setReviewNow(null);
     busyRef.current = false;
   }
 
   /** Step 1: read the code without spending it. */
   async function check(code: string) {
-    if (busyRef.current || review) return;
+    if (busyRef.current || reviewRef.current) return;
     busyRef.current = true;
     try {
       const res = await fetchRef.current(`/api/events/${eventId}/door/check`, {
@@ -118,7 +136,7 @@ export function DoorScanner({
         show({ kind: "ERROR", title: t.door.errorTitle, detail: data.error });
       } else if (data.result === "VALID") {
         // Stays on screen until someone decides; no auto-clear here.
-        setReview({ code, doorCode: data.doorCode });
+        setReviewNow({ code, doorCode: data.doorCode });
         if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(60);
         return;
       } else if (data.result === "USED") {
@@ -139,7 +157,10 @@ export function DoorScanner({
         detail: err instanceof Error ? err.message : t.door.offlineDetail,
       });
     } finally {
-      if (!review) {
+      // The ref, not the state: at this point `setReviewNow` has run but React
+      // has not re-rendered, so `review` would still read as null and release
+      // the camera 1.5s later with a decision still pending on screen.
+      if (!reviewRef.current) {
         setTimeout(() => {
           busyRef.current = false;
         }, 1500);

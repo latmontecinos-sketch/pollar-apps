@@ -6,6 +6,8 @@ import { enforce } from "@/lib/rate-limit";
 import { shortAddress } from "@/lib/security-log";
 import {
   createTicketTypes,
+  MAX_DESCRIPTION_CHARS,
+  MAX_NAME_CHARS,
   parseTicketTypes,
   TicketTypeError,
   type TicketTypeInput,
@@ -44,9 +46,12 @@ export async function POST(request: Request) {
     return badRequest("JSON inválido");
   }
 
-  const name = body.name?.trim() ?? "";
-  const place = body.place?.trim() ?? "";
-  const description = body.description?.trim() ?? "";
+  // Capped like the two organizer fields below, which already were. See
+  // MAX_NAME_CHARS: `name` ends up inside the OpenGraph image, which any
+  // link preview renders without a session.
+  const name = (body.name?.trim() ?? "").slice(0, MAX_NAME_CHARS);
+  const place = (body.place?.trim() ?? "").slice(0, MAX_NAME_CHARS);
+  const description = (body.description?.trim() ?? "").slice(0, MAX_DESCRIPTION_CHARS);
   const organizerName = (body.organizerName?.trim() ?? "").slice(0, 80);
   const organizerContact = (body.organizerContact?.trim() ?? "").slice(0, 120);
   const datetimeUtc = body.datetimeUtc ?? "";

@@ -2,7 +2,16 @@ import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
-import { extendCapacity, listTicketTypes, summarize, type TicketType } from "@/lib/ticket-types";
+import { enforce } from "@/lib/rate-limit";
+import { shortAddress } from "@/lib/security-log";
+import {
+  extendCapacity,
+  listTicketTypes,
+  MAX_DESCRIPTION_CHARS,
+  MAX_NAME_CHARS,
+  summarize,
+  type TicketType,
+} from "@/lib/ticket-types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -97,6 +106,11 @@ export async function PATCH(request: Request, ctx: Ctx) {
   const auth = requireAddress(request, event.organizer_pollar_id);
   if (!auth.ok) return auth.response;
 
+  const limited = await enforce("editEvent", auth.address, {
+    actor: shortAddress(auth.address),
+  });
+  if (limited) return limited;
+
   let body: PatchBody;
   try {
     body = (await request.json()) as PatchBody;
@@ -121,9 +135,14 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
   }
 
-  const name = body.name?.trim() || event.name;
-  const description = body.description?.trim() ?? event.description;
-  const place = body.place?.trim() || event.place;
+  // Capped like organizerName/organizerContact below. See MAX_NAME_CHARS:
+  // the event name reaches a public, unauthenticated image renderer.
+  const name = (body.name?.trim() || event.name).slice(0, MAX_NAME_CHARS);
+  const description = (body.description?.trim() ?? event.description).slice(
+    0,
+    MAX_DESCRIPTION_CHARS
+  );
+  const place = (body.place?.trim() || event.place).slice(0, MAX_NAME_CHARS);
   const organizerName = (body.organizerName?.trim() ?? event.organizer_name).slice(0, 80);
   const organizerContact = (body.organizerContact?.trim() ?? event.organizer_contact).slice(0, 120);
   let datetimeUtc = event.datetime_utc;

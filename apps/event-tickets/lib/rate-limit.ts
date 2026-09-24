@@ -26,6 +26,13 @@ export const QUOTAS = {
   /** Each one can hit Horizon three times; the buy screen polls a handful of times. */
   confirmSale: { limit: 60, windowSeconds: 60 * 60 },
   refundSale: { limit: 30, windowSeconds: 60 * 60 },
+  /**
+   * Editing an event is normal; editing it hundreds of times an hour is a
+   * stuck client. Without a ceiling here, the fields that have no length
+   * limit could be rewritten in a loop, and the seat-extension rule had
+   * nothing slowing down an attempt to race it.
+   */
+  editEvent: { limit: 60, windowSeconds: 60 * 60 },
   /** Rotating a door link is a once-in-a-while act. */
   doorLink: { limit: 10, windowSeconds: 60 * 60 },
   /** Per event: a busy door scans fast, and a wrong scan is retried. */
