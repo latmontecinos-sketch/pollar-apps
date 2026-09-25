@@ -19,6 +19,23 @@ export function tierPrice(t: Dict, locale: Locale, priceDecimal: string): string
   return decimalToStroops(priceDecimal) === 0n ? t.tiers.free : `${formatAmount(priceDecimal, locale)} USDC`;
 }
 
+/**
+ * The price range an event advertises: over the tiers that still have a
+ * seat, so a sold-out free tier stops saying "Gratis" to people who can
+ * only buy the paid ones. When every tier is gone, over all of them — the
+ * page still says what it cost. Compared in stroops (rule 1).
+ */
+export function priceRange(
+  tiers: { priceDecimal: string; capacity: number; reserved: number }[]
+): { minDecimal: string; maxDecimal: string } {
+  const open = tiers.filter((tier) => tier.reserved < tier.capacity);
+  const prices = (open.length > 0 ? open : tiers).map((tier) => tier.priceDecimal);
+  if (prices.length === 0) return { minDecimal: "0", maxDecimal: "0" };
+  const pick = (better: (a: bigint, b: bigint) => boolean) =>
+    prices.reduce((a, b) => (better(decimalToStroops(a), decimalToStroops(b)) ? a : b));
+  return { minDecimal: pick((a, b) => a <= b), maxDecimal: pick((a, b) => a >= b) };
+}
+
 export function isFreePrice(priceDecimal: string): boolean {
   return decimalToStroops(priceDecimal) === 0n;
 }

@@ -19,12 +19,13 @@ import { HoldCountdown } from "@/components/HoldCountdown";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Icon, type IconName } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/Icon";
 import { IconTile } from "@/components/ui/ListRow";
 import { Segmented } from "@/components/ui/Segmented";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { Spinner } from "@/components/ui/Spinner";
+import { Stat } from "@/components/ui/Stat";
 import { SaveTicketButton } from "@/components/SaveTicketButton";
 import { tierPrice } from "@/lib/price-label";
 import { TicketQr } from "@/components/TicketQr";
@@ -49,16 +50,6 @@ type Filter = "upcoming" | "past";
 const byDate = (a: Sale, b: Sale) => a.event.datetimeUtc.localeCompare(b.event.datetimeUtc);
 
 /** One of the band's two light stat cards. */
-function Stat({ icon, label, value }: { icon: IconName; label: string; value: number }) {
-  return (
-    <div className="flex flex-col items-center gap-0.5 rounded-2xl bg-background px-3 py-3 text-foreground shadow-sm">
-      <Icon name={icon} size={20} className="text-primary-text" />
-      <span className="text-xs font-medium text-muted">{label}</span>
-      <span className="text-2xl font-bold tabular-nums">{value}</span>
-    </div>
-  );
-}
-
 export default function MisPasesPage() {
   const { user, isLoading: authLoading } = usePollarAuth();
   const t = useT();

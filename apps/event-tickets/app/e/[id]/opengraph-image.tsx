@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { db, dbReady } from "@/lib/db";
 import { loadEventImage } from "@/lib/event-image";
-import { formatAmount, formatEventDay, formatEventTime } from "@/lib/format";
+import { formatEventDay, formatEventTime } from "@/lib/format";
 import { getDict } from "@/lib/i18n/server";
-import { stroopsToDecimal } from "@/lib/money";
-import { listTicketTypes, summarize } from "@/lib/ticket-types";
+import { priceLabel, priceRange } from "@/lib/price-label";
+import { listTicketTypes } from "@/lib/ticket-types";
 
 /**
  * The picture WhatsApp/Telegram/etc. show next to a shared event link. With
@@ -37,9 +37,11 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     args: [id],
   });
   const event = result.rows[0] as unknown as Row | undefined;
-  // The cheapest tier, as the page's "Desde" says — not the event's legacy price column.
+  // The same phrase as the page's price pill ("Desde 0,05 USDC", "Gratis"), from
+  // the tiers — never "Desde 0,00 USDC", never the event's legacy price column.
   const types = event ? await listTicketTypes(id) : [];
-  const price = formatAmount(stroopsToDecimal(summarize(types).priceStroops), locale);
+  const range = priceRange(types);
+  const price = priceLabel(t, locale, range.minDecimal, range.maxDecimal);
   const photo = event ? await loadEventImage(id) : null;
   const logo = await readFile(join(process.cwd(), "public/pollar-logo-dark.svg"), "utf8");
   const logoSrc = `data:image/svg+xml;base64,${Buffer.from(logo).toString("base64")}`;
@@ -127,7 +129,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
                   borderRadius: 999,
                 }}
               >
-                {t.tiers.from(price)} · Pollar Pass
+                {price}
               </div>
             </div>
           )}

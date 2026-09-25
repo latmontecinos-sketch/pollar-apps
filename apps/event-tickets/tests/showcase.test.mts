@@ -124,6 +124,21 @@ test("each card carries its price range and the seats actually left", async () =
   assert.equal(card.imageVersion, null);
 });
 
+test("once the free tier is gone, the card stops saying Gratis", async () => {
+  const event = await newEvent({
+    tiers: [
+      { name: "Libre", priceDecimal: "0", capacity: 1 },
+      { name: "General", priceDecimal: "0.05", capacity: 5 },
+      { name: "Platea", priceDecimal: "0.1", capacity: 5 },
+    ],
+  });
+  await claim(event.eventId, event.types[0].id, "GBUYER_GONE");
+  const card = (await listPublicEvents()).find((row) => row.id === event.eventId);
+  assert.ok(card);
+  assert.equal(card.minPriceDecimal, "0.0500000", "the sold-out free tier no longer sets the floor");
+  assert.equal(card.maxPriceDecimal, "0.1000000");
+});
+
 test("the showcase query walks the (visibility, datetime_utc) index, not the table", async () => {
   // Its own connection: an EXPLAIN on the shared one leaves a read open that
   // the next write transaction then waits out as SQLITE_BUSY.

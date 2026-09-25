@@ -7,13 +7,24 @@ export type PublicEvent = {
   name: string;
   datetimeUtc: string;
   place: string;
-  /** Cheapest tier; "0.0000000" when some tier is free. */
+  /** Cheapest tier still on sale (lib/price-label.ts `priceRange`); "0.0000000" when it's free. */
   minPriceDecimal: string;
   maxPriceDecimal: string;
   /** Free seats across every tier right now (held checkouts count as taken). */
   seatsLeft: number;
   imageVersion: string | null;
 };
+
+/**
+ * An event's advertised price range as SQL, for listings that can't load
+ * every tier: the same rule as `priceRange` in lib/price-label.ts — over the
+ * tiers with a seat left, else over all of them. Expects the event as `e`.
+ */
+export const PRICE_RANGE_COLUMNS = `
+  COALESCE((SELECT MIN(t.price_stroops) FROM ticket_types t WHERE t.event_id = e.id AND t.reserved < t.capacity),
+           (SELECT MIN(t.price_stroops) FROM ticket_types t WHERE t.event_id = e.id)) AS min_price,
+  COALESCE((SELECT MAX(t.price_stroops) FROM ticket_types t WHERE t.event_id = e.id AND t.reserved < t.capacity),
+           (SELECT MAX(t.price_stroops) FROM ticket_types t WHERE t.event_id = e.id)) AS max_price`;
 
 /**
  * The app's showcase (/app): public events that haven't started, soonest
@@ -28,8 +39,7 @@ export async function listPublicEvents(limit = 40, now = new Date()): Promise<Pu
   await dbReady();
   const result = await db.execute({
     sql: `SELECT e.id, e.name, e.datetime_utc, e.place,
-                 (SELECT MIN(t.price_stroops) FROM ticket_types t WHERE t.event_id = e.id) AS min_price,
-                 (SELECT MAX(t.price_stroops) FROM ticket_types t WHERE t.event_id = e.id) AS max_price,
+                 ${PRICE_RANGE_COLUMNS},
                  (SELECT COALESCE(SUM(MAX(t.capacity - t.reserved, 0)), 0)
                     FROM ticket_types t WHERE t.event_id = e.id) AS seats_left,
                  i.version AS image_version

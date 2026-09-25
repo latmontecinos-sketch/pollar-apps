@@ -18,8 +18,7 @@ import { getDict } from "@/lib/i18n/server";
 import type { Dict } from "@/lib/i18n";
 import { sweepExpiredSales } from "@/lib/sales";
 import { listTicketTypes, summarize, type TicketType } from "@/lib/ticket-types";
-import { decimalToStroops } from "@/lib/money";
-import { isFreePrice, priceLabel } from "@/lib/price-label";
+import { isFreePrice, priceLabel, priceRange } from "@/lib/price-label";
 import { canView, normalizeAccessCode } from "@/lib/visibility";
 import { AppShell } from "@/components/AppShell";
 import { BuyButton } from "@/components/BuyButton";
@@ -82,8 +81,8 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
       openGraph: { title: t.meta.privateTitle, description: t.meta.privateDescription },
     };
   }
-  const prices = data.types.map((type) => type.priceDecimal);
-  const price = priceLabel(t, locale, minDecimal(prices), maxDecimal(prices));
+  const range = priceRange(data.types);
+  const price = priceLabel(t, locale, range.minDecimal, range.maxDecimal);
   const description = t.meta.eventDescription(
     data.event.name,
     formatEventDay(data.event.datetime_utc, locale),
@@ -97,14 +96,6 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
     openGraph: { title: data.event.name, description, type: "website" },
     twitter: { card: "summary_large_image", title: data.event.name, description },
   };
-}
-
-/** Cheapest and dearest tier, compared in stroops (rule 1 in CLAUDE.md: no Number() on money). */
-function minDecimal(values: string[]): string {
-  return values.reduce((a, b) => (decimalToStroops(a) <= decimalToStroops(b) ? a : b), values[0] ?? "0");
-}
-function maxDecimal(values: string[]): string {
-  return values.reduce((a, b) => (decimalToStroops(a) >= decimalToStroops(b) ? a : b), values[0] ?? "0");
 }
 
 /** A private event, asked for without its code (or with a wrong one). */
@@ -173,7 +164,7 @@ export default async function PublicEventPage({ params, searchParams }: PageProp
   if (!canView(event, offered)) return <AccessGate t={t} tried={offered !== ""} />;
   // Carried into the checkout and the photo URL, which check it again.
   const accessCode = event.visibility === "private" ? normalizeAccessCode(offered) : undefined;
-  const prices = types.map((type) => type.priceDecimal);
+  const range = priceRange(types);
 
   const closed = salesClosed(event.datetime_utc);
   const totals = summarize(types);
@@ -191,7 +182,7 @@ export default async function PublicEventPage({ params, searchParams }: PageProp
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <span className="w-fit rounded-full bg-background px-3 py-1 text-xs font-semibold text-primary-text shadow-sm">
-              {priceLabel(t, locale, minDecimal(prices), maxDecimal(prices))}
+              {priceLabel(t, locale, range.minDecimal, range.maxDecimal)}
             </span>
             <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight">{event.name}</h1>
           </div>

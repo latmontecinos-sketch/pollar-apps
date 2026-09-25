@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui/Icon";
+import { useAppMode } from "@/hooks/useAppMode";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
+import { modeForPath, type AppMode } from "@/lib/app-mode";
 import { useT } from "@/lib/i18n/client";
 import type { Dict } from "@/lib/i18n";
 
@@ -15,13 +18,19 @@ type Item = {
   also?: string[];
 };
 
-const ITEMS: Item[] = [
-  { href: "/app", icon: "home", label: "home" },
-  { href: "/mis-pases", icon: "ticket", label: "tickets" },
-  { href: "/escanear", icon: "scan", label: "scan" },
-  { href: "/mis-eventos", icon: "calendar", label: "events", also: ["/organizador/eventos"] },
-  { href: "/organizador/nuevo", icon: "plus", label: "create" },
-];
+/** Each mode's tabs (lib/app-mode.ts): a buyer never wades through the door scanner. */
+const ITEMS: Record<AppMode, Item[]> = {
+  explore: [
+    { href: "/app", icon: "home", label: "home" },
+    { href: "/mis-pases", icon: "ticket", label: "tickets" },
+  ],
+  organize: [
+    { href: "/app", icon: "home", label: "home" },
+    { href: "/mis-eventos", icon: "calendar", label: "events", also: ["/organizador/eventos"] },
+    { href: "/escanear", icon: "scan", label: "scan" },
+    { href: "/organizador/nuevo", icon: "plus", label: "create" },
+  ],
+};
 
 function isActive(pathname: string, item: Item): boolean {
   return [item.href, ...(item.also ?? [])].some(
@@ -29,20 +38,35 @@ function isActive(pathname: string, item: Item): boolean {
   );
 }
 
-/** The floating tab bar. Signed out there is nowhere to go yet, so it stays hidden. */
+/**
+ * The floating tab bar, with the tabs of the current mode. Signed out there
+ * is nowhere to go yet, and on the mode chooser nothing is chosen yet, so
+ * it stays hidden. A screen that belongs to one mode switches the app to it.
+ */
 export function BottomNav() {
   const { user } = usePollarAuth();
   const pathname = usePathname();
   const t = useT();
+  const [stored, setMode] = useAppMode();
+  const screenMode = modeForPath(pathname);
+
+  useEffect(() => {
+    if (user && screenMode && screenMode !== stored) setMode(screenMode);
+  }, [user, screenMode, stored, setMode]);
+
   if (!user) return null;
+  // Nothing chosen yet: the home shows the chooser, anywhere else (an event
+  // opened from a link) reads as looking for events.
+  const mode = screenMode ?? stored ?? (pathname === "/app" ? null : "explore");
+  if (!mode) return null;
 
   return (
     <nav
       aria-label={t.nav.label}
       className="bottom-nav fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="flex w-full max-w-md items-center justify-between rounded-t-[2rem] bg-nav px-4 pt-3 pb-3 shadow-[0_-10px_30px_-20px_var(--foreground)] lg:max-w-lg">
-        {ITEMS.map((item) => {
+      <ul className="flex w-full max-w-md items-center justify-around rounded-t-[2rem] bg-nav px-4 pt-3 pb-3 shadow-[0_-10px_30px_-20px_var(--foreground)] lg:max-w-lg">
+        {ITEMS[mode].map((item) => {
           const active = isActive(pathname, item);
           return (
             <li key={item.href}>
