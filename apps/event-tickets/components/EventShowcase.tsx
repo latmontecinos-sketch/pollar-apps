@@ -13,7 +13,18 @@ import type { PublicEvent } from "@/lib/public-events";
 const AUTO_ADVANCE_MS = 5000;
 const FEATURED = 6;
 
-function Poster({ event, sizes, priority = false }: { event: PublicEvent; sizes: string; priority?: boolean }) {
+function Poster({
+  event,
+  sizes,
+  priority = false,
+  eager = false,
+}: {
+  event: PublicEvent;
+  sizes: string;
+  priority?: boolean;
+  /** The slider's posters: offscreen until the next slide, but that's seconds away. */
+  eager?: boolean;
+}) {
   return event.imageVersion ? (
     <Image
       src={eventImagePath(event.id, event.imageVersion)}
@@ -21,6 +32,7 @@ function Poster({ event, sizes, priority = false }: { event: PublicEvent; sizes:
       fill
       sizes={sizes}
       priority={priority}
+      loading={priority ? undefined : eager ? "eager" : "lazy"}
       unoptimized
       className="object-cover"
     />
@@ -155,7 +167,7 @@ export function EventShowcase({ events }: { events: PublicEvent[] }) {
                 href={`/e/${event.id}`}
                 className="group relative aspect-[4/5] w-[78%] shrink-0 snap-center overflow-hidden rounded-3xl bg-surface shadow-md sm:w-[60%]"
               >
-                <Poster event={event} sizes="(min-width: 640px) 60vw, 78vw" priority={index === 0} />
+                <Poster event={event} sizes="(min-width: 640px) 60vw, 78vw" priority={index === 0} eager />
                 {/* Legible over any poster: a scrim, not a color the poster might share. */}
                 <span className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-scrim/85 via-scrim/50 to-transparent px-4 pt-16 pb-4 text-on-scrim">
                   <span className="w-fit rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
