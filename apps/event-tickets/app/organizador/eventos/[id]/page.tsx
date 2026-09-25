@@ -19,6 +19,7 @@ import { AppShell } from "@/components/AppShell";
 import { CapacityIncrease } from "@/components/CapacityIncrease";
 import { DoorStaffCard } from "@/components/DoorStaffCard";
 import { EventPhotoCard } from "@/components/EventPhotoCard";
+import { VisibilityCard } from "@/components/VisibilityCard";
 import { ShareEventCard } from "@/components/ShareEventCard";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -45,6 +46,8 @@ type EventDetails = {
   doorToken: string | null;
   ticketTypes: TicketTypeView[];
   imageVersion: string | null;
+  visibility: string;
+  accessCode: string | null;
 };
 
 type TicketTypeView = {
@@ -299,8 +302,20 @@ export default function OrganizerEventPage({
 
           <EventPhotoCard eventId={event.id} initialVersion={event.imageVersion} uploadFailed={photoFailed} />
 
+          <VisibilityCard
+            eventId={event.id}
+            visibility={event.visibility}
+            accessCode={event.accessCode}
+            onChanged={(updated) => setState({ step: "loaded", event: updated as EventDetails })}
+          />
+
           {!closed && (
-            <ShareEventCard eventId={event.id} eventName={event.name} datetimeUtc={event.datetimeUtc} />
+            <ShareEventCard
+              eventId={event.id}
+              eventName={event.name}
+              datetimeUtc={event.datetimeUtc}
+              accessCode={event.visibility === "private" ? event.accessCode : null}
+            />
           )}
 
           <ActionLink

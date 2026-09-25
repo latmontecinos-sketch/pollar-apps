@@ -13,6 +13,7 @@ import {
   type TicketTypeInput,
 } from "@/lib/ticket-types";
 import { decimalToStroops } from "@/lib/money";
+import { isVisibility, newAccessCode } from "@/lib/visibility";
 
 type CreateEventBody = {
   organizerName?: string;
@@ -23,6 +24,8 @@ type CreateEventBody = {
   place: string;
   /** One entry per tier (General, VIP…). */
   ticketTypes: TicketTypeInput[];
+  /** Listed in the showcase, or code-only. Public when omitted. */
+  visibility?: "public" | "private";
 };
 
 function badRequest(error: string, code?: string) {
@@ -73,6 +76,9 @@ export async function POST(request: Request) {
     throw err;
   }
 
+  const visibility = isVisibility(body.visibility) ? body.visibility : "public";
+  const accessCode = visibility === "private" ? newAccessCode() : null;
+
   await dbReady();
   const id = newId();
   // `price_stroops` / `capacity` on the event are a summary for listings;
@@ -84,8 +90,9 @@ export async function POST(request: Request) {
 
   await db.execute({
     sql: `INSERT INTO events (id, organizer_pollar_id, name, description, datetime_utc, place,
-                              price_stroops, capacity, organizer_name, organizer_contact)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                              price_stroops, capacity, organizer_name, organizer_contact,
+                              visibility, access_code)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       auth.address,
@@ -97,6 +104,8 @@ export async function POST(request: Request) {
       totalCapacity,
       organizerName,
       organizerContact,
+      visibility,
+      accessCode,
     ],
   });
   await createTicketTypes(id, ticketTypes);

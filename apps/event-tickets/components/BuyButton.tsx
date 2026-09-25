@@ -9,6 +9,7 @@ import { useBalance } from "@/hooks/useBalance";
 import { pollarFetch } from "@/lib/auth-client";
 import { creditAsset } from "@/lib/payments";
 import { USDC_CODE } from "@/lib/network";
+import { isFreePrice } from "@/lib/price-label";
 import { formatAmount } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
@@ -48,7 +49,7 @@ type State =
   | { step: "paying" }
   | { step: "verifying"; attempt: number }
   /** `emailed`: the server says the copy went out, not that we asked for one. */
-  | { step: "done"; ticket: Ticket; emailed: boolean }
+  | { step: "done"; ticket: Ticket; emailed: boolean; existing?: boolean }
   /** Nothing was paid: trying again means a fresh purchase. */
   | { step: "error"; message: string }
   /** A payment may have been sent: trying again only re-checks it. */
@@ -111,12 +112,15 @@ export function BuyButton({
   ticketTypeId,
   ticketTypeName,
   priceDecimal,
+  accessCode,
 }: {
   eventId: string;
   eventName: string;
   ticketTypeId: string;
   ticketTypeName: string;
   priceDecimal: string;
+  /** A private event's code, checked again by the server on every sale. */
+  accessCode?: string;
 }) {
   const { user, verified } = usePollarAuth();
   const t = useT();
@@ -256,7 +260,7 @@ export function BuyButton({
     try {
       const createRes = await pollarFetch(client, user.address, "/api/sales", {
         method: "POST",
-        body: JSON.stringify({ eventId, ticketTypeId, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({ eventId, ticketTypeId, idempotencyKey: crypto.randomUUID(), accessCode }),
       });
       const created = (await createRes.json()) as Sale & { error?: string; code?: string };
       if (!createRes.ok) {
@@ -310,6 +314,44 @@ export function BuyButton({
     await verify(inFlight, { fromReload: false });
   }
 
+  /** A free tier: one request, and the answer is the ticket. No balance, no payment, nothing to verify. */
+  async function claimFree() {
+    if (!user) return;
+    setState({ step: "creating_sale" });
+    try {
+      const res = await pollarFetch(pollarRef.current.getClient(), user.address, "/api/sales/free", {
+        method: "POST",
+        body: JSON.stringify({
+          eventId,
+          ticketTypeId,
+          idempotencyKey: crypto.randomUUID(),
+          accessCode,
+          email: user.profile?.mail,
+          locale,
+        }),
+      });
+      const data = (await res.json()) as {
+        ticket?: Ticket;
+        emailed?: boolean;
+        existing?: boolean;
+        error?: string;
+        code?: string;
+      };
+      if (!res.ok || !data.ticket) {
+        setState({ step: "error", message: apiErrorMessage(t, data, t.buy.errorReserve) });
+        return;
+      }
+      setState({
+        step: "done",
+        ticket: data.ticket,
+        emailed: data.emailed === true,
+        existing: data.existing === true,
+      });
+    } catch {
+      setState({ step: "error", message: t.buy.errorReserveRetry });
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex flex-col gap-3">
@@ -326,6 +368,7 @@ export function BuyButton({
           <Icon name="check" size={30} strokeWidth={3} />
         </span>
         <span className="font-semibold text-success">{t.buy.doneTitle}</span>
+        {state.existing && <span className="text-xs text-muted">{t.buy.freeExisting}</span>}
         <div className="rounded-xl bg-background p-2">
           <TicketQr value={state.ticket.code} size={180} />
         </div>
@@ -395,6 +438,23 @@ export function BuyButton({
         <Link href="/mis-pases" className="font-semibold underline">
           {t.buy.seeDetail}
         </Link>
+      </div>
+    );
+  }
+
+  if (isFreePrice(priceDecimal)) {
+    return (
+      <div className="flex flex-col gap-2">
+        <Button onClick={() => void claimFree()} disabled={!verified} className="w-full py-3">
+          <Icon name="gift" size={17} />
+          {t.buy.freeCta}
+        </Button>
+        <p className="text-center text-xs text-muted">{t.tiers.freeLimit}</p>
+        {state.step === "error" && (
+          <p className="rounded-xl border border-error-border bg-error-light px-3 py-2 text-sm text-error">
+            {state.message}
+          </p>
+        )}
       </div>
     );
   }

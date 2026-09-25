@@ -62,6 +62,9 @@
   /* The brand blue as small text: primary on light, lifted on dark, where
    * #1668c1 on near-black is too dim for an xs line. */
   --primary-text: #005db4;
+  /* Text over a photo, whatever its colors: a dark scrim and light type, both themes. */
+  --scrim: #000000;
+  --on-scrim: #ffffff;
 }
 
 /*
@@ -198,6 +201,8 @@
   --color-tile-strong: var(--tile-strong);
   --color-tile-foreground: var(--tile-foreground);
   --color-primary-text: var(--primary-text);
+  --color-scrim: var(--scrim);
+  --color-on-scrim: var(--on-scrim);
   --font-sans: var(--font-poppins);
   --font-mono: var(--font-geist-mono);
 }

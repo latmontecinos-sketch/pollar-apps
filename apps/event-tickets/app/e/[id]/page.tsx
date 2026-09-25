@@ -18,7 +18,9 @@ import { getDict } from "@/lib/i18n/server";
 import type { Dict } from "@/lib/i18n";
 import { sweepExpiredSales } from "@/lib/sales";
 import { listTicketTypes, summarize, type TicketType } from "@/lib/ticket-types";
-import { stroopsToDecimal } from "@/lib/money";
+import { decimalToStroops } from "@/lib/money";
+import { isFreePrice, priceLabel } from "@/lib/price-label";
+import { canView, normalizeAccessCode } from "@/lib/visibility";
 import { AppShell } from "@/components/AppShell";
 import { BuyButton } from "@/components/BuyButton";
 import { Card } from "@/components/ui/Card";
@@ -33,6 +35,8 @@ type EventRow = {
   place: string;
   organizer_name: string;
   organizer_contact: string;
+  visibility: string;
+  access_code: string | null;
 };
 
 /** Shared by generateMetadata and the page (one DB read per request). */
@@ -44,7 +48,8 @@ const loadPublicEvent = cache(
     // Release seats held by abandoned checkouts, so the counts are honest.
     await sweepExpiredSales({ eventId: id });
     const result = await db.execute({
-      sql: `SELECT id, name, description, datetime_utc, place, organizer_name, organizer_contact
+      sql: `SELECT id, name, description, datetime_utc, place, organizer_name, organizer_contact,
+                   visibility, access_code
             FROM events WHERE id = ?`,
       args: [id],
     });
@@ -67,7 +72,18 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
   const { id } = await params;
   const [data, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
   if (!data) return { title: t.meta.eventNotFound };
-  const price = formatAmount(stroopsToDecimal(summarize(data.types).priceStroops), locale);
+  // A private event's preview says only that it's private — even a link with
+  // the code in it, since the preview image can't carry the code along.
+  if (data.event.visibility === "private") {
+    return {
+      title: t.meta.privateTitle,
+      description: t.meta.privateDescription,
+      robots: { index: false },
+      openGraph: { title: t.meta.privateTitle, description: t.meta.privateDescription },
+    };
+  }
+  const prices = data.types.map((type) => type.priceDecimal);
+  const price = priceLabel(t, locale, minDecimal(prices), maxDecimal(prices));
   const description = t.meta.eventDescription(
     data.event.name,
     formatEventDay(data.event.datetime_utc, locale),
@@ -81,6 +97,50 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
     openGraph: { title: data.event.name, description, type: "website" },
     twitter: { card: "summary_large_image", title: data.event.name, description },
   };
+}
+
+/** Cheapest and dearest tier, compared in stroops (rule 1 in CLAUDE.md: no Number() on money). */
+function minDecimal(values: string[]): string {
+  return values.reduce((a, b) => (decimalToStroops(a) <= decimalToStroops(b) ? a : b), values[0] ?? "0");
+}
+function maxDecimal(values: string[]): string {
+  return values.reduce((a, b) => (decimalToStroops(a) >= decimalToStroops(b) ? a : b), values[0] ?? "0");
+}
+
+/** A private event, asked for without its code (or with a wrong one). */
+function AccessGate({ t, tried }: { t: Dict; tried: boolean }) {
+  return (
+    <AppShell title={t.gate.title}>
+      <Card className="flex flex-col gap-4">
+        <p className="text-sm leading-6 text-muted">{t.gate.body}</p>
+        {/* A plain GET form: the code rides in the URL, the same link an organizer shares. */}
+        <form method="get" className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
+            {t.gate.field}
+            <input
+              name="codigo"
+              required
+              autoComplete="off"
+              autoCapitalize="characters"
+              maxLength={16}
+              className="w-full rounded-2xl border border-transparent bg-field px-4 py-3 font-mono text-base uppercase tracking-[0.3em] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </label>
+          {tried && (
+            <p className="rounded-xl border border-error-border bg-error-light px-3 py-2 text-sm text-error" role="alert">
+              {t.gate.wrong}
+            </p>
+          )}
+          <button
+            type="submit"
+            className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
+          >
+            {t.gate.submit}
+          </button>
+        </form>
+      </Card>
+    </AppShell>
+  );
 }
 
 function OrganizerContact({ contact, t }: { contact: string; t: Dict }) {
@@ -103,11 +163,17 @@ function OrganizerContact({ contact, t }: { contact: string; t: Dict }) {
  * event, every ticket tier with its own price and remaining seats, and
  * whatever name/contact the organizer chose to publish.
  */
-export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) {
+export default async function PublicEventPage({ params, searchParams }: PageProps<"/e/[id]">) {
   const { id } = await params;
+  const { codigo } = await searchParams;
   const [data, { locale, t }] = await Promise.all([loadPublicEvent(id), getDict()]);
   if (!data) notFound();
   const { event, types, imageVersion } = data;
+  const offered = typeof codigo === "string" ? codigo : "";
+  if (!canView(event, offered)) return <AccessGate t={t} tried={offered !== ""} />;
+  // Carried into the checkout and the photo URL, which check it again.
+  const accessCode = event.visibility === "private" ? normalizeAccessCode(offered) : undefined;
+  const prices = types.map((type) => type.priceDecimal);
 
   const closed = salesClosed(event.datetime_utc);
   const totals = summarize(types);
@@ -125,7 +191,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <span className="w-fit rounded-full bg-background px-3 py-1 text-xs font-semibold text-primary-text shadow-sm">
-              {t.tiers.from(formatAmount(stroopsToDecimal(totals.priceStroops), locale))}
+              {priceLabel(t, locale, minDecimal(prices), maxDecimal(prices))}
             </span>
             <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight">{event.name}</h1>
           </div>
@@ -149,7 +215,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
         // The poster, as the organizer framed it: 4:5, the full width of a phone.
         <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl bg-surface shadow-md">
           <Image
-            src={eventImagePath(event.id, imageVersion)}
+            src={eventImagePath(event.id, imageVersion, accessCode)}
             alt={t.eventImage.alt(event.name)}
             fill
             priority
@@ -219,8 +285,14 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
                     </p>
                   </div>
                   <span className="shrink-0 border-l border-tile-soft pl-3 text-right font-mono text-lg font-bold">
-                    {formatAmount(type.priceDecimal, locale)}
-                    <span className="block font-sans text-[11px] font-medium text-muted">USDC</span>
+                    {isFreePrice(type.priceDecimal) ? (
+                      <span className="font-sans text-base text-success">{t.tiers.free}</span>
+                    ) : (
+                      <>
+                        {formatAmount(type.priceDecimal, locale)}
+                        <span className="block font-sans text-[11px] font-medium text-muted">USDC</span>
+                      </>
+                    )}
                   </span>
                 </div>
                 {remaining > 0 ? (
@@ -230,6 +302,7 @@ export default async function PublicEventPage({ params }: PageProps<"/e/[id]">) 
                     ticketTypeId={type.id}
                     ticketTypeName={type.name}
                     priceDecimal={type.priceDecimal}
+                    accessCode={accessCode}
                   />
                 ) : (
                   <p className="rounded-xl bg-surface px-3 py-2 text-center text-xs font-semibold text-muted">

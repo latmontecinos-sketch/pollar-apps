@@ -71,8 +71,9 @@ export function parseTicketTypes(raw: unknown): TicketTypeInput[] {
     } catch {
       throw new TicketTypeError("El precio no es válido", "type_price");
     }
-    if (priceStroops <= 0n) {
-      throw new TicketTypeError("El precio debe ser mayor a 0", "type_price");
+    // 0 is a free tier: seats are claimed without a payment (claimFreeTicket in lib/sales.ts).
+    if (priceStroops < 0n) {
+      throw new TicketTypeError("El precio no puede ser negativo", "type_price");
     }
     // See MAX_PRICE_USDC: without a ceiling, a price with too many zeros is
     // stored fine and then makes the entire event unreadable on every later

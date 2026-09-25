@@ -30,6 +30,8 @@ export const es = {
     howItWorks: "Cómo funciona",
   },
   meta: {
+    privateTitle: "Evento privado",
+    privateDescription: "Un evento privado en Pollar Pass. Necesitas el código del organizador para verlo.",
     title: "Pollar Pass — entradas con QR, pagadas en USDC",
     description:
       "Vende y compra entradas para eventos pequeños en Bolivia. Pagas en USDC dentro de la app y entras con un QR que se valida una sola vez.",
@@ -38,7 +40,7 @@ export const es = {
       "Guía paso a paso de Pollar Pass: cómo comprar una entrada, cómo organizar un evento y preguntas frecuentes.",
     eventNotFound: "Evento no encontrado",
     eventDescription: (name: string, day: string, time: string, place: string, price: string) =>
-      `Compra tus entradas para ${name}. Será el ${day} a las ${time}, en ${place}. Desde ${price} USDC.`,
+      `Compra tus entradas para ${name}. Será el ${day} a las ${time}, en ${place}. ${price}.`,
     ogCta: "Compra tus entradas",
     ogAlt: "Entrada para un evento en Pollar Pass",
   },
@@ -257,6 +259,8 @@ export const es = {
     fullGuide: "Ver la guía completa →",
   },
   buy: {
+    freeCta: "Obtener entrada gratis",
+    freeExisting: "Ya tenías esta entrada: aquí está.",
     loginCta: "Ingresar para comprar",
     loginNote:
       "Ingresas con tu correo. Si es tu primera vez, Pollar te crea una cuenta con billetera automáticamente — no necesitas instalar nada.",
@@ -374,7 +378,7 @@ export const es = {
     organizerHint:
       "Se muestra en la página del evento: los compradores te pagan directo, así que necesitan saber quién eres y cómo escribirte.",
     price: "Precio por entrada (USDC)",
-    pricePlaceholder: "Ej: 2,50",
+    pricePlaceholder: "Ej: 2,50 (0 = gratis)",
     priceHint: "1 USDC ≈ 1 dólar. Cada pago llega directo a tu cuenta Pollar.",
     capacity: "Cupo total",
     capacityPlaceholder: "Ej: 50",
@@ -546,6 +550,9 @@ export const es = {
   },
   /** Ticket tiers: General, VIP, Estudiantes… each with its own price and cupo. */
   tiers: {
+    free: "Gratis",
+    freeAndPaid: (max: string) => `Gratis y hasta ${max} USDC`,
+    freeLimit: "Una entrada gratis por cuenta.",
     sectionTitle: "Tipos de entrada",
     choose: "Elige tu entrada",
     from: (price: string) => `Desde ${price} USDC`,
@@ -615,6 +622,43 @@ export const es = {
     back: "Volver a editar",
     confirm: "Confirmar y publicar",
   },
+  showcase: {
+    title: "Eventos",
+    subtitle: "Encuentra tu próximo plan y compra tu entrada en segundos.",
+    featured: "Destacados",
+    upcoming: "Próximos eventos",
+    search: "Buscar por nombre o lugar",
+    empty: "Todavía no hay eventos públicos. Vuelve pronto.",
+    emptySearch: "No encontramos eventos con esa búsqueda.",
+    seatsLeft: (n: number) => (n === 1 ? "Queda 1 lugar" : `Quedan ${n} lugares`),
+    soldOut: "Agotado",
+    see: "Ver evento",
+    previous: "Anterior",
+    next: "Siguiente",
+    goTo: (n: number) => `Ir al destacado ${n}`,
+    myArea: "Tu cuenta",
+  },
+  visibility: {
+    title: "¿Quién puede verlo?",
+    public: "Público",
+    publicBody: "Aparece en la vitrina de Pollar Pass para cualquiera.",
+    private: "Privado",
+    privateBody: "No aparece en la vitrina. Para verlo y comprar hace falta un código que tú compartes.",
+    link: "Solo con link",
+    linkBody: "Se abre con su link y no aparece en la vitrina.",
+    code: "Código de acceso",
+    codeHint: "Compártelo junto con el link, o comparte el link que ya lo incluye.",
+    makePublic: "Mostrar en la vitrina",
+    makePrivate: "Hacer privado",
+    saveError: "No pudimos cambiar la visibilidad. Intenta de nuevo.",
+  },
+  gate: {
+    title: "Evento privado",
+    body: "Este evento es privado. Ingresa el código que te dio el organizador.",
+    field: "Código de acceso",
+    submit: "Entrar",
+    wrong: "Ese código no es correcto. Revísalo y vuelve a intentar.",
+  },
   eventImage: {
     title: "Foto del evento",
     hint: "Recomendado: 1080 × 1350 px, vertical 4:5 (como un post de Instagram). JPG o PNG. La vas a poder encuadrar.",
@@ -681,6 +725,9 @@ export const es = {
    * `apiErrorMessage` in `lib/i18n/errors.ts`.
    */
   apiErrors: {
+    free_tier: "Esta entrada es gratis: obtenla con el botón de entrada gratis.",
+    not_free: "Esta entrada no es gratis.",
+    access_code_required: "Este evento es privado: necesitas su código de acceso.",
     // From lib/auth.ts — the guard every route goes through, so these are the
     // errors a real user meets most often.
     session_required: "Necesitas iniciar sesión para hacer esto.",

@@ -19,10 +19,13 @@ export function ShareEventCard({
   eventId,
   eventName,
   datetimeUtc,
+  accessCode,
 }: {
   eventId: string;
   eventName: string;
   datetimeUtc: string;
+  /** A private event's code: the shared link opens it without typing. */
+  accessCode?: string | null;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -33,7 +36,7 @@ export function ShareEventCard({
     () => typeof navigator.share === "function",
     () => false
   );
-  const url = origin ? `${origin}/e/${eventId}` : "";
+  const url = origin ? `${origin}/e/${eventId}${accessCode ? `?codigo=${accessCode}` : ""}` : "";
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
 

@@ -10,6 +10,7 @@ import {
 } from "@/lib/event-image";
 import { enforce } from "@/lib/rate-limit";
 import { shortAddressForLog } from "@/lib/security-log";
+import { canView } from "@/lib/visibility";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -29,14 +30,24 @@ const notFound = () =>
  */
 export async function GET(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const params = new URL(request.url).searchParams;
+  // A private event's photo is part of the event: same code as its page.
+  await dbReady();
+  const gate = await db.execute({ sql: "SELECT visibility, access_code FROM events WHERE id = ?", args: [id] });
+  if (gate.rows.length === 0) return new Response(null, { status: 404 });
+  const event = gate.rows[0] as unknown as { visibility: string; access_code: string | null };
+  if (!canView(event, params.get("c"))) return new Response(null, { status: 404 });
   const image = await loadEventImage(id);
   if (!image) return new Response(null, { status: 404 });
-  const pinned = new URL(request.url).searchParams.get("v") === image.version;
+  const pinned = params.get("v") === image.version;
   return new Response(Buffer.from(image.data), {
     headers: {
       "Content-Type": "image/jpeg",
       "Content-Length": String(image.data.length),
-      "Cache-Control": pinned
+      // A private photo stays out of shared caches: the code in its URL is the only key.
+      "Cache-Control": event.visibility === "private"
+        ? "private, max-age=3600"
+        : pinned
         ? "public, max-age=31536000, immutable"
         : "public, max-age=60, s-maxage=300",
       // The bytes were only checked to be a JPEG; nothing here should render as anything else.

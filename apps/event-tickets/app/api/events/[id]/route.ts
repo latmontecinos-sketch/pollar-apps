@@ -5,6 +5,7 @@ import { stroopsToDecimal } from "@/lib/money";
 import { enforce } from "@/lib/rate-limit";
 import { confirmCapacityCode } from "@/lib/capacity-code";
 import { eventImageVersion } from "@/lib/event-image";
+import { isVisibility, newAccessCode } from "@/lib/visibility";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
 import {
   listTicketTypes,
@@ -40,6 +41,8 @@ type EventRow = {
   organizer_name: string;
   organizer_contact: string;
   door_token: string | null;
+  visibility: string;
+  access_code: string | null;
 };
 
 async function loadEvent(id: string): Promise<EventRow | null> {
@@ -79,6 +82,9 @@ function toJson(row: EventRow, types: TicketType[], checkedIn: number, imageVers
     // Owner-only route, so the staff door secret is shown to its owner only.
     doorToken: row.door_token,
     ticketTypes: types,
+    visibility: row.visibility,
+    // Owner-only, like the door token: the code that opens a private event.
+    accessCode: row.access_code,
     /** Null when the event has no photo; else part of its URL (lib/event-image-path.ts). */
     imageVersion,
   };
@@ -116,6 +122,8 @@ type PatchBody = {
   description?: string;
   place?: string;
   datetimeUtc?: string;
+  /** Switches between listed and code-only; a private event gets its code on the way in. */
+  visibility?: "public" | "private";
 };
 
 /** Owner-only edit. Prices are immutable after creation; capacity can only grow. */
@@ -190,11 +198,18 @@ export async function PATCH(request: Request, ctx: Ctx) {
     datetimeUtc = parsed.toISOString();
   }
 
+  // Keeps an existing code when going private again, so links already
+  // shared keep working; making it public drops nothing but the gate.
+  const visibility = isVisibility(body.visibility) ? body.visibility : event.visibility;
+  const accessCode =
+    visibility === "private" ? (event.access_code ?? newAccessCode()) : event.access_code;
+
   const types = await listTicketTypes(id);
   const totals = summarize(types);
   await db.execute({
     sql: `UPDATE events SET name = ?, description = ?, place = ?, datetime_utc = ?,
-            organizer_name = ?, organizer_contact = ?, capacity = ? WHERE id = ?`,
+            organizer_name = ?, organizer_contact = ?, capacity = ?,
+            visibility = ?, access_code = ? WHERE id = ?`,
     args: [
       name,
       description,
@@ -203,6 +218,8 @@ export async function PATCH(request: Request, ctx: Ctx) {
       organizerName,
       organizerContact,
       totals.capacity,
+      visibility,
+      accessCode,
       id,
     ],
   });

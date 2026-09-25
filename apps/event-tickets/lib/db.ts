@@ -167,7 +167,7 @@ const ADDED_COLUMNS = [
   `ALTER TABLE events ADD COLUMN door_token TEXT`,
   // `unclaimed` -> `refunded`: the organizer's refund payment, verified on Horizon.
   `ALTER TABLE sales ADD COLUMN refund_tx_hash TEXT`,
-  // Capacity can be extended (twice at most) after publishing, never reduced.
+  // How many times capacity grew after publishing (a record; it's never reduced).
   `ALTER TABLE events ADD COLUMN capacity_increases INTEGER NOT NULL DEFAULT 0`,
   // Kept to notify the buyer when their ticket is accepted at the door,
   // in the language they bought in. Never shown to the organizer.
@@ -175,6 +175,11 @@ const ADDED_COLUMNS = [
   `ALTER TABLE sales ADD COLUMN buyer_locale TEXT`,
   // Which tier this sale holds a seat in.
   `ALTER TABLE sales ADD COLUMN ticket_type_id TEXT`,
+  // Who can find the event (lib/visibility.ts). Rows from before default to
+  // 'link' — opened by their link as always, never listed.
+  `ALTER TABLE events ADD COLUMN visibility TEXT NOT NULL DEFAULT 'link'`,
+  // The code a private event asks for; NULL for any other visibility.
+  `ALTER TABLE events ADD COLUMN access_code TEXT`,
 ];
 
 /**
@@ -188,6 +193,8 @@ const ADDED_COLUMNS = [
  */
 const POST_COLUMN_INDEXES = [
   `CREATE INDEX IF NOT EXISTS sales_tier_status_idx ON sales (ticket_type_id, status)`,
+  /** The showcase: public events, soonest first (lib/public-events.ts). */
+  `CREATE INDEX IF NOT EXISTS events_visibility_date_idx ON events (visibility, datetime_utc)`,
 ];
 
 /**

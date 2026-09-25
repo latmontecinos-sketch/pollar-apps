@@ -191,7 +191,11 @@ test("tier input is validated before anything is written", () => {
       ]),
     /mismo nombre/
   );
-  assert.throws(() => parseTicketTypes([{ name: "VIP", priceDecimal: "0", capacity: 1 }]), /mayor a 0/);
+  // 0 is a free tier now (claimFreeTicket); only a negative price is nonsense.
+  assert.deepEqual(parseTicketTypes([{ name: "Libre", priceDecimal: "0", capacity: 5 }]), [
+    { name: "Libre", priceDecimal: "0.0000000", capacity: 5 },
+  ]);
+  assert.throws(() => parseTicketTypes([{ name: "VIP", priceDecimal: "-1", capacity: 1 }]), /precio/i);
   assert.throws(() => parseTicketTypes([{ name: "VIP", priceDecimal: "1", capacity: 0 }]), /cupo/i);
 
   const parsed = parseTicketTypes([{ name: " VIP ", priceDecimal: "0.03", capacity: 2 }]);

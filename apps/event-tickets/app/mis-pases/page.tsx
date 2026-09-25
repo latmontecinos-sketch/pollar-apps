@@ -6,7 +6,6 @@ import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import {
-  formatAmount,
   formatEventDateTime,
   formatEventMonth,
   formatTimestamp,
@@ -27,6 +26,7 @@ import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { Spinner } from "@/components/ui/Spinner";
 import { SaveTicketButton } from "@/components/SaveTicketButton";
+import { tierPrice } from "@/lib/price-label";
 import { TicketQr } from "@/components/TicketQr";
 
 type Sale = {
@@ -227,7 +227,7 @@ export default function MisPasesPage() {
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1 border-l border-tile-soft pl-3">
                   <span className="whitespace-nowrap font-mono text-xs font-semibold text-muted">
-                    {formatAmount(sale.amountDecimal, locale)} USDC
+                    {tierPrice(t, locale, sale.amountDecimal)}
                   </span>
                   {sale.ticketTypeName && (
                     <span className="rounded-full bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary">

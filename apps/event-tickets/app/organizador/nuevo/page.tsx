@@ -62,6 +62,7 @@ export default function CreateEventPage() {
   const [preview, setPreview] = useState(false);
   /** Framed in the form, shown in the preview, uploaded once the event exists. */
   const [photo, setPhoto] = useState<{ jpeg: Blob; url: string } | null>(null);
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
   // Object URLs hold the whole image in memory until revoked.
   useEffect(() => () => {
     if (photo) URL.revokeObjectURL(photo.url);
@@ -94,7 +95,8 @@ export default function CreateEventPage() {
       capacity,
       priceValid: (() => {
         try {
-          return decimalToStroops(price) > 0n;
+          // 0 is a free tier; only nonsense and negatives are refused.
+          return decimalToStroops(price) >= 0n;
         } catch {
           return false;
         }
@@ -147,6 +149,7 @@ export default function CreateEventPage() {
           datetimeUtc: laPazLocalToUtcIso(datetimeLocal),
           organizerName,
           organizerContact,
+          visibility,
           ticketTypes: parsedTiers.map((tier) => ({
             name: tier.name,
             priceDecimal: tier.priceDecimal,
@@ -327,6 +330,37 @@ export default function CreateEventPage() {
               onCropped={(jpeg) => setPhoto({ jpeg, url: URL.createObjectURL(jpeg) })}
               onRemove={() => setPhoto(null)}
             />
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-3 border-t border-border pt-5">
+            <legend className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
+              {t.visibility.title}
+            </legend>
+            {(["public", "private"] as const).map((option) => (
+              <label
+                key={option}
+                className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
+                  visibility === option ? "border-primary bg-primary-light" : "border-border hover:bg-surface"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="visibility"
+                  value={option}
+                  checked={visibility === option}
+                  onChange={() => setVisibility(option)}
+                  className="mt-1 accent-[var(--primary)]"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-sm font-semibold">
+                    {option === "public" ? t.visibility.public : t.visibility.private}
+                  </span>
+                  <span className="text-xs leading-5 text-muted">
+                    {option === "public" ? t.visibility.publicBody : t.visibility.privateBody}
+                  </span>
+                </span>
+              </label>
+            ))}
           </fieldset>
 
           <fieldset className="flex flex-col gap-4 border-t border-border pt-5">

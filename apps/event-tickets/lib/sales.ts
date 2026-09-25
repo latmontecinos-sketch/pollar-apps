@@ -346,3 +346,82 @@ export async function settlePayment(
     return { outcome: "no_match" };
   });
 }
+
+export type FreeClaimResult =
+  /** `existing`: this account already had a free ticket for this tier; that one comes back. */
+  | { ok: true; saleId: string; ticket: Ticket; existing: boolean }
+  | { ok: false; reason: "sold_out" | "key_taken" | "not_free" };
+
+/**
+ * A free tier's ticket: seat, sale and ticket in one transaction, with no
+ * payment step — there's nothing to verify, so nothing to wait for.
+ *
+ * One free ticket per account per tier. A paid ticket costs something, which
+ * is its own limit; a free one doesn't, and without this a single account
+ * could empty a "limited seats" event with a loop. Asking twice hands the
+ * same ticket back instead of an error, so a double tap is harmless.
+ *
+ * The price is re-read inside the transaction: a tier is only free if the
+ * database says so at the moment the seat is taken.
+ */
+export async function claimFreeTicket(params: {
+  eventId: string;
+  ticketTypeId: string;
+  buyerPollarId: string;
+  reference: string;
+  idempotencyKey: string;
+}): Promise<FreeClaimResult> {
+  return withTransaction(async (tx: Transaction) => {
+    const tier = await tx.execute({
+      sql: "SELECT price_stroops FROM ticket_types WHERE id = ? AND event_id = ?",
+      args: [params.ticketTypeId, params.eventId],
+    });
+    if (tier.rows.length === 0 || BigInt(tier.rows[0].price_stroops as number) !== 0n) {
+      return { ok: false, reason: "not_free" };
+    }
+
+    const owned = await tx.execute({
+      sql: `SELECT id FROM sales
+            WHERE event_id = ? AND ticket_type_id = ? AND buyer_pollar_id = ? AND status = 'paid'
+            ORDER BY created_at LIMIT 1`,
+      args: [params.eventId, params.ticketTypeId, params.buyerPollarId],
+    });
+    if (owned.rows.length > 0) {
+      const saleId = String(owned.rows[0].id);
+      return { ok: true, saleId, ticket: await issueTicket(saleId, params.eventId, tx), existing: true };
+    }
+
+    const taken = await tx.execute({
+      sql: "SELECT 1 FROM sales WHERE idempotency_key = ?",
+      args: [params.idempotencyKey],
+    });
+    if (taken.rows.length > 0) return { ok: false, reason: "key_taken" };
+
+    // Same atomic per-tier seat as a paid sale: the last free seat goes to one person.
+    const reserved = await tx.execute({
+      sql: `UPDATE ticket_types SET reserved = reserved + 1
+            WHERE id = ? AND event_id = ? AND reserved < capacity
+            RETURNING reserved`,
+      args: [params.ticketTypeId, params.eventId],
+    });
+    if (reserved.rows.length === 0) return { ok: false, reason: "sold_out" };
+
+    const saleId = newId();
+    await tx.execute({
+      sql: `INSERT INTO sales
+              (id, event_id, ticket_type_id, buyer_pollar_id, reference, amount_stroops,
+               idempotency_key, status, expires_at_utc)
+            VALUES (?, ?, ?, ?, ?, 0, ?, 'paid', ?)`,
+      args: [
+        saleId,
+        params.eventId,
+        params.ticketTypeId,
+        params.buyerPollarId,
+        params.reference,
+        params.idempotencyKey,
+        new Date().toISOString(),
+      ],
+    });
+    return { ok: true, saleId, ticket: await issueTicket(saleId, params.eventId, tx), existing: false };
+  });
+}
