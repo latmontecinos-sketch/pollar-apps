@@ -1,0 +1,321 @@
+@import "tailwindcss";
+
+/*
+ * Pollar design tokens. Every color in the app derives from these.
+ * Light-first, like pollar.xyz (the brand look is white + Pollar blue).
+ * Dark mode is opt-in: set <html data-theme="dark"> to enable it.
+ */
+:root {
+  color-scheme: light;
+
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+
+  --primary: #005db4;
+  --primary-hover: #0047a0;
+  --primary-light: #f0f7ff;
+  --primary-foreground: #ffffff;
+
+  --surface: #f8fafc;
+  --surface-hover: #f1f5f9;
+  --border: #e5e7eb;
+
+  --muted: #6b7280;
+  --muted-light: #9ca3af;
+
+  --error: #dc2626;
+  --error-light: #fef2f2;
+  --error-border: #fecaca;
+
+  --success: #16a34a;
+  --success-light: #f0fdf4;
+  --success-border: #bbf7d0;
+
+  --warning: #d97706;
+  --warning-light: #fffbeb;
+  --warning-border: #fde68a;
+
+  /* Mascot (polar bear): brand illustration colors, same in both themes. */
+  --mascot: #ffffff;
+  --mascot-outline: #005db4;
+  --mascot-shade: #cde4fa;
+  --mascot-features: #0f2b46;
+
+  /* Official logo fill: brand blue on light (pollar-logo-light). */
+  --logo: var(--primary);
+
+  /*
+   * App shell (components/AppShell.tsx): a brand band on top, the content on
+   * a lighter sheet that overlaps it, and a floating bottom nav. The icon
+   * tiles are three steps of the same brand blue, soft → strong.
+   */
+  --band: #005db4;
+  --band-foreground: #ffffff;
+  --sheet: #f2f7fc;
+  --nav: #e2edf8;
+  --field: #e8f0f9;
+  --tile-soft: #d3e5f7;
+  --tile-soft-foreground: #005db4;
+  --tile-mid: #3a86d4;
+  --tile-strong: #005db4;
+  --tile-foreground: #ffffff;
+  /* The brand blue as small text: primary on light, lifted on dark, where
+   * #1668c1 on near-black is too dim for an xs line. */
+  --primary-text: #005db4;
+  /* Text over a photo, whatever its colors: a dark scrim and light type, both themes. */
+  --scrim: #000000;
+  --on-scrim: #ffffff;
+}
+
+/*
+ * Dark palette, applied two ways: automatically when the device asks for
+ * dark (unless the reader pinned light), and explicitly when they chose
+ * dark in Preferences. Both blocks carry the same tokens.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --background: #0a0e14;
+    --foreground: #eef2f6;
+
+    --primary: #1668c1;
+    --primary-hover: #2f81d6;
+    --primary-light: #0e1d33;
+    --primary-foreground: #ffffff;
+
+    --surface: #111823;
+    --surface-hover: #18202e;
+    --border: #232d3d;
+
+    --muted: #8b95a5;
+    --muted-light: #647080;
+
+    --error: #f87171;
+    --error-light: #2a1113;
+    --error-border: #542427;
+
+    --success: #4ade80;
+    --success-light: #0c2416;
+    --success-border: #1d4a2c;
+
+    --warning: #fbbf24;
+    --warning-light: #291d05;
+    --warning-border: #57420f;
+
+    --logo: var(--foreground);
+
+    --band: #0c2d52;
+    --band-foreground: #eef2f6;
+    --sheet: #0a0e14;
+    --nav: #111823;
+    --field: #151e2b;
+    --tile-soft: #14335a;
+    --tile-soft-foreground: #8cc0f5;
+    --tile-mid: #1f5fa8;
+    --tile-strong: #1668c1;
+    --tile-foreground: #ffffff;
+    --primary-text: #8cc0f5;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #0a0e14;
+  --foreground: #eef2f6;
+
+  /* Same blue family; hover goes lighter on dark. White stays readable on both. */
+  --primary: #1668c1;
+  --primary-hover: #2f81d6;
+  --primary-light: #0e1d33;
+  --primary-foreground: #ffffff;
+
+  --surface: #111823;
+  --surface-hover: #18202e;
+  --border: #232d3d;
+
+  --muted: #8b95a5;
+  --muted-light: #647080;
+
+  --error: #f87171;
+  --error-light: #2a1113;
+  --error-border: #542427;
+
+  --success: #4ade80;
+  --success-light: #0c2416;
+  --success-border: #1d4a2c;
+
+  --warning: #fbbf24;
+  --warning-light: #291d05;
+  --warning-border: #57420f;
+
+  /* Near-white on dark, matching pollar-logo-dark. */
+  --logo: var(--foreground);
+
+  /* A deeper band on dark: the light one's full blue would glare. */
+  --band: #0c2d52;
+  --band-foreground: #eef2f6;
+  --sheet: #0a0e14;
+  --nav: #111823;
+  --field: #151e2b;
+  --tile-soft: #14335a;
+  --tile-soft-foreground: #8cc0f5;
+  --tile-mid: #1f5fa8;
+  --tile-strong: #1668c1;
+  --tile-foreground: #ffffff;
+  --primary-text: #8cc0f5;
+}
+
+/* Expose the tokens as Tailwind utilities (bg-primary, text-muted, border-border…). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-light: var(--muted-light);
+  --color-error: var(--error);
+  --color-error-light: var(--error-light);
+  --color-error-border: var(--error-border);
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-warning-border: var(--warning-border);
+  --color-logo: var(--logo);
+  --color-band: var(--band);
+  --color-band-foreground: var(--band-foreground);
+  --color-sheet: var(--sheet);
+  --color-nav: var(--nav);
+  --color-field: var(--field);
+  --color-tile-soft: var(--tile-soft);
+  --color-tile-soft-foreground: var(--tile-soft-foreground);
+  --color-tile-mid: var(--tile-mid);
+  --color-tile-strong: var(--tile-strong);
+  --color-tile-foreground: var(--tile-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-scrim: var(--scrim);
+  --color-on-scrim: var(--on-scrim);
+  --font-sans: var(--font-poppins);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-poppins), system-ui, sans-serif;
+}
+
+/* Screens inside the app shell sit on the sheet all the way down, footer
+ * included, and leave room for the floating bottom nav. */
+body:has(.app-shell) {
+  background: var(--sheet);
+}
+body:has(.bottom-nav) {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+/*
+ * Small celebration for the moment a ticket exists: the card rises in and
+ * the check mark pops. Motion-sensitive readers get the end state only.
+ */
+@keyframes pollar-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+@keyframes pollar-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+.pollar-rise {
+  animation: pollar-rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pollar-pop {
+  animation: pollar-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pollar-rise,
+  .pollar-pop {
+    animation: none;
+  }
+}
+
+/*
+ * Modal animation (components/ui/Modal.tsx). Pure CSS via @starting-style +
+ * allow-discrete: the sheet slides in/out through the bottom edge on phones
+ * and fades in centered on desktop. Browsers without @starting-style just
+ * skip the animation.
+ */
+.pollar-modal {
+  transition:
+    translate 0.3s ease,
+    opacity 0.3s ease;
+}
+/* display lives here, NOT as a class on the element: a bare `flex` class
+ * would override the closed dialog's native display:none and leave an
+ * invisible layer over the page that swallows clicks. */
+.pollar-modal[open] {
+  display: flex;
+  flex-direction: column;
+  translate: 0 0;
+}
+/* enter: slide up from the bottom edge */
+@starting-style {
+  .pollar-modal[open] {
+    translate: 0 100%;
+  }
+}
+/* exit: Modal.tsx adds .closing, waits for the transition, then close()s.
+ * (A pure-CSS exit via `overlay`/`display allow-discrete` is not reliable;
+ * some engines drop the dialog from the top layer instantly.) */
+.pollar-modal[open].closing {
+  translate: 0 100%;
+}
+
+.pollar-modal::backdrop {
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
+  backdrop-filter: blur(4px);
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+@starting-style {
+  .pollar-modal[open]::backdrop {
+    opacity: 0;
+  }
+}
+.pollar-modal[open].closing::backdrop {
+  opacity: 0;
+}
+
+/* Desktop: centered, fade + a small rise instead of the full slide */
+@media (min-width: 640px) {
+  .pollar-modal[open] {
+    translate: 0 0;
+    opacity: 1;
+  }
+  @starting-style {
+    .pollar-modal[open] {
+      translate: 0 24px;
+      opacity: 0;
+    }
+  }
+  .pollar-modal[open].closing {
+    translate: 0 24px;
+    opacity: 0;
+  }
+}

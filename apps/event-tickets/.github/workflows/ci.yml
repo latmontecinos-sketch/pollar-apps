@@ -1,0 +1,52 @@
+# Runs in the deploy mirror (latmontecinos-sketch/pollar-pass), where this app
+# is the repository root. In the pollar-apps monorepo this file sits inside
+# apps/event-tickets/ and GitHub never reads it: only a root .github/ counts,
+# and the monorepo's root is out of this app's scope. The mirror is built
+# from `git subtree split`, so a workflow added there directly would be
+# erased by the next deploy; it has to live here to survive.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Audit
+        run: pnpm audit --audit-level high
+
+      # No env on purpose: the build must hold with nothing but defaults,
+      # the same way `pnpm dev` must run with only the Pollar key.
+      - name: Build
+        run: pnpm build
