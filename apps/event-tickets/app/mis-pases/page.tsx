@@ -15,9 +15,11 @@ import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
 import { explorerTxUrl } from "@/lib/network";
 import { AppShell } from "@/components/AppShell";
+import { ScreenLoading } from "@/components/ScreenLoading";
 import { HoldCountdown } from "@/components/HoldCountdown";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { LoadError } from "@/components/LoadError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { IconTile } from "@/components/ui/ListRow";
@@ -68,11 +70,22 @@ export default function MisPasesPage() {
 
   const load = useCallback(async () => {
     if (!address) return;
-    const res = await pollarFetch(pollarRef.current.getClient(), address, "/api/sales/mine");
-    if (!res.ok) return setState({ step: "error" });
-    const data = (await res.json()) as { sales: Sale[] };
-    setState({ step: "loaded", sales: data.sales });
+    // A failed reload (after "Ya pagué") keeps the list already on screen.
+    const failed = () => setState((current) => (current.step === "loaded" ? current : { step: "error" }));
+    try {
+      const res = await pollarFetch(pollarRef.current.getClient(), address, "/api/sales/mine");
+      if (!res.ok) return failed();
+      const data = (await res.json()) as { sales: Sale[] };
+      setState({ step: "loaded", sales: data.sales });
+    } catch {
+      failed();
+    }
   }, [address]);
+
+  const retry = useCallback(() => {
+    setState({ step: "loading" });
+    void load();
+  }, [load]);
 
   useEffect(() => {
     void load();
@@ -114,7 +127,7 @@ export default function MisPasesPage() {
     }
   }
 
-  if (authLoading) return null;
+  if (authLoading) return <ScreenLoading title={t.tickets.title} back={{ href: "/app", label: t.common.home }} />;
 
   if (!user) {
     return (
@@ -157,11 +170,7 @@ export default function MisPasesPage() {
         </div>
       )}
 
-      {state.step === "error" && (
-        <Card>
-          <p className="text-center text-sm text-error">{t.tickets.loadError}</p>
-        </Card>
-      )}
+      {state.step === "error" && <LoadError message={t.tickets.loadError} onRetry={retry} />}
 
       {state.step === "loaded" && state.sales.length === 0 && (
         <Card>

@@ -1,4 +1,5 @@
 import { randomInt, timingSafeEqual } from "node:crypto";
+import { CODE_ALPHABET } from "./code-alphabet.ts";
 
 /**
  * Who can find an event.
@@ -19,13 +20,11 @@ export function isVisibility(value: unknown): value is "public" | "private" {
   return value === "public" || value === "private";
 }
 
-/** No 0/O, 1/I/L: read aloud or copied off a flyer, it has to survive. */
-const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const ACCESS_CODE_LENGTH = 6;
 
 export function newAccessCode(): string {
   let code = "";
-  for (let i = 0; i < ACCESS_CODE_LENGTH; i++) code += ALPHABET[randomInt(ALPHABET.length)];
+  for (let i = 0; i < ACCESS_CODE_LENGTH; i++) code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
   return code;
 }
 

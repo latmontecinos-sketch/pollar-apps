@@ -33,7 +33,7 @@ export function modeCookie(mode: AppMode, secure: boolean): string {
 
 // Not /puerta: door staff open it from a link the organizer shares, and they
 // aren't organizers.
-const ORGANIZER_ROUTES = ["/mis-eventos", "/organizador", "/escanear"];
+const ORGANIZER_ROUTES = ["/mis-eventos", "/organizador"];
 const EXPLORER_ROUTES = ["/mis-pases"];
 
 function under(pathname: string, route: string): boolean {

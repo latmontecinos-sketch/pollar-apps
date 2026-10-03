@@ -21,7 +21,7 @@ function paths(value: unknown, prefix = ""): string[] {
   return [prefix];
 }
 
-test("all three languages define exactly the same keys", () => {
+test("both languages define exactly the same keys", () => {
   const spanish = paths(DICTIONARIES.es).sort();
   for (const locale of LOCALES) {
     assert.deepEqual(paths(DICTIONARIES[locale]).sort(), spanish, `${locale} differs from es`);
@@ -45,7 +45,7 @@ test("no empty strings", () => {
 
 test("interpolated strings keep their values in every language", () => {
   const samples: [string, (d: (typeof DICTIONARIES)["es"]) => string, string[]][] = [
-    ["event.remaining", (d) => d.event.remaining(3, 40), ["3", "40"]],
+    ["tiers.remaining", (d) => d.tiers.remaining(3), ["3"]],
     ["buy.cta", (d) => d.buy.cta("2,50"), ["2,50"]],
     ["buy.missing", (d) => d.buy.missing("2,50", "0,00"), ["2,50", "0,00"]],
     ["myEvents.sold", (d) => d.myEvents.sold(2, 5), ["2", "5"]],

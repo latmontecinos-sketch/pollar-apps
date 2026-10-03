@@ -16,7 +16,8 @@ export const en: Dict = {
     copied: "Copied",
     share: "Share",
     whatsapp: "WhatsApp",
-    close: "Close",
+    retry: "Try again",
+    loading: "Loading…",
   },
   footer: {
     disclaimer:
@@ -37,27 +38,15 @@ export const en: Dict = {
     eventDescription: (name: string, day: string, time: string, place: string, price: string) =>
       `Get your tickets for ${name}. It's on ${day} at ${time}, at ${place}. ${price}.`,
     ogCta: "Get your tickets",
-    ogAlt: "Ticket for an event on Pollar Pass",
   },
   landing: {
-    badge: "Digital tickets for events in Bolivia",
     titleLine1: "Your ticket is a QR.",
     titleLine2: "Your payment, in USDC.",
     subtitle:
       "Run an event and sell tickets with a link, or buy yours in seconds. All inside the app — no cards, no external wallets.",
     cta: "Start with my email",
     seeHow: "See how it works →",
-    buyerCardTitle: "Going to an event?",
-    buyerCardBody: "Open the link you were sent and buy your ticket.",
-    organizerCardTitle: "Running one?",
-    organizerCardBody: "Create your event, share the link, check people in at the door.",
     stepsTitle: "How buying a ticket works",
-    fullGuide: "Full guide and FAQ →",
-    promises: [
-      "No external wallet: you sign in with your email",
-      "Every payment is verified on the Stellar network",
-      "Every QR works exactly once at the door",
-    ],
   },
   product: {
     openApp: "Open the app",
@@ -83,14 +72,10 @@ export const en: Dict = {
     techBody:
       "Next.js and the Pollar SDK on Stellar. Amounts are integers (stroops) end to end, every payment is verified against Horizon, and door validation is a single atomic database operation.",
     linkRepo: "Code on GitHub",
-    linkGuide: "User guide",
-    linkDocs: "Visual documentation",
     ctaTitle: "Give it a try",
     ctaBody: "Open the app, create a test event and share it. Nothing to install.",
   },
   home: {
-    title: "What would you like to do?",
-    subtitle: "Buy tickets or manage your events.",
     receive: "Receive USDC",
     testUsdc: "Test USDC",
     emptyBalanceStrong: "Your balance is 0.",
@@ -101,18 +86,16 @@ export const en: Dict = {
     eventsTile: "My events",
     eventsTileBody: "Sales, shareable link and door mode",
     createTile: "Create event",
-    createTileBody: "Publish your event and start selling",
     firstTimeStrong: "First time here?",
     firstTimeBody: "See how Pollar Pass works, step by step.",
     greeting: "Welcome back",
     balanceLabel: "Available balance",
-    activeTicketsLabel: "Active tickets",
   },
   nav: {
     label: "Main navigation",
     home: "Home",
     tickets: "Tickets",
-    scan: "Scan",
+    door: "Door",
     events: "Events",
     create: "Create",
   },
@@ -207,7 +190,7 @@ export const en: Dict = {
       },
       {
         title: "Check people in",
-        body: "On the day, open “Door mode” on your phone and scan the QRs. Green: let them in. Red: already used or not valid. If someone else is on the door, send them the door link from your panel.",
+        body: "On the day, open “Door mode” on your phone and scan the QRs. Check the ticket and tap “Let them in”: only then is it used. Red: already used or not valid. If someone else is on the door, send them the door link from your panel.",
       },
     ],
     faq: {
@@ -236,7 +219,7 @@ export const en: Dict = {
         "Your seat is held for 10 minutes. If the payment isn't completed by then, the reservation expires on its own and the seat goes back on sale. You're not charged anything.",
       screenshotQ: "Can someone get in with a screenshot of my QR?",
       screenshotA:
-        "Each ticket works exactly once: the moment it's scanned at the door it's marked as used, so a copy is worthless. That's why you shouldn't share your QR or door code.",
+        "Each ticket works exactly once: it's marked as used when its entry is accepted at the door, so a copy is worthless. That's why you shouldn't share your QR or door code.",
       refundQ: "Can I get a refund?",
       refundA:
         "Payments go straight to the organizer, so a refund is up to them: contact them using the details on the event page. The app never holds your money.",
@@ -255,14 +238,11 @@ export const en: Dict = {
     },
   },
   event: {
-    ticketBadge: (price: string) => `Ticket · ${price} USDC`,
     organizedBy: (name: string) => `Organized by ${name}`,
     organizerFallback: "the organizer",
     contactLink: (contact: string) => `Contact: ${contact}`,
     contactPlain: (contact: string) => `Contact: ${contact}`,
-    seats: "Seats",
     soldOut: "Sold out",
-    remaining: (left: number, total: number) => `${left} of ${total} left`,
     closed: "This event has already happened: ticket sales are closed.",
     firstTimeTitle: "First time buying with Pollar Pass?",
     firstTimeSteps: [
@@ -333,7 +313,7 @@ export const en: Dict = {
     statUsed: "Used",
     emptyFilter: "No tickets in this list.",
     loginNote: "Sign in to see the tickets you've bought.",
-    loadError: "We couldn't load your tickets. Reload the page.",
+    loadError: "We couldn't load your tickets.",
     emptyTitle: "No tickets yet",
     emptyBody:
       "Tickets are bought from the link each organizer shares. Once you buy one, it shows up here with its QR.",
@@ -364,7 +344,7 @@ export const en: Dict = {
     title: "My events",
     loginNote: "Sign in to see the events you're running.",
     create: "Create event",
-    loadError: "We couldn't load your events. Reload the page.",
+    loadError: "We couldn't load your events.",
     emptyTitle: "You're not running any events yet",
     emptyBody:
       "Create one in a minute: name, place, date, price and capacity, and we give you a link to sell tickets.",
@@ -379,7 +359,6 @@ export const en: Dict = {
     intro: "Fill this in and publish. At the end we give you the link to share on WhatsApp.",
     sectionEvent: "The event",
     sectionOrganizer: "Who's organizing",
-    sectionTickets: "Tickets",
     name: "Event name",
     namePlaceholder: "e.g. Jazz night in Sopocachi",
     description: "Description (optional)",
@@ -394,18 +373,13 @@ export const en: Dict = {
     organizerContactPlaceholder: "WhatsApp (70012345) or @instagram",
     organizerHint:
       "Shown on the event page: buyers pay you directly, so they need to know who you are and how to reach you.",
-    price: "Price per ticket (USDC)",
     pricePlaceholder: "e.g. 2.50 (0 = free)",
     priceHint: "1 USDC ≈ 1 dollar. Every payment lands straight in your Pollar account.",
-    capacity: "Total seats",
     capacityPlaceholder: "e.g. 50",
-    capacityHint: "The most tickets that can be sold.",
     immutableStrong: "Price and capacity can't be changed",
     immutableBody:
       "after publishing: it protects whoever already bought. Name, description, place and date can, and capacity can be raised, confirmed with an emailed code.",
     maxRevenue: (amount: string) => ` If you sell out, you make ${amount} USDC.`,
-    submit: "Publish event",
-    errorPrice: "Write the price as a number, for example 2.50",
     errorPastDate: "That date is in the past — pick a future one",
     errorGeneric: "The event couldn't be created",
   },
@@ -475,6 +449,8 @@ export const en: Dict = {
   },
   door: {
     title: "Door mode",
+    pickTitle: "Choose the event",
+    pickBody: "Open the door of the event where you will check tickets.",
     loginNote:
       "Sign in with the account that created the event to validate tickets. Are you staff? Ask the organizer for the door link.",
     forbiddenTitle: "This event isn't yours",
@@ -482,8 +458,6 @@ export const en: Dict = {
       "Only the account that created the event (or whoever has its door link) can validate tickets.",
     validatingFor: "Checking in for",
     checkedIn: "Checked in",
-    validTitle: "Valid ticket",
-    validDetail: "Let them in.",
     usedTitle: "Already used",
     usedDetail: (when: string) => `Came in on ${when} — don't let them through.`,
     usedDetailNoTime: "This ticket already came in. Don't let them through.",
@@ -496,12 +470,12 @@ export const en: Dict = {
     noCamera: "No camera found. Use the door code below.",
     cameraDenied:
       "We couldn't open the camera. Allow camera access in your browser, or use the door code.",
-    aim: "Point the camera at the ticket's QR. The result shows up on its own.",
+    aim: "Point the camera at the ticket's QR. We show whether it's valid; the entry is only recorded when you tap “Let them in”.",
     manualLabel: "Can't scan it? Type the door code",
     manualPlaceholder: "e.g. UJE4YMVP",
     validate: "Validate",
     footerNote:
-      "Each ticket works exactly once: it's marked as used the moment it's validated, so a screenshot of an already-used QR comes up red.",
+      "Each ticket works exactly once: it's marked as used when you accept its entry (scanning only checks it), so a screenshot of an already-used QR comes up red.",
   },
   sales: {
     title: "Sales",
@@ -553,7 +527,6 @@ export const en: Dict = {
     wallet: "Wallet",
     addressCopied: "Copied ✓",
     logout: "Sign out",
-    balance: "Your balance",
     refresh: "Refresh",
     receiveTitle: "Receive USDC",
     receiveBody:
@@ -573,7 +546,6 @@ export const en: Dict = {
     remaining: (left: number) => `${left} left`,
     soldOut: "Sold out",
     held: "Held",
-    ticketOf: (name: string) => `${name} ticket`,
     addType: "Add a ticket type",
     removeType: "Remove",
     typeName: "Type name",
@@ -587,7 +559,6 @@ export const en: Dict = {
     errorDuplicate: "Two ticket types share the same name",
     errorPrice: "Write the price as a number, for example 2.50",
     errorCapacity: "Seats must be a whole number above 0",
-    errorTooMany: "Up to 6 ticket types per event",
     totalCapacity: (total: number) => `Total capacity: ${total}`,
   },
   hold: {
@@ -599,15 +570,12 @@ export const en: Dict = {
         ? "The last seat is held by someone who hasn't paid yet. If they don't pay in a few minutes, it frees up again."
         : `${count} seats are held by buyers who haven't paid yet. If they don't pay in a few minutes, they free up again.`,
     retryLater: "Reload this page in a few minutes.",
-    releasedOnCancel: "Cancelled: your seat is available to others again.",
   },
   checkin: {
     reviewTitle: "Valid ticket",
-    reviewBody: "Review and confirm the check-in.",
-    ticketOf: "Ticket of",
+    reviewBody: "Not recorded yet. Tap “Let them in” to mark it as used.",
     approve: "Let them in",
     reject: "Cancel",
-    approving: "Recording check-in…",
     approved: "Checked in!",
     approvedDetail: "They can go through.",
     notifyFailed: "The buyer could not be notified by email.",
@@ -619,7 +587,6 @@ export const en: Dict = {
     emptyHint: "We'll tell you here when you sell a ticket, or when yours is checked in.",
     sold: (event: string) => `You sold a ticket for ${event}`,
     checkedIn: (event: string) => `Your ticket for ${event} was accepted. Enjoy!`,
-    markAllRead: "Mark all as read",
     loadError: "We couldn't load your notifications.",
   },
   scan: {
@@ -636,8 +603,6 @@ export const en: Dict = {
     confirm: "Confirm and publish",
   },
   showcase: {
-    title: "Events",
-    subtitle: "Find your next plan and get your ticket in seconds.",
     featured: "Featured",
     upcoming: "Upcoming events",
     search: "Search by name or place",
@@ -645,7 +610,6 @@ export const en: Dict = {
     emptySearch: "No events match that search.",
     seatsLeft: (n: number) => (n === 1 ? "1 spot left" : `${n} spots left`),
     soldOut: "Sold out",
-    see: "See event",
     previous: "Previous",
     next: "Next",
     goTo: (n: number) => `Go to featured ${n}`,
@@ -691,12 +655,10 @@ export const en: Dict = {
     uploadLater: "The event is published, but the photo didn't upload. Upload it again from here.",
   },
   capacity: {
-    title: "Add tickets",
     body: "Each increase is confirmed with a 6-digit code we email you.",
     field: "New total capacity",
     submit: "Send code",
     errorLower: "The new capacity has to be higher than the current one.",
-    errorLimit: "Capacity can't go above 100,000 tickets.",
     emailField: "Email for the code",
     emailHint: "Just this once: from now on, codes always go to this email.",
     codeSent: (to: string, capacity: number) =>

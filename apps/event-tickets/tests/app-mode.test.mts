@@ -22,7 +22,9 @@ test("organizer screens put the app in organizer mode; shared screens don't pick
   assert.equal(modeForPath("/mis-eventos"), "organize");
   assert.equal(modeForPath("/organizador/nuevo"), "organize");
   assert.equal(modeForPath("/organizador/eventos/abc"), "organize");
-  assert.equal(modeForPath("/escanear"), "organize");
+  assert.equal(modeForPath("/organizador/puerta"), "organize");
+  // The poster reader is for whoever finds an event, not for the door.
+  assert.equal(modeForPath("/escanear"), null);
   assert.equal(modeForPath("/puerta/abc"), null);
   assert.equal(modeForPath("/mis-pases"), "explore");
   assert.equal(modeForPath("/app"), null);

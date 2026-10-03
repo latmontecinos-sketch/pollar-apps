@@ -27,7 +27,7 @@ const ITEMS: Record<AppMode, Item[]> = {
   organize: [
     { href: "/app", icon: "home", label: "home" },
     { href: "/mis-eventos", icon: "calendar", label: "events", also: ["/organizador/eventos"] },
-    { href: "/escanear", icon: "scan", label: "scan" },
+    { href: "/organizador/puerta", icon: "scan", label: "door" },
     { href: "/organizador/nuevo", icon: "plus", label: "create" },
   ],
 };

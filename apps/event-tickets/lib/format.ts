@@ -2,7 +2,7 @@ import { INTL_LOCALE, type Locale } from "./i18n/locales.ts";
 
 /**
  * "0.0000000" → "0.00", "12.5000000" → "12.50", written the way the reader's
- * language writes numbers ("2,50" in Spanish and French, "2.50" in English).
+ * language writes numbers ("2,50" in Spanish, "2.50" in English).
  * The locale is always passed in: falling back to the device's own locale
  * would make the server and the browser render different strings.
  */

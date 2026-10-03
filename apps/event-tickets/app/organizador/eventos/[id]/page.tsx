@@ -15,6 +15,7 @@ import {
 import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
 import { AppShell } from "@/components/AppShell";
+import { ScreenLoading } from "@/components/ScreenLoading";
 import { CapacityIncrease } from "@/components/CapacityIncrease";
 import { DoorStaffCard } from "@/components/DoorStaffCard";
 import { EventPhotoCard } from "@/components/EventPhotoCard";
@@ -173,7 +174,7 @@ export default function OrganizerEventPage({
     };
   }, [address, id]);
 
-  if (authLoading) return null;
+  if (authLoading) return <ScreenLoading title={t.panel.title} back={{ href: "/app", label: t.common.home }} />;
 
   if (!user) {
     return (

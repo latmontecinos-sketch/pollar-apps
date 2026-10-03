@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { usePollar } from "@pollar/react";
+import { useBrowserValue } from "@/hooks/useBrowserValue";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { useT } from "@/lib/i18n/client";
@@ -9,8 +10,6 @@ import { apiErrorMessage } from "@/lib/i18n/errors";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
-
-const noopSubscribe = () => () => {};
 
 /**
  * Lets the organizer hand door duty to someone else without sharing their
@@ -30,7 +29,7 @@ export function DoorStaffCard({
   const { user } = usePollarAuth();
   const { getClient } = usePollar();
   const t = useT();
-  const origin = useSyncExternalStore(noopSubscribe, () => window.location.origin, () => "");
+  const origin = useBrowserValue(() => window.location.origin, "");
   const [token, setToken] = useState(initialToken);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);

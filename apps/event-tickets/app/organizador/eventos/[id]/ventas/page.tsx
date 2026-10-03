@@ -8,6 +8,7 @@ import { formatAmount, formatTimestamp, shortAddress } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { explorerTxUrl } from "@/lib/network";
 import { AppShell } from "@/components/AppShell";
+import { ScreenLoading } from "@/components/ScreenLoading";
 import { Card } from "@/components/ui/Card";
 import { RefundButton } from "@/components/RefundButton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -74,9 +75,9 @@ export default function SalesPage({
     void load();
   }, [load]);
 
-  if (authLoading) return null;
-
   const back = { href: `/organizador/eventos/${id}`, label: t.panel.title };
+
+  if (authLoading) return <ScreenLoading title={t.sales.title} back={back} />;
 
   const statusLabel: Record<SaleStatus, string> = {
     paid: t.sales.statusPaid,

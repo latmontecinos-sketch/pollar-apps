@@ -9,11 +9,9 @@ import { Icon } from "@/components/ui/Icon";
 import { PollarLogo } from "@/components/ui/PollarLogo";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useT } from "@/lib/i18n/client";
+import { bandButton } from "@/components/band-button";
 
 /** The round, light buttons that sit on the brand band. */
-export const bandButton =
-  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-foreground/80 shadow-sm transition-colors hover:text-primary";
-
 /**
  * The header inside the app shell's band: back (or the logo, home) on the
  * left; help, notifications, preferences and the account on the right; then

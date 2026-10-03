@@ -36,8 +36,8 @@ test("event times are La Paz time whatever the device's timezone", () => {
   const iso = laPazLocalToUtcIso("2026-10-09T20:00");
   assert.equal(iso, "2026-10-10T00:00:00.000Z");
   assert.equal(utcIsoToLaPazLocal(iso), "2026-10-09T20:00");
-  // Same instant, read from three languages: the hour never moves.
-  for (const locale of ["es", "en", "fr"] as const) {
+  // Same instant, read from both languages: the hour never moves.
+  for (const locale of ["es", "en"] as const) {
     assert.match(formatEventDateTime(iso, locale), /8|20/);
   }
 });
@@ -45,7 +45,6 @@ test("event times are La Paz time whatever the device's timezone", () => {
 test("amounts follow the reader's language", () => {
   assert.equal(formatAmount("2.5000000", "es"), "2,50");
   assert.equal(formatAmount("2.5000000", "en"), "2.50");
-  assert.equal(formatAmount("2.5000000", "fr"), "2,50");
   assert.equal(formatAmount(null, "es"), "—");
 });
 
@@ -73,7 +72,7 @@ test("an event late on the 31st in La Paz is grouped in its own month, not UTC's
   // 22:30 on 31 Oct in La Paz is already 1 Nov in UTC.
   assert.equal(formatEventMonth("2026-11-01T02:30:00.000Z", "es"), "octubre de 2026");
   assert.equal(formatEventMonth("2026-11-01T02:30:00.000Z", "en"), "October 2026");
-  assert.equal(formatEventMonth("not a date", "fr"), "not a date");
+  assert.equal(formatEventMonth("not a date", "en"), "not a date");
 });
 
 test("the link preview says the day and the time apart, in La Paz", () => {
@@ -81,7 +80,6 @@ test("the link preview says the day and the time apart, in La Paz", () => {
   const iso = "2026-10-24T23:00:00.000Z";
   assert.match(formatEventDay(iso, "es"), /^sábado,? 24 de octubre$/);
   assert.match(formatEventDay(iso, "en"), /^Saturday, October 24$/);
-  assert.match(formatEventTime(iso, "fr"), /^19:00$/);
   // ICU puts a narrow no-break space before "PM"; \s covers it and a plain one.
   assert.match(formatEventTime(iso, "en"), /^7:00\sPM$/);
 });

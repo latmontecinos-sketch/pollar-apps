@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { EventShowcase } from "@/components/EventShowcase";
 import { BalanceCard } from "@/components/BalanceCard";
 import { buyerSteps, GuideSteps } from "@/components/GuideSteps";
+import { LoadError } from "@/components/LoadError";
 import { LoginButton } from "@/components/LoginButton";
 import { CreateEventButton, OrganizerEventCard } from "@/components/OrganizerEventCard";
 import { ReceiveModal } from "@/components/ReceiveModal";
@@ -163,7 +164,7 @@ function OrganizerHome({ onMode }: { onMode: (mode: AppMode) => void }) {
           <Spinner />
         </div>
       )}
-      {state.step === "error" && <p className="px-1 text-sm text-error">{t.myEvents.loadError}</p>}
+      {state.step === "error" && <LoadError message={t.myEvents.loadError} onRetry={state.retry} />}
       {state.step === "loaded" && upcoming.length === 0 && (
         <p className="px-1 text-sm leading-6 text-muted">{t.mode.noUpcoming}</p>
       )}
@@ -180,7 +181,13 @@ function OrganizerHome({ onMode }: { onMode: (mode: AppMode) => void }) {
           title={t.home.eventsTile}
           subtitle={t.home.eventsTileBody}
         />
-        <ListRow href="/escanear" icon="scan" tone="mid" title={t.scan.open} subtitle={t.scan.body} />
+        <ListRow
+          href="/organizador/puerta"
+          icon="scan"
+          tone="mid"
+          title={t.door.title}
+          subtitle={t.door.pickBody}
+        />
       </nav>
       {state.step === "loaded" && decimalToStroops(collected) > 0n && (
         <p className="px-1 text-xs leading-5 text-muted">{t.mode.collectedNote(formatAmount(collected, locale))}</p>
@@ -252,6 +259,7 @@ function ExploreHome({ events, onMode }: { events: PublicEvent[]; onMode: (mode:
           title={t.home.ticketsTile}
           subtitle={t.home.ticketsTileBody}
         />
+        <ListRow href="/escanear" icon="scan" tone="mid" title={t.scan.open} subtitle={t.scan.body} />
       </nav>
 
       <Link

@@ -7,8 +7,8 @@ import { securityLog, shortAddressForLog } from "./security-log.ts";
  * Server-side identity for a Pollar user, without an "Authorization: Bearer".
  *
  * Pollar sessions are DPoP-bound — the signing key lives on the user's device
- * and never reaches our server, so a forwarded token proves nothing here
- * (see SDK-NOTES.md §8). The proven alternative (already shipped in
+ * and never reaches our server, so a forwarded token proves nothing here.
+ * The proven alternative (already shipped in
  * apps/vendor-pay-link, a merged PR in this monorepo): the client signs a
  * short-lived message via `client.stellar.sep53.signMessage()`, and we
  * verify that signature purely cryptographically — no call to Pollar at all.

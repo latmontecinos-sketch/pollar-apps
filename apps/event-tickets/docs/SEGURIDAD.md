@@ -117,18 +117,20 @@ Lo que no cubre un test automático, porque necesita un navegador real:
 ## Reportar un problema
 
 Todavía **no** publicamos `/.well-known/security.txt`: hace falta decidir
-qué contacto exponer (un correo público se cosecha para siempre). La
-plantilla está en `docs/security.txt.ejemplo`; para publicarla, completa
-`Contact:` y muévela a `public/.well-known/security.txt`.
+qué contacto exponer (un correo público se cosecha para siempre). Para
+publicarlo, crea `public/.well-known/security.txt` con `Contact:` (un
+correo o una URL) y `Expires:` (una fecha futura, máximo un año).
 
 ## Pendiente
 
 - Rotar el token de Turso: estuvo en `.env`, que cargan todos los scripts.
-- Marcar `DATABASE_URL`, `DATABASE_AUTH_TOKEN` y `RESEND_API_KEY` como
+- Marcar `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `SMTP_PASS` y `RESEND_API_KEY` como
   *Sensitive* en Vercel; hoy son legibles desde el panel.
 - Separar la base de datos de *preview* de la de producción: hoy un deploy
   de preview escribe en los datos reales.
-- Dominio propio verificado en Resend (hoy `onboarding@resend.dev`, sin
-  SPF/DKIM nuestro).
+- Correo: `lib/mail.ts` envía por SMTP cuando están `SMTP_HOST`, `SMTP_USER` y
+  `SMTP_PASS`, y usa Resend como respaldo si no. Resend con el remitente de
+  pruebas (`onboarding@resend.dev`) solo entrega al dueño de la cuenta; para
+  producción hace falta SMTP o un dominio propio verificado, con SPF/DKIM.
 - `pnpm audit` en CI. No se agregó acá porque el workflow viviría en la
   raíz del monorepo, fuera del alcance de este app.

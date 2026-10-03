@@ -6,6 +6,7 @@ import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
 import { useT } from "@/lib/i18n/client";
 import { AppShell } from "@/components/AppShell";
+import { ScreenLoading } from "@/components/ScreenLoading";
 import { DoorScanner } from "@/components/DoorScanner";
 import { Card } from "@/components/ui/Card";
 import { LoginButton } from "@/components/LoginButton";
@@ -21,9 +22,9 @@ export default function DoorModePage({
   const t = useT();
   const [denied, setDenied] = useState(false);
 
-  if (authLoading) return null;
-
   const back = { href: `/organizador/eventos/${id}`, label: t.panel.title };
+
+  if (authLoading) return <ScreenLoading title={t.door.title} back={back} />;
 
   if (!user) {
     return (

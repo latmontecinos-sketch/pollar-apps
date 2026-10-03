@@ -1,15 +1,10 @@
-import type { SubmitOutcome, WalletBalanceRecord } from "@pollar/core";
+import type { WalletBalanceRecord } from "@pollar/core";
 import { decimalToStroops } from "./money.ts";
 
 /** Asset for `runTx('payment', …)`. */
 export type PaymentAsset =
   | { type: "native" }
   | { type: "credit_alphanum4" | "credit_alphanum12"; code: string; issuer: string };
-
-export type PaymentResult = Extract<
-  SubmitOutcome,
-  { status: "success" | "pending" }
->;
 
 /**
  * The exact asset a sale is denominated in, as `runTx('payment', …)` wants it.
@@ -28,10 +23,6 @@ export function creditAsset(asset: { code: string; issuer: string }): PaymentAss
     code: asset.code,
     issuer: asset.issuer,
   };
-}
-
-export function currencyOf(asset: PaymentAsset): string {
-  return asset.type === "native" ? "XLM" : asset.code;
 }
 
 /**

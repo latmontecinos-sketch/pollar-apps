@@ -1,4 +1,4 @@
-export const LOCALES = ["es", "en", "fr"] as const;
+export const LOCALES = ["es", "en"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "es";
@@ -8,14 +8,12 @@ export const LOCALE_COOKIE = "pollarpass_locale";
 export const LOCALE_LABELS: Record<Locale, string> = {
   es: "Español",
   en: "English",
-  fr: "Français",
 };
 
 /** Intl tags: dates and amounts follow the reader's language, never the device's. */
 export const INTL_LOCALE: Record<Locale, string> = {
   es: "es-BO",
   en: "en-US",
-  fr: "fr-FR",
 };
 
 export function isLocale(value: string | undefined | null): value is Locale {

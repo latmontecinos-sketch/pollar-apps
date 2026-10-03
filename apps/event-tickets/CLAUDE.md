@@ -25,10 +25,19 @@ For anything SDK-related, the source of truth is https://docs.pollar.xyz/llms-fu
 | Payments | `components/BuyButton.tsx` | The real checkout: reserve a seat, pay it with the sale's memo via `runTx('payment', …)`, then verify against Horizon with backoff. Remembers an in-flight purchase in `localStorage` so a reload only ever re-verifies, never re-pays. The template's `PayButton`/`SendModal` are gone — they could not carry a memo, which this flow needs. |
 | Network & asset | `lib/network.ts` | The single source of truth for which Stellar network this is: issuer, Horizon URL, explorer links, and the `IS_MAINNET` gate for copy. Refuses to load if `HORIZON_URL` contradicts the publishable key. Nothing else may decide the network. |
 | Receive | `components/ReceiveModal.tsx` | The receive view (address + QR), for a buyer topping up before a purchase. |
-| UI kit | `components/ui/` | `Button`, `Card`, `Input`, `Modal`, `Spinner`, `EmptyState`, `ListRow`/`IconTile`, `Segmented`, `PollarLogo`, `PollarBear`. Typed, token-styled. `Modal` is the single modal shell: bottom sheet on phones, centered on desktop. |
+| UI kit | `components/ui/` | `Button`, `Card`, `Icon`, `Input`, `Modal`, `Spinner`, `EmptyState`, `ListRow`/`IconTile`, `Segmented`, `Stat`, `PollarLogo`, `PollarBear`. Typed, token-styled. `Modal` is the single modal shell: bottom sheet on phones, centered on desktop. |
 | Design tokens | `app/globals.css` | All colors as CSS variables (light by default, dark via `data-theme="dark"`), exposed as Tailwind utilities (`bg-primary`, `text-muted`, …). The shell adds `band`, `sheet`, `nav`, `field` and three icon-tile steps (`tile-soft`/`mid`/`strong`), all from the same brand blue. |
 | Manifest | `pollar.manifest.json` | Identifies the app to the Pollar hub: name, slug, description, category, icon, deploy URL. Must be filled before the PR. |
-| Demo | `app/page.tsx` | Working demo of all of the above. Replace it with the real app. |
+| Product page | `app/page.tsx` | The public product page (what Pollar Pass is, who it's for, the way in to `/app`). The app itself starts at `app/app/`. |
+| Languages | `lib/i18n/` | Spanish and English. `es.ts` is the source dictionary and `en.ts` is typed against it; the language comes from a cookie, else `Accept-Language`, else Spanish (a browser that asks only for another language gets Spanish). |
+| Screen states | `components/ScreenLoading.tsx`, `components/LoadError.tsx` | A screen waiting for the session shows `ScreenLoading` (its frame plus a spinner), never a blank page; a failed first load shows `LoadError` with a retry button. |
+| Checkout memory | `lib/checkout.ts` | Pure: what a purchase or refund remembers while money may be in flight, and whether it is safe to let the person pay again. |
+| Tab claims | `lib/claim.ts` | An exclusive claim shared by every tab of the browser (Web Locks, `localStorage` fallback), so two tabs never send the same payment. |
+| Event owner | `lib/event-owner.ts` | `organizerOf(eventId)`: who owns an event, `null` if it doesn't exist; owner-only routes answer 404 before 403. |
+| Event edits | `lib/event-update.ts` | One `UPDATE` that writes only the fields an organizer's edit carries, so racing edits can't undo each other. |
+| Revenue | `lib/revenue.ts` | What each event has collected, summed in BigInt (never `SUM` in SQL). |
+| Check-in email | `lib/checkin-notify.ts` | The best-effort "you're in" email after a check-in: never throws, returns `none`/`sent`/`failed` for the screen. |
+| Door | `app/organizador/puerta/`, `app/organizador/eventos/[id]/puerta/`, `app/puerta/[id]/` | The organizer's "Puerta" tab picks an event and opens its door; staff open the same scanner from the event's door link. The check-in is recorded only when the person taps accept, not when the QR is read. `app/escanear` is a different thing: the poster reader that opens an event's public page. |
 
 ## Hard rules
 
@@ -76,7 +85,7 @@ not from a style guide. Breaking one has cost something here before.
 
 5. **Every user-facing string lives in `lib/i18n/`, error messages
    included.** The client prefers `t.xxx` over a string from the server;
-   an API error in one language silently defeats three translated
+   an API error in one language silently defeats the translated
    dictionaries.
 
 6. **The network and the asset are decided in `lib/network.ts` and

@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { TicketQr } from "@/components/TicketQr";
+import { useBrowserValue } from "@/hooks/useBrowserValue";
 import { formatEventDateTime } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
-
-const noopSubscribe = () => () => {};
 
 /**
  * The organizer's main job after creating an event: getting the public link
@@ -30,12 +29,8 @@ export function ShareEventCard({
   const t = useT();
   const locale = useLocale();
   // Browser-only values: empty/false during SSR, real after hydration.
-  const origin = useSyncExternalStore(noopSubscribe, () => window.location.origin, () => "");
-  const canShare = useSyncExternalStore(
-    noopSubscribe,
-    () => typeof navigator.share === "function",
-    () => false
-  );
+  const origin = useBrowserValue(() => window.location.origin, "");
+  const canShare = useBrowserValue(() => typeof navigator.share === "function", false);
   const url = origin ? `${origin}/e/${eventId}${accessCode ? `?codigo=${accessCode}` : ""}` : "";
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);

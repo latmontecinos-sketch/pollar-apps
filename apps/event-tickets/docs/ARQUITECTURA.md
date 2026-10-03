@@ -9,7 +9,7 @@ Tablero completo (arquitectura, flujos y capturas), editable en Figma/FigJam:
 | Sección | Contenido |
 |---|---|
 | Portada | Resumen del proyecto, stack y links |
-| Arquitectura general | Comprador/Organizador ↔ Next.js (páginas + rutas API) ↔ Pollar SDK ↔ Stellar Testnet / Horizon ↔ Base de datos (Turso) ↔ Resend |
+| Arquitectura general | Comprador/Organizador ↔ Next.js (páginas + rutas API) ↔ Pollar SDK ↔ Stellar Testnet / Horizon ↔ Base de datos (Turso) ↔ Correo (SMTP, con Resend de respaldo) |
 | Flujo de compra de ticket | Los 9 pasos, desde abrir el link del evento hasta que el ticket queda validado en la puerta |
 | Check-in en la puerta | Escaneo o código manual → validación atómica en la base de datos → los 3 resultados posibles (válido / usado / desconocido) |
 | Estados de una venta | Ciclo de vida de una venta: `pending` → `paid` / `expired` / `unclaimed` |

@@ -291,25 +291,6 @@ export async function sweepExpiredSales(
   });
 }
 
-/**
- * `pending` -> `paid`. If this loses the race to a concurrent `expireSale`
- * (WHERE status = 'pending' matches nothing because it already flipped to
- * 'expired'), the caller applies the late-payment rule instead of retrying
- * blindly — see the design's PENDING/EXPIRED/UNCLAIMED state chart.
- */
-export async function markPaid(
-  saleId: string,
-  txHash: string
-): Promise<{ paid: boolean }> {
-  return withTransaction(async (tx: Transaction) => {
-    const updated = await tx.execute({
-      sql: "UPDATE sales SET status = 'paid', tx_hash = ? WHERE id = ? AND status = 'pending' RETURNING id",
-      args: [txHash, saleId],
-    });
-    return { paid: updated.rows.length > 0 };
-  });
-}
-
 export type SettleResult =
   | { outcome: "paid"; ticket: Ticket }
   | { outcome: "already_paid"; ticket: Ticket }

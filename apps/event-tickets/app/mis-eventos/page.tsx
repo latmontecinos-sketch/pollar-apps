@@ -4,8 +4,10 @@ import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useMyEvents } from "@/hooks/useMyEvents";
 import { useT } from "@/lib/i18n/client";
 import { AppShell } from "@/components/AppShell";
+import { ScreenLoading } from "@/components/ScreenLoading";
 import { CreateEventButton, OrganizerEventCard } from "@/components/OrganizerEventCard";
 import { Card } from "@/components/ui/Card";
+import { LoadError } from "@/components/LoadError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoginButton } from "@/components/LoginButton";
 import { PollarLogo } from "@/components/ui/PollarLogo";
@@ -16,7 +18,7 @@ export default function MisEventosPage() {
   const t = useT();
   const state = useMyEvents();
 
-  if (authLoading) return null;
+  if (authLoading) return <ScreenLoading title={t.myEvents.title} back={{ href: "/app", label: t.common.home }} />;
 
   if (!user) {
     return (
@@ -38,11 +40,7 @@ export default function MisEventosPage() {
         </div>
       )}
 
-      {state.step === "error" && (
-        <Card>
-          <p className="text-center text-sm text-error">{t.myEvents.loadError}</p>
-        </Card>
-      )}
+      {state.step === "error" && <LoadError message={t.myEvents.loadError} onRetry={state.retry} />}
 
       {state.step === "loaded" && state.events.length === 0 && (
         <Card>

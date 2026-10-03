@@ -1,5 +1,5 @@
 /**
- * Source dictionary. `en.ts` and `fr.ts` are typed against this shape, so a
+ * Source dictionary. `en.ts` is typed against this shape, so a
  * missing or renamed key breaks the build instead of shipping a blank label.
  * Interpolations are plain functions — no template DSL to learn.
  */
@@ -19,7 +19,8 @@ export const es = {
     copied: "Copiado",
     share: "Compartir",
     whatsapp: "WhatsApp",
-    close: "Cerrar",
+    retry: "Reintentar",
+    loading: "Cargando…",
   },
   footer: {
     disclaimer:
@@ -42,27 +43,15 @@ export const es = {
     eventDescription: (name: string, day: string, time: string, place: string, price: string) =>
       `Compra tus entradas para ${name}. Será el ${day} a las ${time}, en ${place}. ${price}.`,
     ogCta: "Compra tus entradas",
-    ogAlt: "Entrada para un evento en Pollar Pass",
   },
   landing: {
-    badge: "Entradas digitales para eventos en Bolivia",
     titleLine1: "Tu entrada es un QR.",
     titleLine2: "Tu pago, en USDC.",
     subtitle:
       "Organiza un evento y vende entradas con un link, o compra la tuya en segundos. Todo dentro de la app, sin tarjetas ni billeteras externas.",
     cta: "Empezar con mi correo",
     seeHow: "Ver cómo funciona →",
-    buyerCardTitle: "¿Vas a un evento?",
-    buyerCardBody: "Abre el link que te compartieron y compra tu entrada.",
-    organizerCardTitle: "¿Organizas?",
-    organizerCardBody: "Crea tu evento, comparte el link y valida en la puerta.",
     stepsTitle: "Así se compra una entrada",
-    fullGuide: "Guía completa y preguntas frecuentes →",
-    promises: [
-      "Sin billetera externa: ingresas con tu correo",
-      "Cada pago se verifica en la red Stellar",
-      "Cada QR vale una sola vez en la puerta",
-    ],
   },
   /** The public product page at "/" — the app itself lives at "/app". */
   product: {
@@ -89,14 +78,10 @@ export const es = {
     techBody:
       "Next.js y el SDK de Pollar sobre Stellar. Los montos se manejan en enteros (stroops), cada pago se verifica contra Horizon y la validación en la puerta es una sola operación atómica en la base de datos.",
     linkRepo: "Código en GitHub",
-    linkGuide: "Guía de uso",
-    linkDocs: "Documentación visual",
     ctaTitle: "¿Lo probamos?",
     ctaBody: "Abre la app, crea un evento de prueba y compártelo. No necesitas instalar nada.",
   },
   home: {
-    title: "¿Qué quieres hacer hoy?",
-    subtitle: "Compra entradas o administra tus eventos.",
     receive: "Recibir USDC",
     testUsdc: "USDC de prueba",
     emptyBalanceStrong: "Tu saldo está en 0.",
@@ -107,18 +92,16 @@ export const es = {
     eventsTile: "Mis eventos",
     eventsTileBody: "Ventas, link para compartir y modo puerta",
     createTile: "Crear evento",
-    createTileBody: "Publica tu evento y empieza a vender",
     firstTimeStrong: "¿Primera vez?",
     firstTimeBody: "Mira cómo funciona Pollar Pass, paso a paso.",
     greeting: "Hola de nuevo",
     balanceLabel: "Saldo disponible",
-    activeTicketsLabel: "Entradas activas",
   },
   nav: {
     label: "Navegación principal",
     home: "Inicio",
     tickets: "Entradas",
-    scan: "Escanear",
+    door: "Puerta",
     events: "Eventos",
     create: "Crear",
   },
@@ -213,7 +196,7 @@ export const es = {
       },
       {
         title: "Valida en la puerta",
-        body: "El día del evento abre “Modo puerta” en tu celular y escanea los QR. Verde: puede pasar. Rojo: ya usada o no válida. Si alguien más recibe a la gente, mándale el link de puerta desde tu panel.",
+        body: "El día del evento abre “Modo puerta” en tu celular y escanea los QR. Revisa la entrada y toca “Aceptar ingreso”: recién ahí queda usada. Rojo: ya usada o no válida. Si alguien más recibe a la gente, mándale el link de puerta desde tu panel.",
       },
     ],
     faq: {
@@ -242,7 +225,7 @@ export const es = {
         "Tu cupo queda reservado 10 minutos. Si no se completa el pago en ese tiempo, la reserva expira sola y el cupo vuelve a estar disponible. No se te cobra nada.",
       screenshotQ: "¿Alguien puede entrar con una captura de mi QR?",
       screenshotA:
-        "Cada entrada vale una sola vez: apenas se escanea en la puerta queda marcada como usada, así que una copia no sirve. Por eso no compartas tu QR ni tu código de puerta.",
+        "Cada entrada vale una sola vez: queda marcada como usada cuando en la puerta se acepta su ingreso, así que una copia no sirve. Por eso no compartas tu QR ni tu código de puerta.",
       refundQ: "¿Puedo pedir un reembolso?",
       refundA:
         "Los pagos van directo al organizador, así que un reembolso depende de él: contáctalo con los datos que publicó en la página del evento. La app no retiene dinero.",
@@ -261,14 +244,11 @@ export const es = {
     },
   },
   event: {
-    ticketBadge: (price: string) => `Entrada · ${price} USDC`,
     organizedBy: (name: string) => `Organiza: ${name}`,
     organizerFallback: "el organizador",
     contactLink: (contact: string) => `Contactar: ${contact}`,
     contactPlain: (contact: string) => `Contacto: ${contact}`,
-    seats: "Cupos",
     soldOut: "Agotado",
-    remaining: (left: number, total: number) => `Quedan ${left} de ${total}`,
     closed: "Este evento ya pasó: la venta de entradas está cerrada.",
     firstTimeTitle: "¿Primera vez comprando con Pollar Pass?",
     firstTimeSteps: [
@@ -339,7 +319,7 @@ export const es = {
     statUsed: "Usadas",
     emptyFilter: "No hay entradas en esta lista.",
     loginNote: "Ingresa para ver las entradas que compraste.",
-    loadError: "No se pudieron cargar tus entradas. Recarga la página.",
+    loadError: "No se pudieron cargar tus entradas.",
     emptyTitle: "Todavía no tienes entradas",
     emptyBody:
       "Las entradas se compran desde el link que comparte cada organizador. Cuando compres una, aparecerá aquí con su QR.",
@@ -370,7 +350,7 @@ export const es = {
     title: "Mis eventos",
     loginNote: "Ingresa para ver los eventos que organizas.",
     create: "Crear evento",
-    loadError: "No se pudieron cargar tus eventos. Recarga la página.",
+    loadError: "No se pudieron cargar tus eventos.",
     emptyTitle: "Todavía no organizas eventos",
     emptyBody:
       "Crea uno en un minuto: pones nombre, lugar, fecha, precio y cupo, y te damos un link para vender entradas.",
@@ -385,7 +365,6 @@ export const es = {
     intro: "Completa los datos y publica. Al terminar te damos el link para compartir por WhatsApp.",
     sectionEvent: "El evento",
     sectionOrganizer: "Quién organiza",
-    sectionTickets: "Entradas",
     name: "Nombre del evento",
     namePlaceholder: "Ej: Noche de jazz en Sopocachi",
     description: "Descripción (opcional)",
@@ -400,18 +379,13 @@ export const es = {
     organizerContactPlaceholder: "WhatsApp (70012345) o @instagram",
     organizerHint:
       "Se muestra en la página del evento: los compradores te pagan directo, así que necesitan saber quién eres y cómo escribirte.",
-    price: "Precio por entrada (USDC)",
     pricePlaceholder: "Ej: 2,50 (0 = gratis)",
     priceHint: "1 USDC ≈ 1 dólar. Cada pago llega directo a tu cuenta Pollar.",
-    capacity: "Cupo total",
     capacityPlaceholder: "Ej: 50",
-    capacityHint: "Cuántas entradas se pueden vender como máximo.",
     immutableStrong: "El precio y el cupo no se pueden cambiar",
     immutableBody:
       "después de publicar: protege a quien ya compró. Nombre, descripción, lugar y fecha sí, y el cupo se puede ampliar, confirmando con un código por correo.",
     maxRevenue: (amount: string) => ` Si vendes todo, recaudas ${amount} USDC.`,
-    submit: "Publicar evento",
-    errorPrice: "Escribe el precio como número, por ejemplo 2,50",
     errorPastDate: "La fecha del evento ya pasó — elige una fecha futura",
     errorGeneric: "No se pudo crear el evento",
   },
@@ -481,6 +455,8 @@ export const es = {
   },
   door: {
     title: "Modo puerta",
+    pickTitle: "Elige el evento",
+    pickBody: "Abre la puerta del evento donde vas a validar entradas.",
     loginNote:
       "Ingresa con la cuenta que creó el evento para validar entradas. ¿Eres del personal? Pide al organizador el link de puerta.",
     forbiddenTitle: "Este evento no es tuyo",
@@ -488,8 +464,6 @@ export const es = {
       "Solo la cuenta que creó el evento (o quien tenga su link de puerta) puede validar entradas.",
     validatingFor: "Validando para",
     checkedIn: "Ingresaron",
-    validTitle: "Entrada válida",
-    validDetail: "Puede pasar.",
     usedTitle: "Ya fue usada",
     usedDetail: (when: string) => `Ingresó el ${when} — no dejes pasar.`,
     usedDetailNoTime: "Esta entrada ya ingresó. No dejes pasar.",
@@ -502,12 +476,12 @@ export const es = {
     noCamera: "No encontramos una cámara. Usa el código de puerta de abajo.",
     cameraDenied:
       "No pudimos abrir la cámara. Permite el acceso a la cámara en tu navegador, o usa el código de puerta.",
-    aim: "Apunta la cámara al QR de la entrada. El resultado aparece solo.",
+    aim: "Apunta la cámara al QR de la entrada. Te mostramos si es válida; el ingreso se registra cuando tocas “Aceptar ingreso”.",
     manualLabel: "¿No se puede escanear? Escribe el código de puerta",
     manualPlaceholder: "Ej: UJE4YMVP",
     validate: "Validar",
     footerNote:
-      "Cada entrada vale una sola vez: se marca como usada en el mismo instante en que se valida, así que una captura de pantalla de un QR ya usado sale en rojo.",
+      "Cada entrada vale una sola vez: se marca como usada cuando aceptas su ingreso (escanear solo la revisa), así que una captura de pantalla de un QR ya usado sale en rojo.",
   },
   sales: {
     title: "Ventas",
@@ -563,7 +537,6 @@ export const es = {
     wallet: "Billetera",
     addressCopied: "Copiada ✓",
     logout: "Cerrar sesión",
-    balance: "Tu saldo",
     refresh: "Actualizar",
     receiveTitle: "Recibir USDC",
     receiveBody:
@@ -584,7 +557,6 @@ export const es = {
     remaining: (left: number) => `Quedan ${left}`,
     soldOut: "Agotado",
     held: "Reservadas",
-    ticketOf: (name: string) => `Entrada ${name}`,
     addType: "Agregar tipo de entrada",
     removeType: "Quitar",
     typeName: "Nombre del tipo",
@@ -598,7 +570,6 @@ export const es = {
     errorDuplicate: "Hay dos tipos de entrada con el mismo nombre",
     errorPrice: "Escribe el precio como número, por ejemplo 2,50",
     errorCapacity: "El cupo debe ser un número entero mayor a 0",
-    errorTooMany: "Máximo 6 tipos de entrada por evento",
     totalCapacity: (total: number) => `Cupo total: ${total}`,
   },
   /** Seat holds: the countdown a buyer sees, and what others see meanwhile. */
@@ -611,16 +582,13 @@ export const es = {
         ? "El último cupo está reservado por alguien que aún no paga. Si no paga en unos minutos, vuelve a quedar libre."
         : `${count} cupos están reservados por compradores que aún no pagan. Si no pagan en unos minutos, vuelven a quedar libres.`,
     retryLater: "Vuelve a cargar esta página en unos minutos.",
-    releasedOnCancel: "Cancelaste: tu cupo volvió a estar disponible para otras personas.",
   },
   /** Door check-in with an explicit "let them in" step. */
   checkin: {
     reviewTitle: "Entrada válida",
-    reviewBody: "Revisa y confirma el ingreso.",
-    ticketOf: "Entrada de",
+    reviewBody: "Todavía no está registrada. Toca “Aceptar ingreso” para marcarla como usada.",
     approve: "Aceptar ingreso",
     reject: "Cancelar",
-    approving: "Registrando ingreso…",
     approved: "¡Ingreso confirmado!",
     approvedDetail: "Ya puede pasar.",
     notifyFailed: "No se pudo avisar por correo al comprador.",
@@ -632,7 +600,6 @@ export const es = {
     emptyHint: "Aquí te avisamos cuando vendas una entrada o cuando validen la tuya.",
     sold: (event: string) => `Vendiste una entrada para ${event}`,
     checkedIn: (event: string) => `Tu entrada para ${event} fue aceptada. ¡Que disfrutes!`,
-    markAllRead: "Marcar todo como leído",
     loadError: "No se pudieron cargar las notificaciones.",
   },
   scan: {
@@ -649,8 +616,6 @@ export const es = {
     confirm: "Confirmar y publicar",
   },
   showcase: {
-    title: "Eventos",
-    subtitle: "Encuentra tu próximo plan y compra tu entrada en segundos.",
     featured: "Destacados",
     upcoming: "Próximos eventos",
     search: "Buscar por nombre o lugar",
@@ -658,7 +623,6 @@ export const es = {
     emptySearch: "No encontramos eventos con esa búsqueda.",
     seatsLeft: (n: number) => (n === 1 ? "Queda 1 lugar" : `Quedan ${n} lugares`),
     soldOut: "Agotado",
-    see: "Ver evento",
     previous: "Anterior",
     next: "Siguiente",
     goTo: (n: number) => `Ir al destacado ${n}`,
@@ -704,12 +668,10 @@ export const es = {
     uploadLater: "El evento se publicó, pero la foto no se pudo subir. Súbela de nuevo desde aquí.",
   },
   capacity: {
-    title: "Agregar entradas",
     body: "Cada ampliación se confirma con un código de 6 dígitos que te mandamos por correo.",
     field: "Nuevo cupo total",
     submit: "Enviar código",
     errorLower: "El cupo nuevo tiene que ser mayor al actual.",
-    errorLimit: "El cupo no puede pasar de 100.000 entradas.",
     emailField: "Correo para el código",
     emailHint: "Solo esta vez: desde ahora los códigos llegan siempre a este correo.",
     codeSent: (to: string, capacity: number) =>

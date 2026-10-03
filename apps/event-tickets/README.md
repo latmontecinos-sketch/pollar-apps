@@ -19,7 +19,7 @@ Required in `.env`: `NEXT_PUBLIC_POLLAR_PUBLISHABLE_KEY` (dashboard.pollar.xyz �
 
 - **Local dev**: no database setup needed — falls back to `file:./dev.db`. If your `.env` also holds the production `DATABASE_URL` (e.g. copied from Vercel), add a `.env.development.local` with `DATABASE_URL=file:./dev.db` so `pnpm dev` never writes test data into production.
 - **Production**: `DATABASE_URL` + `DATABASE_AUTH_TOKEN` (libSQL/Turso) are required; the app refuses to start on the local file DB in production rather than silently losing writes on a serverless filesystem.
-- **`RESEND_API_KEY`**: optional, best-effort email of the ticket after purchase (see below).
+- **`SMTP_HOST` / `SMTP_USER` / `SMTP_PASS`** or **`RESEND_API_KEY`**: optional, best-effort email of the ticket after purchase (SMTP wins when set; Resend is the fallback).
 
 Deploying to a new domain (Vercel or otherwise) also needs that domain added on the Pollar side, or every login fails with "Could not load sign-in options": dashboard.pollar.xyz → your app → Build → Domains → add the deploy URL (e.g. `https://your-app.vercel.app`) to both **Allowed origins** and **Allowed redirect URIs** (the latter is only checked for OAuth logins like Google — email/wallet login only needs the former). `localhost:3000` for local dev is separate and unaffected.
 
@@ -53,7 +53,7 @@ There's no merchant "charge" API in Pollar — an in-app purchase is a user-to-u
 
 ## Languages and theme
 
-Spanish, English and French, plus light / dark / system. Both live in cookies read on the **server** (`lib/i18n/server.ts`), so the first paint is already in the right language and theme — no flash, and shared links preview correctly for whoever opens them. A visitor with no cookie gets their `Accept-Language`. `lib/i18n/es.ts` is the source dictionary; `en.ts` and `fr.ts` are typed against it, so a missing key fails the build instead of rendering blank. Amounts and dates follow the reader's language (`2,50` vs `2.50`) while event times stay in `America/La_Paz` — the event happens in Bolivia whoever is reading.
+Spanish and English, plus light / dark / system. Both live in cookies read on the **server** (`lib/i18n/server.ts`), so the first paint is already in the right language and theme — no flash, and shared links preview correctly for whoever opens them. A visitor with no cookie gets their `Accept-Language`. `lib/i18n/es.ts` is the source dictionary; `en.ts` is typed against it, so a missing key fails the build instead of rendering blank. Amounts and dates follow the reader's language (`2,50` vs `2.50`) while event times stay in `America/La_Paz` — the event happens in Bolivia whoever is reading.
 
 ## Ticket tiers
 
@@ -88,7 +88,7 @@ A full review against the [OWASP Top 10:2025](https://owasp.org/Top10/2025/) liv
 
 ## Testing and QA
 
-Automated where it's cheap, by hand where it isn't. The spikes below run against the real remote database and real testnet; the manual pass is the one to repeat before a demo.
+Automated where it's cheap, by hand where it isn't. `pnpm db:probe` checks the database (transactions, rollback, `RETURNING`, `UNIQUE`, concurrency) against whatever `DATABASE_URL` points at; the manual pass is the one to repeat before a demo.
 
 **Manual pass (two accounts, two phones — the same setup as the demo video):**
 
@@ -116,22 +116,11 @@ pnpm test     # node --test, no extra dependency
 pnpm audit    # dependencies with a known CVE; fails on high or worse
 ```
 
-Covers what has actually broken here: stroops arithmetic (never floats), the SQLite-timestamp and timezone bugs, tier validation and capacity limits, the sale state machine (holds, expiry, late payments, refunds, one live reservation per buyer), and that all three dictionaries define the same keys with their interpolations intact.
+Covers what has actually broken here: stroops arithmetic (never floats), the SQLite-timestamp and timezone bugs, tier validation and capacity limits, the sale state machine (holds, expiry, late payments, refunds, one live reservation per buyer), and that both dictionaries define the same keys with their interpolations intact.
 
 `tests/security.test.mts` covers the abuse cases instead: a proof replayed on a different endpoint or a different method, an expired one, one claiming a week of life, one forging someone else's address, a staff token used on the wrong event or after it ended, and a quota that lets the honest case through and stops the loop. They run the real modules directly — `lib/auth.ts` returns plain `Response`s precisely so no framework has to be booted around them.
 
 `.npmrc` sets `minimum-release-age=1440`: never install a version published less than 24 hours ago. A compromised release is usually yanked within hours, so our installs are never the ones that run it.
-
-## Reproducible spikes
-
-Each runs against the real remote database / real testnet, not stubs:
-
-```bash
-pnpm db:probe          # transactions, rollback, RETURNING, UNIQUE, concurrency — 12/12
-pnpm spike:capacity    # atomic seat reservation under concurrency — 12/12
-pnpm spike:door        # atomic door check-in, both code kinds — 8/8
-pnpm spike:horizon-verify  # payment verification against a real existing tx — 5/5
-```
 
 ## Door staff, without sharing an account
 
@@ -164,4 +153,4 @@ There's no automatic refund of a *paid* ticket (a cancelled event, a buyer who c
 - [x] Organizer sees their sales (revenue, status, per-sale detail)
 - [x] Runs from a fresh clone with `pnpm install && pnpm dev` plus only the Pollar API key in `.env`
 - [x] Deployed to Vercel — https://pollarpass.vercel.app
-- [ ] Demo video with real Bolivian testers — shooting script ready in [docs/GUION-DEMO.md](docs/GUION-DEMO.md)
+- [ ] Demo video with real Bolivian testers

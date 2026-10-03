@@ -19,6 +19,7 @@ import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { MAX_TICKET_TYPES } from "@/lib/ticket-limits";
 import { AppShell } from "@/components/AppShell";
+import { ScreenLoading } from "@/components/ScreenLoading";
 import { EventImagePicker } from "@/components/EventImagePicker";
 import { uploadEventPhoto } from "@/components/EventPhotoCard";
 import { Button } from "@/components/ui/Button";
@@ -68,7 +69,7 @@ export default function CreateEventPage() {
     if (photo) URL.revokeObjectURL(photo.url);
   }, [photo]);
 
-  if (authLoading) return null;
+  if (authLoading) return <ScreenLoading title={t.create.title} back={{ href: "/app", label: t.common.home }} />;
 
   if (!user) {
     return (

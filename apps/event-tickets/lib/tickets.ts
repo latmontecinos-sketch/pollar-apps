@@ -1,10 +1,8 @@
 import { randomBytes } from "node:crypto";
 import type { Transaction } from "@libsql/client";
 import { db, dbReady, withTransaction } from "./db.ts";
+import { CODE_ALPHABET } from "./code-alphabet.ts";
 import { newId } from "./ids.ts";
-
-/** Unambiguous alphabet: no 0/O, no 1/I/L. 31 symbols. */
-const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 /**
  * 256 isn't a multiple of 31, so a plain `byte % 31` would hand the first
@@ -12,14 +10,14 @@ const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
  * Rejection sampling drops the leftover values instead, keeping every symbol
  * equally likely.
  */
-const MAX_UNBIASED_BYTE = 256 - (256 % ALPHABET.length); // 248
+const MAX_UNBIASED_BYTE = 256 - (256 % CODE_ALPHABET.length); // 248
 
 function randomCode(length: number): string {
   let out = "";
   while (out.length < length) {
     for (const b of randomBytes(length)) {
       if (b >= MAX_UNBIASED_BYTE) continue;
-      out += ALPHABET[b % ALPHABET.length];
+      out += CODE_ALPHABET[b % CODE_ALPHABET.length];
       if (out.length === length) break;
     }
   }

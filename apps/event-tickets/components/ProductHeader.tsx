@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { bandButton } from "@/components/band-button";
 import { PreferencesModal } from "@/components/PreferencesModal";
 import { Icon } from "@/components/ui/Icon";
 import { PollarLogo } from "@/components/ui/PollarLogo";
@@ -29,7 +30,7 @@ export function ProductHeader() {
           onClick={() => setPreferencesOpen(true)}
           aria-label={t.common.preferences}
           title={t.common.preferences}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-foreground/80 shadow-sm transition-colors hover:text-primary"
+          className={bandButton}
         >
           <Icon name="settings" size={18} />
         </button>
