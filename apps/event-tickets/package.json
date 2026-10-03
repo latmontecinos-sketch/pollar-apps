@@ -16,7 +16,7 @@
     "spike:capacity": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/spike-capacity.mts",
     "spike:door": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/spike-door.mts",
     "spike:horizon-verify": "node --env-file-if-exists=.env --env-file-if-exists=.env.development.local scripts/spike-horizon-verify.mts",
-    "test": "node --test tests/*.test.mts",
+    "test": "node scripts/clean-test-dbs.mjs && node --test tests/*.test.mts",
     "audit": "pnpm audit --audit-level high",
     "db:probe:prod": "node --env-file=.env.ops scripts/db-probe.mjs"
   },
