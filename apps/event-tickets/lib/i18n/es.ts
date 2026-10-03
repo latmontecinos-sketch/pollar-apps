@@ -310,6 +310,10 @@ export const es = {
     refreshBalance: "Ya cargué saldo, actualizar",
     cta: (price: string) => `Comprar entrada · ${price} USDC`,
     checkingBalance: "Revisando tu saldo…",
+    balanceError: "No pudimos revisar tu saldo.",
+    balanceRetry: "Reintentar",
+    otherTab: "Otra pestaña está pagando esta misma reserva. No pagues desde aquí: revisa allá o toca “Verificar de nuevo”.",
+    errorNotSeenYet: "Todavía no vemos tu pago. Si ya pagaste, no pagues de nuevo: toca “Verificar de nuevo” en unos segundos. Si no, podrás volver a comprar cuando termine tu reserva.",
     yourBalance: "Tu saldo:",
     alreadyOwned: (count: number) =>
       count === 1 ? "Ya tienes una entrada para este evento." : `Ya tienes ${count} entradas para este evento.`,
@@ -546,6 +550,8 @@ export const es = {
     retry: "Intentar otra vez",
     errorPrepare: "No se pudo preparar la devolución",
     errorSend: "No se pudo enviar la devolución.",
+    errorNoFunds: "Tu billetera no tiene suficiente USDC de esta venta para devolver.",
+    otherTab: "Otra pestaña está enviando esta devolución. No la envíes desde aquí: verifica en unos segundos.",
     errorNotSeen:
       "Todavía no vemos la devolución en la red. No pagues de nuevo: verifica en unos segundos.",
   },
@@ -617,6 +623,7 @@ export const es = {
     approving: "Registrando ingreso…",
     approved: "¡Ingreso confirmado!",
     approvedDetail: "Ya puede pasar.",
+    notifyFailed: "No se pudo avisar por correo al comprador.",
     approveError: "No se pudo confirmar el ingreso. Intenta otra vez.",
   },
   notifications: {
@@ -677,6 +684,7 @@ export const es = {
     field: "Código de acceso",
     submit: "Entrar",
     wrong: "Ese código no es correcto. Revísalo y vuelve a intentar.",
+    tooMany: "Demasiados intentos con el código. Espera un rato y vuelve a intentar.",
   },
   eventImage: {
     title: "Foto del evento",
@@ -769,6 +777,9 @@ export const es = {
     sale_closed: "La venta de este evento ya cerró.",
     sold_out: "Este evento está agotado.",
     key_taken: "Esa reserva ya se usó. Recarga la página e intenta de nuevo.",
+    key_conflict: "Esa reserva es de otra compra. Recarga la página e intenta de nuevo.",
+    sale_not_pending: "Esa reserva ya no está activa. Recarga la página e intenta de nuevo.",
+    refund_already_sent: "Ya enviaste esta devolución: la estamos verificando.",
     reference_generation_failed: "No se pudo generar tu reserva. Intenta de nuevo.",
     no_payment: "Todavía no vemos ese pago en la red.",
     tx_failed:

@@ -26,6 +26,8 @@ export const QUOTAS = {
   /** Each one can hit Horizon three times; the buy screen polls a handful of times. */
   confirmSale: { limit: 60, windowSeconds: 60 * 60 },
   refundSale: { limit: 30, windowSeconds: 60 * 60 },
+  /** Giving a held seat back: once per abandoned checkout, so a few a day is already a lot. */
+  releaseSale: { limit: 60, windowSeconds: 60 * 60 },
   /**
    * Editing an event is normal; editing it hundreds of times an hour is a
    * stuck client. Without a ceiling here, the fields that have no length
@@ -43,8 +45,23 @@ export const QUOTAS = {
   eventImage: { limit: 20, windowSeconds: 60 * 60 },
   /** Rotating a door link is a once-in-a-while act. */
   doorLink: { limit: 10, windowSeconds: 60 * 60 },
-  /** Per event: a busy door scans fast, and a wrong scan is retried. */
-  door: { limit: 900, windowSeconds: 60 * 60 },
+  /**
+   * Per event, and one bucket per step: a check-in is two calls (peek, then
+   * spend), and a single shared budget of 900 meant ~450 people an hour
+   * before the door locked itself. The ceilings sit far above what a real
+   * door does (a person a second is already a stampede) and far below what
+   * guessing an 8-character door code would need.
+   */
+  doorCheck: { limit: 3600, windowSeconds: 60 * 60 },
+  door: { limit: 1800, windowSeconds: 60 * 60 },
+  /**
+   * Per IP and event, for WRONG tries at a private event's access code (page
+   * or photo); a right code never counts, so a crowd behind one carrier IP
+   * opening the shared link doesn't lock itself out. Six characters out of 31
+   * is ~887 million codes; at 60 misses an hour from one address that is
+   * unreachable. Past the ceiling no code is checked from that address.
+   */
+  accessCode: { limit: 60, windowSeconds: 60 * 60 },
   sweep: { limit: 60, windowSeconds: 60 * 60 },
   /** Per IP, unauthenticated: renders a PNG, so it's CPU someone else can spend. */
   ticketQr: { limit: 120, windowSeconds: 60 * 60 },
@@ -104,6 +121,31 @@ export async function consume(name: QuotaName, subject: string): Promise<RateRes
 }
 
 /**
+ * Says whether `name:subject` is already at its ceiling, without counting a
+ * hit. For limits that only count failures (a wrong access code): the caller
+ * checks this first, then {@link consume}s only when the attempt fails, so a
+ * right answer never spends quota. Fails open, like {@link consume}.
+ */
+export async function isOverLimit(name: QuotaName, subject: string): Promise<RateResult> {
+  const { limit, windowSeconds } = QUOTAS[name];
+  try {
+    await dbReady();
+    const result = await db.execute({
+      sql: `SELECT hits, window_start FROM rate_limits
+            WHERE bucket = ? AND datetime(window_start) > datetime('now', ?)`,
+      args: [`${name}:${subject}`, `-${windowSeconds} seconds`],
+    });
+    if (result.rows.length === 0 || Number(result.rows[0].hits) < limit) return { ok: true };
+    const startedAt = Date.parse(`${String(result.rows[0].window_start).replace(" ", "T")}Z`);
+    const elapsed = Number.isNaN(startedAt) ? 0 : Math.floor((Date.now() - startedAt) / 1000);
+    return { ok: false, retryAfterSeconds: Math.max(1, windowSeconds - elapsed) };
+  } catch (err) {
+    console.error(`[rate-limit] ${name}:${subject} check failed open: ${err instanceof Error ? err.message : err}`);
+    return { ok: true };
+  }
+}
+
+/**
  * The 429 to return when {@link consume} says no. Deliberately vague about
  * which limit was hit and how much is left — that's a map of our defences.
  */
@@ -133,7 +175,12 @@ export async function enforce(
  * which is why it only ever guards a PNG.
  */
 export function clientIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
+  return clientIpFrom(request.headers);
+}
+
+/** Same, for callers that only have headers (a page reads them from `next/headers`). */
+export function clientIpFrom(headers: { get(name: string): string | null }): string {
+  const forwarded = headers.get("x-forwarded-for");
   const first = forwarded?.split(",")[0]?.trim();
-  return first || request.headers.get("x-real-ip")?.trim() || "unknown";
+  return first || headers.get("x-real-ip")?.trim() || "unknown";
 }

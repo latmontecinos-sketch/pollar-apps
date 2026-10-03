@@ -89,9 +89,14 @@ export type ReserveParams = {
 };
 
 export type ReserveResult =
-  /** `reused`: the buyer's existing live reservation, not a newly held seat. */
+  /**
+   * `reused`: an existing sale of this buyer (a live reservation, or a replay
+   * of the same key), not a newly held seat. A payment for it may already be
+   * on its way from another tab, so the client must look before it pays.
+   */
   | { ok: true; sale: Sale; reused?: boolean }
-  | { ok: false; reason: "sold_out" | "key_taken" };
+  /** `key_conflict`: that key already belongs to a purchase of another event or tier. */
+  | { ok: false; reason: "sold_out" | "key_taken" | "key_conflict" };
 
 /**
  * Reserves a seat and creates the sale as one DB transaction: if the INSERT
@@ -118,7 +123,15 @@ export async function reserveAndCreateSale(
       args: [params.idempotencyKey, params.buyerPollarId],
     });
     if (existing.rows.length > 0) {
-      return { ok: true, sale: rowToSale(existing.rows[0]) };
+      const sale = rowToSale(existing.rows[0]);
+      // The key names ONE purchase. Reusing it for another event or tier used
+      // to hand back the old sale's id, reference and amount, which the route
+      // then glued to the new request's organizer and tier: a payment to one
+      // organizer carrying another sale's memo.
+      if (sale.eventId !== params.eventId || sale.ticketTypeId !== params.ticketTypeId) {
+        return { ok: false, reason: "key_conflict" };
+      }
+      return { ok: true, sale, reused: true };
     }
 
     // Same key, different buyer: the column is UNIQUE, so inserting would

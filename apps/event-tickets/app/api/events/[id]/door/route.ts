@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { requireDoorAccess } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { sqlUtcToIso } from "@/lib/format";
-import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/locales";
-import { sendCheckinEmail } from "@/lib/mail";
+import { notifyCheckin } from "@/lib/checkin-notify";
 import { enforce } from "@/lib/rate-limit";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
 import { validateAtDoor } from "@/lib/tickets";
@@ -35,27 +34,6 @@ async function doorCounts(eventId: string): Promise<{ paid: number; checkedIn: n
     args: [eventId, eventId],
   });
   return { paid: Number(result.rows[0].paid), checkedIn: Number(result.rows[0].checked_in) };
-}
-
-/**
- * "You're in" email, in the language the buyer bought in. Best-effort: the
- * person is already through the door, so a mail failure only gets logged.
- */
-async function notifyBuyer(saleId: string, eventName: string): Promise<void> {
-  const row = await db.execute({
-    sql: "SELECT buyer_email, buyer_locale FROM sales WHERE id = ?",
-    args: [saleId],
-  });
-  const email = row.rows[0]?.buyer_email;
-  if (!email) return;
-  const locale = row.rows[0]?.buyer_locale;
-  const result = await sendCheckinEmail({
-    to: String(email),
-    locale: isLocale(locale as string) ? (locale as Locale) : DEFAULT_LOCALE,
-    eventName,
-    checkedInAt: new Date().toISOString(),
-  });
-  if (!result.sent) console.error(`[mail] check-in email failed: ${result.error}`);
 }
 
 /** What the door screen shows (organizer or staff link): which event, and the running counter. */
@@ -117,8 +95,13 @@ export async function POST(request: Request, ctx: Ctx) {
         ticket: result.ticket.id,
         by: shortAddressForLog(access.actor),
       });
-      await notifyBuyer(result.ticket.saleId, event.name);
-      return NextResponse.json({ result: "VALID", checkedIn: (await doorCounts(id)).checkedIn });
+      const notified = await notifyCheckin(result.ticket.saleId, event.name);
+      // The counter is a nicety too: if reading it fails the ticket is still spent.
+      const checkedIn = await doorCounts(id).then(
+        (counts) => counts.checkedIn,
+        () => undefined
+      );
+      return NextResponse.json({ result: "VALID", checkedIn, notified });
     case "USED":
       return NextResponse.json({ result: "USED", usedAt: sqlUtcToIso(result.usedAt) });
     case "UNKNOWN":

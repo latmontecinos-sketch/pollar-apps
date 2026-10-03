@@ -14,7 +14,6 @@ import {
 } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
-import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { AppShell } from "@/components/AppShell";
 import { CapacityIncrease } from "@/components/CapacityIncrease";
 import { DoorStaffCard } from "@/components/DoorStaffCard";
@@ -41,6 +40,8 @@ type EventDetails = {
   reserved: number;
   paid: number;
   checkedIn: number;
+  /** Sum of the paid sales, whatever tier each one was. */
+  collectedDecimal: string;
   organizerName: string;
   organizerContact: string;
   doorToken: string | null;
@@ -277,10 +278,7 @@ export default function OrganizerEventPage({
               <Stat label={t.panel.statSold} value={`${event.paid} / ${event.capacity}`} />
               <Stat
                 label={t.panel.statRevenue}
-                value={formatAmount(
-                  stroopsToDecimal(decimalToStroops(event.priceDecimal) * BigInt(event.paid)),
-                  locale
-                )}
+                value={formatAmount(event.collectedDecimal, locale)}
                 hint="USDC"
               />
               <Stat

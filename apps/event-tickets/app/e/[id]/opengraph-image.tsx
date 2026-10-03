@@ -7,6 +7,7 @@ import { formatEventDay, formatEventTime } from "@/lib/format";
 import { getDict } from "@/lib/i18n/server";
 import { priceLabel, priceRange } from "@/lib/price-label";
 import { listTicketTypes } from "@/lib/ticket-types";
+import { canView } from "@/lib/visibility";
 
 /**
  * The picture WhatsApp/Telegram/etc. show next to a shared event link. With
@@ -26,17 +27,28 @@ export const alt = "Evento en Pollar Pass";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-type Row = { name: string; datetime_utc: string; place: string };
+type Row = {
+  name: string;
+  datetime_utc: string;
+  place: string;
+  visibility: string;
+  access_code: string | null;
+};
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { locale, t } = await getDict();
   await dbReady();
   const result = await db.execute({
-    sql: "SELECT name, datetime_utc, place FROM events WHERE id = ?",
+    sql: "SELECT name, datetime_utc, place, visibility, access_code FROM events WHERE id = ?",
     args: [id],
   });
-  const event = result.rows[0] as unknown as Row | undefined;
+  const row = result.rows[0] as unknown as Row | undefined;
+  // Same rule as the page: a private event needs its code, and a link preview
+  // is fetched with no way to carry one (this route gets no query string), so a
+  // private event — or one that doesn't exist — gets the generic Pollar Pass
+  // card: no name, date, place, price or photo.
+  const event = row && canView(row, null) ? row : undefined;
   // The same phrase as the page's price pill ("Desde 0,05 USDC", "Gratis"), from
   // the tiers — never "Desde 0,00 USDC", never the event's legacy price column.
   const types = event ? await listTicketTypes(id) : [];

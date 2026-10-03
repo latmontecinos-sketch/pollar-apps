@@ -56,14 +56,119 @@ export function jpegSize(bytes: Uint8Array): { width: number; height: number } |
   return null;
 }
 
+/**
+ * Fewest bytes of compressed image data a real photo of this size can have.
+ * A flat, single-colour frame still spends a few bits on every 8×8 block (a
+ * zero DC difference plus an end-of-block), which for 4:2:0 is ~12 KB at
+ * 1080 × 1350; this asks for a sixth of that, so only a header with nothing
+ * behind it — what someone forges to pass the size check — falls short.
+ */
+const MIN_BYTES_PER_PIXEL = 1 / 2000;
+
+/**
+ * The size from a JPEG that is well formed *as far as it can be told without
+ * decoding it* (no dependency: rule 10), or null. Where {@link jpegSize} only
+ * reads the first frame header it meets, this walks the whole file:
+ *
+ * - every marker segment is in bounds, and the frame header is coherent
+ *   (8-bit samples, 1, 3 or 4 components, a length that matches them);
+ * - quantisation and Huffman tables are present before the first scan, and
+ *   every scan lists exactly the frame's components;
+ * - the compressed data is made of bytes and legal markers only (an `FF`
+ *   is followed by `00`, a restart or a segment — never by garbage);
+ * - it ends with exactly one end-of-image marker, with enough data in front
+ *   of it for the size the header claims.
+ *
+ * It can't prove the entropy-coded data decodes: forged data that is
+ * structurally clean still passes, and catching that takes a real decoder
+ * (sharp, jpeg-js) — see the note in the review report.
+ */
+export function wellFormedJpegSize(bytes: Uint8Array): { width: number; height: number } | null {
+  const n = bytes.length;
+  if (n < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[n - 2] !== 0xff || bytes[n - 1] !== 0xd9) {
+    return null;
+  }
+  let i = 2;
+  let size: { width: number; height: number } | null = null;
+  let components = 0;
+  let sawDqt = false;
+  let sawDht = false;
+  let scans = 0;
+  let entropyBytes = 0;
+
+  while (i < n) {
+    // A segment: FF, marker, big-endian length that counts itself.
+    if (bytes[i] !== 0xff) return null;
+    const marker = bytes[i + 1];
+    if (marker === 0xff) {
+      i += 1; // fill byte
+      continue;
+    }
+    if (marker === 0xd9) {
+      // The end of the image has to be the end of the file, and something has to precede it.
+      const enough = size !== null && entropyBytes >= size.width * size.height * MIN_BYTES_PER_PIXEL;
+      return i + 2 === n && scans > 0 && enough ? size : null;
+    }
+    if (marker === 0x00 || marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) return null;
+    if (i + 4 > n) return null;
+    const length = (bytes[i + 2] << 8) | bytes[i + 3];
+    if (length < 2 || i + 2 + length > n) return null;
+    const body = i + 4;
+
+    if (marker === 0xdb) sawDqt = true;
+    if (marker === 0xc4) sawDht = true;
+    if (marker === 0xdd && length !== 4) return null;
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (size || length < 8) return null;
+      components = bytes[body + 5];
+      const height = (bytes[body + 1] << 8) | bytes[body + 2];
+      const width = (bytes[body + 3] << 8) | bytes[body + 4];
+      if (bytes[body] !== 8 || ![1, 3, 4].includes(components) || length !== 8 + 3 * components) return null;
+      if (width === 0 || height === 0) return null;
+      for (let c = 0; c < components; c++) {
+        const sampling = bytes[body + 7 + 3 * c];
+        if (sampling >> 4 === 0 || (sampling & 0x0f) === 0) return null;
+      }
+      size = { width, height };
+    }
+    if (marker === 0xda) {
+      // A scan needs the frame, the tables, and its own component list to add up.
+      if (!size || !sawDqt || !sawDht) return null;
+      const inScan = bytes[body];
+      if (inScan < 1 || inScan > components || length !== 6 + 2 * inScan) return null;
+      scans++;
+      i += 2 + length;
+      // Entropy-coded data: runs until a marker that is not a stuffed 00 or a restart.
+      const dataStart = i;
+      while (i < n) {
+        if (bytes[i] !== 0xff) {
+          i += 1;
+          continue;
+        }
+        const next = bytes[i + 1];
+        if (next === undefined) return null;
+        if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) {
+          i += 2; // a stuffed FF, or a restart marker
+          continue;
+        }
+        break; // a real marker: the next segment, or the end
+      }
+      entropyBytes += i - dataStart;
+      continue;
+    }
+    i += 2 + length;
+  }
+  return null;
+}
+
 export type ImageCheck =
   | { ok: true; width: number; height: number }
   | { ok: false; code: "image_invalid" | "image_too_large" };
 
-/** What the upload route accepts: a JPEG, 4:5 within 2%, between 320 and 2160 px wide. */
+/** What the upload route accepts: a well-formed JPEG, 4:5 within 2%, between 320 and 2160 px wide. */
 export function checkEventImage(bytes: Uint8Array): ImageCheck {
   if (bytes.length > MAX_IMAGE_BYTES) return { ok: false, code: "image_too_large" };
-  const size = jpegSize(bytes);
+  const size = wellFormedJpegSize(bytes);
   if (!size) return { ok: false, code: "image_invalid" };
   if (size.width < MIN_WIDTH || size.width > MAX_WIDTH) return { ok: false, code: "image_invalid" };
   if (Math.abs(size.width / size.height - ASPECT) > 0.02) return { ok: false, code: "image_invalid" };

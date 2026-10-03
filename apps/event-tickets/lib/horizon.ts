@@ -75,39 +75,123 @@ type PaymentsPage = {
   _embedded?: {
     records?: Array<{
       type?: string;
+      paging_token?: string;
+      created_at?: string;
       transaction_hash?: string;
+      from?: string;
+      to?: string;
       transaction?: { memo?: string | null; memo_type?: string | null };
     }>;
   };
 };
 
+/** Horizon's page size ceiling. */
+const PAGE_LIMIT = 200;
+/** 5 x 200 = 1,000 payments looked at, at most: the search is bounded in requests... */
+const MAX_PAGES = 5;
+/** ...and in time, so a slow Horizon can't hold the buyer's request open. */
+const SEARCH_BUDGET_MS = 20_000;
+/** Slack between our clock (sale created_at) and the ledger's. */
+const CLOCK_SLACK_MS = 5 * 60 * 1000;
+
+/**
+ * Lower bound for a search: the sale's `created_at` (SQLite's
+ * "YYYY-MM-DD HH:MM:SS" in UTC, or an ISO string) minus a little clock slack.
+ * A payment older than its own sale can't belong to it, which is what lets
+ * a search reach a definite "nothing there" instead of paging forever.
+ */
+export function searchSince(createdAt: string | null | undefined): number | undefined {
+  if (!createdAt) return undefined;
+  const text = createdAt.includes("T") ? createdAt : `${createdAt.replace(" ", "T")}Z`;
+  const ms = Date.parse(text);
+  return Number.isNaN(ms) ? undefined : ms - CLOCK_SLACK_MS;
+}
+
+export type MemoSearch =
+  | { status: "found"; hash: string }
+  /** Looked through everything that could be this payment, and it isn't there. */
+  | { status: "none" }
+  /**
+   * Couldn't tell: Horizon failed, the history was longer than we're willing
+   * to read, or a candidate couldn't be checked. Never "unpaid": retry.
+   */
+  | { status: "inconclusive" };
+
 /**
  * Recovery path when the client never delivered a hash (closed the tab,
- * lost signal, Horizon hadn't indexed it yet): scans `account`'s most recent
- * payments (the organizer's for a sale, the buyer's for a refund) for the
- * unique `memo`. Returns the hash to feed into `verifyPaymentOnHorizon` —
- * the full check (amount, asset, parties) still runs there, this only finds
- * the tx. `undefined` = Horizon unreachable (retry later), `null` = none.
+ * lost signal, Horizon hadn't indexed it yet): scans `account`'s payments for
+ * ones carrying the unique `memo`, newest first, and returns the first that
+ * passes the FULL check (`verifyPaymentOnHorizon`: destination, asset,
+ * amount, memo, success).
+ *
+ * It used to take the first record with a matching memo and stop. The memo
+ * is public on-chain, so anyone could send the buyer a 1-stroop payment
+ * carrying it; that newer record then shadowed the real payment, the full
+ * check rejected it, and recovery never looked at the older one. Candidates
+ * that don't verify are now skipped, not believed.
  */
-export async function findPaymentHashByMemo(opts: {
+export async function findVerifiedPaymentByMemo(opts: {
   account: string;
   memo: string;
-}): Promise<string | null | undefined> {
-  let page: PaymentsPage | null;
-  try {
-    page = await horizonGet<PaymentsPage>(
-      `/accounts/${encodeURIComponent(opts.account)}/payments?order=desc&limit=200&join=transactions`
-    );
-  } catch {
-    return undefined;
+  destination: string;
+  source?: string;
+  amountDecimal: string;
+  /** From {@link searchSince}: stop reading history older than this. */
+  since?: number;
+}): Promise<MemoSearch> {
+  const started = Date.now();
+  let cursor = "";
+  let sawProblem = false;
+
+  for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
+    if (Date.now() - started > SEARCH_BUDGET_MS) return { status: "inconclusive" };
+
+    let page: PaymentsPage | null;
+    try {
+      page = await horizonGet<PaymentsPage>(
+        `/accounts/${encodeURIComponent(opts.account)}/payments?order=desc&limit=${PAGE_LIMIT}&join=transactions` +
+          (cursor ? `&cursor=${encodeURIComponent(cursor)}` : "")
+      );
+    } catch {
+      return { status: "inconclusive" };
+    }
+    const records = page?._embedded?.records ?? [];
+
+    for (const record of records) {
+      if (
+        record.type !== "payment" ||
+        record.transaction?.memo_type !== "text" ||
+        (record.transaction.memo ?? "").trim() !== opts.memo ||
+        record.to !== opts.destination ||
+        (opts.source && record.from !== opts.source) ||
+        !record.transaction_hash
+      ) {
+        continue;
+      }
+      const check = await verifyPaymentOnHorizon({
+        hash: record.transaction_hash,
+        destination: opts.destination,
+        source: opts.source,
+        amountDecimal: opts.amountDecimal,
+        reference: opts.memo,
+      });
+      if (check.ok) return { status: "found", hash: record.transaction_hash };
+      // A real transaction that doesn't match is just not ours; one we
+      // couldn't read leaves the answer open.
+      if (check.code !== "mismatch") sawProblem = true;
+    }
+
+    const last = records[records.length - 1];
+    const reachedEnd = records.length < PAGE_LIMIT || !last?.paging_token;
+    const lastAt = last?.created_at ? Date.parse(last.created_at) : Number.NaN;
+    const olderThanSale = opts.since !== undefined && !Number.isNaN(lastAt) && lastAt < opts.since;
+    if (reachedEnd || olderThanSale) {
+      return sawProblem ? { status: "inconclusive" } : { status: "none" };
+    }
+    cursor = last.paging_token as string;
   }
-  const match = page?._embedded?.records?.find(
-    (record) =>
-      record.type === "payment" &&
-      record.transaction?.memo_type === "text" &&
-      (record.transaction.memo ?? "").trim() === opts.memo
-  );
-  return match?.transaction_hash ?? null;
+  // Ran out of pages with history still ahead: not evidence of anything.
+  return { status: "inconclusive" };
 }
 
 /**

@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { db, dbReady } from "@/lib/db";
 import Image from "next/image";
 import { eventImageVersion } from "@/lib/event-image";
@@ -17,6 +18,7 @@ import {
 import { getDict } from "@/lib/i18n/server";
 import type { Dict } from "@/lib/i18n";
 import { sweepExpiredSales } from "@/lib/sales";
+import { clientIpFrom, consume, isOverLimit } from "@/lib/rate-limit";
 import { listTicketTypes, summarize, type TicketType } from "@/lib/ticket-types";
 import { isFreePrice, priceLabel, priceRange } from "@/lib/price-label";
 import { canView, normalizeAccessCode } from "@/lib/visibility";
@@ -99,7 +101,7 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
 }
 
 /** A private event, asked for without its code (or with a wrong one). */
-function AccessGate({ t, tried }: { t: Dict; tried: boolean }) {
+function AccessGate({ t, tried, limited = false }: { t: Dict; tried: boolean; limited?: boolean }) {
   return (
     <AppShell title={t.gate.title}>
       <Card className="flex flex-col gap-4">
@@ -117,9 +119,9 @@ function AccessGate({ t, tried }: { t: Dict; tried: boolean }) {
               className="w-full rounded-2xl border border-transparent bg-field px-4 py-3 font-mono text-base uppercase tracking-[0.3em] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
             />
           </label>
-          {tried && (
+          {(tried || limited) && (
             <p className="rounded-xl border border-error-border bg-error-light px-3 py-2 text-sm text-error" role="alert">
-              {t.gate.wrong}
+              {limited ? t.gate.tooMany : t.gate.wrong}
             </p>
           )}
           <button
@@ -161,6 +163,20 @@ export default async function PublicEventPage({ params, searchParams }: PageProp
   if (!data) notFound();
   const { event, types, imageVersion } = data;
   const offered = typeof codigo === "string" ? codigo : "";
+  // Wrong codes for a private event count per IP and event; past the ceiling no
+  // code is checked from that address until the window passes, so the limit
+  // bounds guessing instead of slowing it. A right code never counts: many
+  // phones share one carrier IP, and they all open the same shared link. The
+  // miss writes one counter row from a page a stranger can open (rule 7) — the
+  // exception on purpose, since a throwaway counter is the whole point.
+  if (event.visibility === "private" && normalizeAccessCode(offered)) {
+    const subject = `${clientIpFrom(await headers())}:${id}`;
+    if (!(await isOverLimit("accessCode", subject)).ok) return <AccessGate t={t} tried={false} limited />;
+    if (!canView(event, offered)) {
+      await consume("accessCode", subject);
+      return <AccessGate t={t} tried />;
+    }
+  }
   if (!canView(event, offered)) return <AccessGate t={t} tried={offered !== ""} />;
   // Carried into the checkout and the photo URL, which check it again.
   const accessCode = event.visibility === "private" ? normalizeAccessCode(offered) : undefined;

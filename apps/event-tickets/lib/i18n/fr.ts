@@ -304,6 +304,10 @@ export const fr: Dict = {
     refreshBalance: "J'ai rechargé, actualiser",
     cta: (price: string) => `Acheter un billet · ${price} USDC`,
     checkingBalance: "Vérification de votre solde…",
+    balanceError: "Nous n'avons pas pu vérifier votre solde.",
+    balanceRetry: "Réessayer",
+    otherTab: "Un autre onglet paie cette même réservation. Ne payez pas d'ici : vérifiez là-bas, ou touchez « Vérifier à nouveau ».",
+    errorNotSeenYet: "Nous ne voyons pas encore votre paiement. Si vous avez déjà payé, ne payez pas à nouveau : touchez « Vérifier à nouveau » dans quelques secondes. Sinon, vous pourrez racheter une fois votre réservation terminée.",
     yourBalance: "Votre solde :",
     alreadyOwned: (count: number) =>
       count === 1
@@ -541,6 +545,8 @@ export const fr: Dict = {
     retry: "Réessayer",
     errorPrepare: "Le remboursement n'a pas pu être préparé",
     errorSend: "Le remboursement n'a pas pu être envoyé.",
+    errorNoFunds: "Votre portefeuille ne contient pas assez de l'USDC de cette vente pour rembourser.",
+    otherTab: "Un autre onglet envoie ce remboursement. Ne l'envoyez pas d'ici : vérifiez dans quelques secondes.",
     errorNotSeen:
       "Nous ne voyons pas encore le remboursement sur le réseau. Ne payez pas à nouveau : vérifiez dans quelques secondes.",
   },
@@ -609,6 +615,7 @@ export const fr: Dict = {
     approving: "Enregistrement de l'entrée…",
     approved: "Entrée confirmée !",
     approvedDetail: "La personne peut passer.",
+    notifyFailed: "L'acheteur n'a pas pu être prévenu par e-mail.",
     approveError: "L'entrée n'a pas pu être confirmée. Réessayez.",
   },
   notifications: {
@@ -669,6 +676,7 @@ export const fr: Dict = {
     field: "Code d'accès",
     submit: "Entrer",
     wrong: "Ce code n'est pas le bon. Vérifiez-le et réessayez.",
+    tooMany: "Trop d'essais avec ce code. Attendez un moment et réessayez.",
   },
   eventImage: {
     title: "Photo de l'événement",
@@ -754,6 +762,9 @@ export const fr: Dict = {
     sale_closed: "La vente des billets pour cet événement est fermée.",
     sold_out: "Cet événement est complet.",
     key_taken: "Cette réservation a déjà été utilisée. Rechargez la page et réessayez.",
+    key_conflict: "Cette réservation appartient à un autre achat. Rechargez la page et réessayez.",
+    sale_not_pending: "Cette réservation n'est plus active. Rechargez la page et réessayez.",
+    refund_already_sent: "Vous avez déjà envoyé ce remboursement : nous le vérifions.",
     reference_generation_failed: "Nous n'avons pas pu créer votre réservation. Réessayez.",
     no_payment: "Nous ne voyons toujours pas ce paiement sur le réseau.",
     tx_failed:

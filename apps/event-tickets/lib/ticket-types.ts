@@ -99,6 +99,83 @@ export function parseTicketTypes(raw: unknown): TicketTypeInput[] {
   });
 }
 
+export type NewEvent = {
+  id: string;
+  organizerPollarId: string;
+  name: string;
+  description: string;
+  datetimeUtc: string;
+  place: string;
+  organizerName: string;
+  organizerContact: string;
+  visibility: "public" | "private";
+  accessCode: string | null;
+};
+
+/**
+ * Creates an event and its tiers in ONE transaction.
+ *
+ * Two separate writes left a window with an event and no tiers, and the
+ * "give every tier-less event a General tier" backfill (lib/db.ts, run by
+ * any instance that cold-starts in that window) filled it — after which the
+ * organizer's own tiers were inserted on top, and the event sold the seats
+ * twice. Inside a transaction nobody can see the event without its tiers,
+ * and if a tier fails to insert the event never exists.
+ *
+ * `price_stroops` / `capacity` on the event are a summary for listings;
+ * the seats that get sold live on the tiers.
+ */
+export async function createEventWithTypes(
+  event: NewEvent,
+  types: TicketTypeInput[]
+): Promise<void> {
+  const cheapest = types
+    .map((type) => decimalToStroops(type.priceDecimal))
+    .reduce((a, b) => (a < b ? a : b));
+  const totalCapacity = types.reduce((sum, type) => sum + type.capacity, 0);
+
+  await withTransaction(async (tx: Transaction) => {
+    await tx.execute({
+      sql: `INSERT INTO events (id, organizer_pollar_id, name, description, datetime_utc, place,
+                                price_stroops, capacity, organizer_name, organizer_contact,
+                                visibility, access_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        event.id,
+        event.organizerPollarId,
+        event.name,
+        event.description,
+        event.datetimeUtc,
+        event.place,
+        cheapest.toString(),
+        totalCapacity,
+        event.organizerName,
+        event.organizerContact,
+        event.visibility,
+        event.accessCode,
+      ],
+    });
+    for (const [index, type] of types.entries()) {
+      await tx.execute({
+        sql: `INSERT INTO ticket_types (id, event_id, name, price_stroops, capacity, sort_order)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          newId(),
+          event.id,
+          type.name,
+          decimalToStroops(type.priceDecimal).toString(),
+          type.capacity,
+          index,
+        ],
+      });
+    }
+  });
+}
+
+/**
+ * Adds tiers to an event that already exists (seeding, spikes, tests).
+ * Creating an event goes through {@link createEventWithTypes} instead.
+ */
 export async function createTicketTypes(
   eventId: string,
   types: TicketTypeInput[]

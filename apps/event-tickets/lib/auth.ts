@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual, verify as verifySignature } from "node:crypto";
 import { ed25519PublicKeyFrom } from "./strkey.ts";
-import { authMessage, normalizeRoute, POLLAR_PROOF_HEADER } from "./auth-message.ts";
+import { authAudience, authMessage, normalizeRoute, POLLAR_PROOF_HEADER } from "./auth-message.ts";
 import { securityLog, shortAddressForLog } from "./security-log.ts";
 
 /**
@@ -68,6 +68,33 @@ export function verifySep53(opts: {
   }
 }
 
+/**
+ * Hosts a proof may be addressed to. `APP_ORIGIN` (comma-separated for more
+ * than one) is the configured answer; the request's own host is always
+ * accepted as well, so a deployment that never set it — or that sits behind
+ * a proxy answering on an alias — keeps signing in instead of locking
+ * everyone out. Routing by Host is what keeps a request for one deployment
+ * from landing on another.
+ */
+export function acceptedAudiences(request: Request): string[] {
+  const hosts = new Set<string>();
+  for (const origin of (process.env.APP_ORIGIN ?? "").split(",")) {
+    const trimmed = origin.trim();
+    if (!trimmed) continue;
+    try {
+      hosts.add(new URL(trimmed).host);
+    } catch {
+      hosts.add(trimmed);
+    }
+  }
+  try {
+    hosts.add(new URL(request.url).host);
+  } catch {
+    /* no usable URL: only the configured hosts remain */
+  }
+  return [...hosts].map(authAudience);
+}
+
 export type ProofPayload = { address: string; exp: number; signature: string };
 
 type AuthOutcome =
@@ -124,8 +151,10 @@ export function requireSignedAddress(request: Request): AuthOutcome {
   // The signature covers the endpoint being called, so a proof lifted from
   // one request can't be spent on another.
   const { method, path } = requestRoute(request);
-  const message = authMessage(address, exp, method, path);
-  if (!verifySep53({ address, message, signature })) {
+  const valid = acceptedAudiences(request).some((audience) =>
+    verifySep53({ address, message: authMessage(address, exp, method, path, audience), signature })
+  );
+  if (!valid) {
     return reject(request, "bad_signature", address);
   }
 

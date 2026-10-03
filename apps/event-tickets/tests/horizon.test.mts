@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { findPaymentHashByMemo, verifyPaymentOnHorizon } from "../lib/horizon.ts";
+import { findVerifiedPaymentByMemo, searchSince, verifyPaymentOnHorizon } from "../lib/horizon.ts";
 import { expectedUsdcIssuer } from "../lib/network.ts";
 
 /**
@@ -187,34 +187,136 @@ test("a hash that is not a hash never reaches the network", async () => {
   assert.equal(called, false);
 });
 
+/**
+ * Looking a payment up by its memo (the buyer closed the tab before we got a
+ * hash). The memo is public on the chain, so what comes back is a list of
+ * candidates, each of which has to pass the full check on its own.
+ */
+const BUYER = "GBUYERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const DUST_HASH = "d".repeat(64);
+
+type Listed = Json;
+
+/** A payments-list record, the way Horizon returns it with `join=transactions`. */
+function listed(hash: string, overrides: Json = {}): Listed {
+  return {
+    type: "payment",
+    paging_token: `pt-${hash.slice(0, 6)}`,
+    created_at: new Date().toISOString(),
+    transaction_hash: hash,
+    from: BUYER,
+    to: DESTINATION,
+    transaction: { memo: MEMO, memo_type: "text" },
+    ...overrides,
+  };
+}
+
+/**
+ * Serves the account's payment pages (by cursor) and each transaction's own
+ * lookup. `txs` maps a hash to the transaction + operations Horizon holds.
+ */
+function stubChain(opts: {
+  pages: Listed[][];
+  txs?: Record<string, { tx: Json; ops: Json }>;
+  failPages?: boolean;
+}) {
+  let pageRequests = 0;
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = new URL(String(input));
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (url.pathname.includes("/payments")) {
+      pageRequests++;
+      if (opts.failPages) throw new Error("network down");
+      const cursor = url.searchParams.get("cursor");
+      const index = cursor ? Number(cursor.split("-").pop()) : 0;
+      return json({ _embedded: { records: opts.pages[index] ?? [] } });
+    }
+    const hash = url.pathname.split("/")[2];
+    const held = opts.txs?.[hash];
+    if (!held) return new Response("not found", { status: 404 });
+    return json(url.pathname.endsWith("/operations") ? held.ops : held.tx);
+  }) as typeof fetch;
+  return { requests: () => pageRequests };
+}
+
+const lookup = {
+  account: BUYER,
+  memo: MEMO,
+  destination: DESTINATION,
+  amountDecimal: "10.0000000",
+};
+
+const realPayment = { tx: transaction(), ops: opsWith(payment()) };
+
 test("a payment is found by its memo when the buyer never sent us the hash", async () => {
-  globalThis.fetch = (async () =>
-    new Response(
-      JSON.stringify({
-        _embedded: {
-          records: [
-            { type: "payment", transaction_hash: "b".repeat(64), transaction: { memo: "pother", memo_type: "text" } },
-            { type: "payment", transaction_hash: HASH, transaction: { memo: MEMO, memo_type: "text" } },
-          ],
-        },
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    )) as typeof fetch;
-  assert.equal(await findPaymentHashByMemo({ account: DESTINATION, memo: MEMO }), HASH);
+  stubChain({ pages: [[listed("b".repeat(64), { transaction: { memo: "pother", memo_type: "text" } }), listed(HASH)]], txs: { [HASH]: realPayment } });
+  assert.deepEqual(await findVerifiedPaymentByMemo(lookup), { status: "found", hash: HASH });
 });
 
-test("no payment with that memo is null, while Horizon failing is undefined", async () => {
-  // The caller treats these very differently: null is "you have not paid",
-  // undefined is "ask me again in a moment".
-  globalThis.fetch = (async () =>
-    new Response(JSON.stringify({ _embedded: { records: [] } }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    })) as typeof fetch;
-  assert.equal(await findPaymentHashByMemo({ account: DESTINATION, memo: MEMO }), null);
+test("a newer dust payment with the same memo does not hide the real one", async () => {
+  // Newest first: the attacker's 1-stroop payment, then the buyer's.
+  const dustTx = { tx: transaction(), ops: opsWith(payment({ amount: "0.0000001" })) };
+  stubChain({
+    pages: [[listed(DUST_HASH), listed(HASH)]],
+    txs: { [DUST_HASH]: dustTx, [HASH]: realPayment },
+  });
+  assert.deepEqual(await findVerifiedPaymentByMemo(lookup), { status: "found", hash: HASH });
+});
 
-  globalThis.fetch = (async () => {
-    throw new Error("network down");
-  }) as typeof fetch;
-  assert.equal(await findPaymentHashByMemo({ account: DESTINATION, memo: MEMO }), undefined);
+test("a payment to somebody other than the organizer is never a candidate", async () => {
+  // Sent to the buyer with the sale's memo: it must not even be looked at as the purchase.
+  stubChain({ pages: [[listed(DUST_HASH, { to: BUYER, from: "GSPAMMERAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" })]] });
+  assert.deepEqual(await findVerifiedPaymentByMemo(lookup), { status: "none" });
+});
+
+test("an account with no payment carrying the memo is none, not an error", async () => {
+  stubChain({ pages: [[]] });
+  assert.deepEqual(await findVerifiedPaymentByMemo(lookup), { status: "none" });
+});
+
+test("Horizon failing is inconclusive, never none", async () => {
+  // The caller treats these very differently: none is "you have not paid",
+  // inconclusive is "ask me again in a moment".
+  stubChain({ pages: [], failPages: true });
+  assert.deepEqual(await findVerifiedPaymentByMemo(lookup), { status: "inconclusive" });
+});
+
+test("a candidate that can't be read leaves the answer open", async () => {
+  // The transaction lookup 404s (not indexed yet): that is not "this isn't ours".
+  stubChain({ pages: [[listed(HASH)]], txs: {} });
+  assert.deepEqual(await findVerifiedPaymentByMemo(lookup), { status: "inconclusive" });
+});
+
+test("history longer than the search is willing to read is inconclusive", async () => {
+  // Full pages all the way down, none of them ours: flooding the account
+  // must not turn into a confident "no payment".
+  const full = (n: number) =>
+    Array.from({ length: 200 }, (_, i) =>
+      listed(`${n}`.padStart(2, "0") + `${i}`.padStart(62, "0"), { transaction: { memo: "pnoise", memo_type: "text" }, paging_token: `pt-${n + 1}` })
+    );
+  const stub = stubChain({ pages: [full(0), full(1), full(2), full(3), full(4), full(5)] });
+  assert.deepEqual(await findVerifiedPaymentByMemo(lookup), { status: "inconclusive" });
+  assert.equal(stub.requests(), 5, "the search is bounded in requests");
+});
+
+test("paging stops once the history is older than the sale", async () => {
+  const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const page = Array.from({ length: 200 }, (_, i) =>
+    listed(`${i}`.padStart(64, "0"), { transaction: { memo: "pnoise", memo_type: "text" }, created_at: old, paging_token: "pt-1" })
+  );
+  const stub = stubChain({ pages: [page, page] });
+  const result = await findVerifiedPaymentByMemo({ ...lookup, since: Date.now() - 60 * 60 * 1000 });
+  assert.deepEqual(result, { status: "none" });
+  assert.equal(stub.requests(), 1);
+});
+
+test("the search window starts a little before the sale was created", () => {
+  const created = "2026-10-03 12:00:00"; // SQLite's datetime('now'), UTC
+  const since = searchSince(created);
+  assert.ok(since !== undefined);
+  assert.equal(since, Date.parse("2026-10-03T12:00:00Z") - 5 * 60 * 1000);
+  assert.equal(searchSince("2026-10-03T12:00:00.000Z"), since);
+  assert.equal(searchSince("garbage"), undefined);
+  assert.equal(searchSince(null), undefined);
 });

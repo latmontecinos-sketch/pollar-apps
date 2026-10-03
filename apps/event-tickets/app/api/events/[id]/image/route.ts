@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
+import { organizerOf } from "@/lib/event-owner";
 import {
   checkEventImage,
   deleteEventImage,
@@ -8,17 +9,11 @@ import {
   MAX_IMAGE_BYTES,
   saveEventImage,
 } from "@/lib/event-image";
-import { enforce } from "@/lib/rate-limit";
+import { clientIp, consume, enforce, isOverLimit, tooManyRequests } from "@/lib/rate-limit";
 import { shortAddressForLog } from "@/lib/security-log";
-import { canView } from "@/lib/visibility";
+import { canView, normalizeAccessCode } from "@/lib/visibility";
 
 type Ctx = { params: Promise<{ id: string }> };
-
-async function organizerOf(id: string): Promise<string | null> {
-  await dbReady();
-  const result = await db.execute({ sql: "SELECT organizer_pollar_id FROM events WHERE id = ?", args: [id] });
-  return result.rows.length > 0 ? String(result.rows[0].organizer_pollar_id) : null;
-}
 
 const notFound = () =>
   NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
@@ -36,6 +31,19 @@ export async function GET(request: Request, ctx: Ctx) {
   const gate = await db.execute({ sql: "SELECT visibility, access_code FROM events WHERE id = ?", args: [id] });
   if (gate.rows.length === 0) return new Response(null, { status: 404 });
   const event = gate.rows[0] as unknown as { visibility: string; access_code: string | null };
+  // Same ceiling as the page's code form, per IP and event (lib/rate-limit.ts):
+  // this URL takes the code too, so it would otherwise be a way around it. Only
+  // a wrong code counts; every viewer of a private event loads this with the
+  // right one.
+  if (event.visibility === "private" && normalizeAccessCode(params.get("c"))) {
+    const subject = `${clientIp(request)}:${id}`;
+    const over = await isOverLimit("accessCode", subject);
+    if (!over.ok) return tooManyRequests(over);
+    if (!canView(event, params.get("c"))) {
+      await consume("accessCode", subject);
+      return new Response(null, { status: 404 });
+    }
+  }
   if (!canView(event, params.get("c"))) return new Response(null, { status: 404 });
   const image = await loadEventImage(id);
   if (!image) return new Response(null, { status: 404 });

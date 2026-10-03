@@ -1,19 +1,11 @@
 import { NextResponse } from "next/server";
 import { newDoorToken, requireAddress } from "@/lib/auth";
-import { db, dbReady } from "@/lib/db";
+import { db } from "@/lib/db";
+import { organizerOf } from "@/lib/event-owner";
 import { enforce } from "@/lib/rate-limit";
 import { shortAddressForLog } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
-
-async function organizerOf(id: string): Promise<string | null> {
-  await dbReady();
-  const result = await db.execute({
-    sql: "SELECT organizer_pollar_id FROM events WHERE id = ?",
-    args: [id],
-  });
-  return result.rows.length > 0 ? String(result.rows[0].organizer_pollar_id) : null;
-}
 
 /** Owner-only: creates (or replaces, invalidating the old one) the staff door link's token. */
 export async function POST(request: Request, ctx: Ctx) {

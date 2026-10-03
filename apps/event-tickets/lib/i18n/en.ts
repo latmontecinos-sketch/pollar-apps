@@ -304,6 +304,10 @@ export const en: Dict = {
     refreshBalance: "I topped up, refresh",
     cta: (price: string) => `Buy ticket · ${price} USDC`,
     checkingBalance: "Checking your balance…",
+    balanceError: "We couldn't check your balance.",
+    balanceRetry: "Try again",
+    otherTab: "Another tab is paying this same reservation. Don't pay from here: check there, or tap “Check again”.",
+    errorNotSeenYet: "We don't see your payment yet. If you already paid, don't pay again: tap “Check again” in a few seconds. If not, you can buy again once your reservation ends.",
     yourBalance: "Your balance:",
     alreadyOwned: (count: number) =>
       count === 1 ? "You already have a ticket for this event." : `You already have ${count} tickets for this event.`,
@@ -536,6 +540,8 @@ export const en: Dict = {
     retry: "Try again",
     errorPrepare: "We couldn't prepare the refund",
     errorSend: "The refund couldn't be sent.",
+    errorNoFunds: "Your wallet doesn't hold enough of this sale's USDC to refund it.",
+    otherTab: "Another tab is sending this refund. Don't send it from here: check again in a few seconds.",
     errorNotSeen:
       "We don't see the refund on the network yet. Don't pay again: check back in a few seconds.",
   },
@@ -604,6 +610,7 @@ export const en: Dict = {
     approving: "Recording check-in…",
     approved: "Checked in!",
     approvedDetail: "They can go through.",
+    notifyFailed: "The buyer could not be notified by email.",
     approveError: "The check-in couldn't be confirmed. Try again.",
   },
   notifications: {
@@ -664,6 +671,7 @@ export const en: Dict = {
     field: "Access code",
     submit: "Enter",
     wrong: "That code isn't right. Check it and try again.",
+    tooMany: "Too many attempts with that code. Wait a while and try again.",
   },
   eventImage: {
     title: "Event photo",
@@ -748,6 +756,9 @@ export const en: Dict = {
     sale_closed: "Ticket sales for this event are closed.",
     sold_out: "This event is sold out.",
     key_taken: "That reservation was already used. Reload the page and try again.",
+    key_conflict: "That reservation belongs to another purchase. Reload the page and try again.",
+    sale_not_pending: "That reservation is no longer active. Reload the page and try again.",
+    refund_already_sent: "You already sent this refund: we're verifying it.",
     reference_generation_failed: "We couldn't create your reservation. Please try again.",
     no_payment: "We still don't see that payment on the network.",
     tx_failed:

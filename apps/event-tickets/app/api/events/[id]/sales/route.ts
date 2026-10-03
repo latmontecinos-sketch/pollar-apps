@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
+import { organizerOf } from "@/lib/event-owner";
 import { sqlUtcToIso } from "@/lib/format";
 import { stroopsToDecimal } from "@/lib/money";
 import { sweepExpiredSales } from "@/lib/sales";
 
 type Ctx = { params: Promise<{ id: string }> };
-
-type EventRow = { organizer_pollar_id: string };
 
 type SaleRow = {
   id: string;
@@ -26,16 +25,12 @@ export async function GET(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
 
   await dbReady();
-  const eventResult = await db.execute({
-    sql: "SELECT organizer_pollar_id FROM events WHERE id = ?",
-    args: [id],
-  });
-  if (eventResult.rows.length === 0) {
+  const organizer = await organizerOf(id);
+  if (!organizer) {
     return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
   }
-  const event = eventResult.rows[0] as unknown as EventRow;
 
-  const auth = requireAddress(request, event.organizer_pollar_id);
+  const auth = requireAddress(request, organizer);
   if (!auth.ok) return auth.response;
 
   await sweepExpiredSales({ eventId: id });

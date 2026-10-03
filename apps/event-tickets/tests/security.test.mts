@@ -16,7 +16,7 @@ process.env.DATABASE_URL = `file:./${DB_FILE}`;
 delete process.env.DATABASE_AUTH_TOKEN;
 
 const { db, dbReady } = await import("../lib/db.ts");
-const { authMessage, normalizeRoute, POLLAR_PROOF_HEADER } = await import("../lib/auth-message.ts");
+const { authAudience, authMessage, normalizeRoute, POLLAR_PROOF_HEADER } = await import("../lib/auth-message.ts");
 const { DOOR_TOKEN_HEADER, doorTokenExpired, newDoorToken, requireDoorAccess, requireSignedAddress } =
   await import("../lib/auth.ts");
 const { isDeliverableEmail } = await import("../lib/mail.ts");
@@ -61,7 +61,8 @@ function requestWithProof(
     options.signedAs ?? keypair.publicKey(),
     exp,
     options.method ?? method,
-    options.path ?? path
+    options.path ?? path,
+    authAudience(new URL(ORIGIN).host)
   );
   const proof = {
     address: options.signedAs ?? keypair.publicKey(),

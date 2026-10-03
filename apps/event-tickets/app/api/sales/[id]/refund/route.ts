@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
-import { findPaymentHashByMemo, verifyPaymentOnHorizon } from "@/lib/horizon";
+import { findVerifiedPaymentByMemo, searchSince, verifyPaymentOnHorizon } from "@/lib/horizon";
 import { stroopsToDecimal } from "@/lib/money";
+import { usdcAsset } from "@/lib/network";
 import { enforce } from "@/lib/rate-limit";
 import { markRefunded, refundMemo } from "@/lib/sales";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
@@ -15,6 +16,7 @@ type SaleRow = {
   reference: string;
   amount_stroops: string;
   status: string;
+  created_at: string;
   refund_tx_hash: string | null;
   organizer_pollar_id: string;
 };
@@ -23,7 +25,7 @@ async function loadSale(id: string): Promise<SaleRow | null> {
   await dbReady();
   const result = await db.execute({
     sql: `SELECT sales.id, sales.buyer_pollar_id, sales.reference, sales.amount_stroops,
-                 sales.status, sales.refund_tx_hash, events.organizer_pollar_id
+                 sales.status, sales.created_at, sales.refund_tx_hash, events.organizer_pollar_id
           FROM sales JOIN events ON events.id = sales.event_id
           WHERE sales.id = ?`,
     args: [id],
@@ -31,7 +33,29 @@ async function loadSale(id: string): Promise<SaleRow | null> {
   return result.rows.length > 0 ? (result.rows[0] as unknown as SaleRow) : null;
 }
 
-/** Owner-only: what the organizer's refund payment must look like (the client builds it with `runTx`). */
+/**
+ * Looks for the organizer's refund of this sale on the chain, by its memo.
+ * Both the plan (is there already one on its way?) and the recording (which
+ * hash is it?) need exactly this answer.
+ */
+function findRefund(sale: SaleRow) {
+  return findVerifiedPaymentByMemo({
+    account: sale.buyer_pollar_id,
+    memo: refundMemo(sale.reference),
+    destination: sale.buyer_pollar_id,
+    source: sale.organizer_pollar_id,
+    amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
+    since: searchSince(sale.created_at),
+  });
+}
+
+/**
+ * Owner-only: what the organizer's refund payment must look like (the client
+ * builds it with `runTx`). The client asks again right before it sends, so
+ * this is also the last check that the sale is still unclaimed and that no
+ * refund of it is already on the chain — a plan loaded minutes ago, or in
+ * another tab, must not become a second transfer.
+ */
 export async function GET(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const sale = await loadSale(id);
@@ -46,10 +70,31 @@ export async function GET(request: Request, ctx: Ctx) {
       { status: 409 }
     );
   }
+  // Each plan can cost Horizon requests, so it shares the refund quota.
+  const limited = await enforce("refundSale", auth.address, {
+    actor: shortAddressForLog(auth.address),
+  });
+  if (limited) return limited;
+
+  const existing = await findRefund(sale);
+  if (existing.status === "inconclusive") {
+    return NextResponse.json(
+      { error: "No pudimos consultar la red de Stellar.", code: "horizon_unreachable" },
+      { status: 503 }
+    );
+  }
+  if (existing.status === "found") {
+    return NextResponse.json(
+      { error: "Ya enviaste esta devolución.", code: "refund_already_sent", hash: existing.hash },
+      { status: 409 }
+    );
+  }
   return NextResponse.json({
     destination: sale.buyer_pollar_id,
     amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
     memo: refundMemo(sale.reference),
+    // The sale's own asset, so the organizer's wallet can't pick another one.
+    asset: usdcAsset(),
   });
 }
 
@@ -93,20 +138,20 @@ export async function POST(request: Request, ctx: Ctx) {
   const memo = refundMemo(sale.reference);
   let hash = body.hash?.trim() ?? "";
   if (!hash) {
-    const found = await findPaymentHashByMemo({ account: sale.buyer_pollar_id, memo });
-    if (found === undefined) {
+    const found = await findRefund(sale);
+    if (found.status === "inconclusive") {
       return NextResponse.json(
         { error: "No pudimos consultar la red de Stellar.", code: "horizon_unreachable" },
         { status: 503 }
       );
     }
-    if (found === null) {
+    if (found.status === "none") {
       return NextResponse.json(
         { error: "Todavía no vemos la devolución en la red.", code: "no_payment" },
         { status: 404 }
       );
     }
-    hash = found;
+    hash = found.hash;
   }
 
   const check = await verifyPaymentOnHorizon({

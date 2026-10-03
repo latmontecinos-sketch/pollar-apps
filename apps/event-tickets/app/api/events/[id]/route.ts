@@ -3,9 +3,11 @@ import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { enforce } from "@/lib/rate-limit";
+import { collectedForEvent } from "@/lib/revenue";
 import { confirmCapacityCode } from "@/lib/capacity-code";
 import { eventImageVersion } from "@/lib/event-image";
-import { isVisibility, newAccessCode } from "@/lib/visibility";
+import { updateEventFields, type EventPatch } from "@/lib/event-update";
+import { isVisibility } from "@/lib/visibility";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
 import {
   listTicketTypes,
@@ -61,7 +63,13 @@ async function checkedInTotal(id: string): Promise<number> {
   return Number(result.rows[0].n);
 }
 
-function toJson(row: EventRow, types: TicketType[], checkedIn: number, imageVersion: string | null) {
+function toJson(
+  row: EventRow,
+  types: TicketType[],
+  checkedIn: number,
+  imageVersion: string | null,
+  collected: bigint
+) {
   const totals = summarize(types);
   return {
     id: row.id,
@@ -76,6 +84,8 @@ function toJson(row: EventRow, types: TicketType[], checkedIn: number, imageVers
     reserved: totals.reserved,
     paid: totals.paid,
     checkedIn,
+    /** What the paid sales brought in, summed across tiers (each has its own price). */
+    collectedDecimal: stroopsToDecimal(collected),
     createdAt: row.created_at,
     organizerName: row.organizer_name,
     organizerContact: row.organizer_contact,
@@ -103,7 +113,13 @@ export async function GET(request: Request, ctx: Ctx) {
   if (!auth.ok) return auth.response;
 
   return NextResponse.json(
-    toJson(event, await listTicketTypes(id), await checkedInTotal(id), await eventImageVersion(id))
+    toJson(
+      event,
+      await listTicketTypes(id),
+      await checkedInTotal(id),
+      await eventImageVersion(id),
+      await collectedForEvent(id)
+    )
   );
 }
 
@@ -179,53 +195,40 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
   }
 
-  // Capped like organizerName/organizerContact below. See MAX_NAME_CHARS:
-  // the event name reaches a public, unauthenticated image renderer.
-  const name = (body.name?.trim() || event.name).slice(0, MAX_NAME_CHARS);
-  const description = (body.description?.trim() ?? event.description).slice(
-    0,
-    MAX_DESCRIPTION_CHARS
-  );
-  const place = (body.place?.trim() || event.place).slice(0, MAX_NAME_CHARS);
-  const organizerName = (body.organizerName?.trim() ?? event.organizer_name).slice(0, 80);
-  const organizerContact = (body.organizerContact?.trim() ?? event.organizer_contact).slice(0, 120);
-  let datetimeUtc = event.datetime_utc;
+  // Only what the request carries is written (lib/event-update.ts), so an edit
+  // that doesn't mention visibility can't undo one that does. Capped like the
+  // organizer fields. See MAX_NAME_CHARS: the event name reaches a public,
+  // unauthenticated image renderer.
+  const patch: EventPatch = {};
+  const name = body.name?.trim().slice(0, MAX_NAME_CHARS);
+  if (name) patch.name = name;
+  if (typeof body.description === "string") {
+    patch.description = body.description.trim().slice(0, MAX_DESCRIPTION_CHARS);
+  }
+  const place = body.place?.trim().slice(0, MAX_NAME_CHARS);
+  if (place) patch.place = place;
+  if (typeof body.organizerName === "string") patch.organizerName = body.organizerName.trim().slice(0, 80);
+  if (typeof body.organizerContact === "string") {
+    patch.organizerContact = body.organizerContact.trim().slice(0, 120);
+  }
   if (body.datetimeUtc) {
     const parsed = new Date(body.datetimeUtc);
     if (Number.isNaN(parsed.getTime())) {
       return NextResponse.json({ error: "La fecha no es válida", code: "invalid_date" }, { status: 400 });
     }
-    datetimeUtc = parsed.toISOString();
+    patch.datetimeUtc = parsed.toISOString();
   }
-
-  // Keeps an existing code when going private again, so links already
-  // shared keep working; making it public drops nothing but the gate.
-  const visibility = isVisibility(body.visibility) ? body.visibility : event.visibility;
-  const accessCode =
-    visibility === "private" ? (event.access_code ?? newAccessCode()) : event.access_code;
-
-  const types = await listTicketTypes(id);
-  const totals = summarize(types);
-  await db.execute({
-    sql: `UPDATE events SET name = ?, description = ?, place = ?, datetime_utc = ?,
-            organizer_name = ?, organizer_contact = ?, capacity = ?,
-            visibility = ?, access_code = ? WHERE id = ?`,
-    args: [
-      name,
-      description,
-      place,
-      datetimeUtc,
-      organizerName,
-      organizerContact,
-      totals.capacity,
-      visibility,
-      accessCode,
-      id,
-    ],
-  });
+  if (isVisibility(body.visibility)) patch.visibility = body.visibility;
+  await updateEventFields(id, patch);
 
   const updated = await loadEvent(id);
   return NextResponse.json(
-    toJson(updated!, types, await checkedInTotal(id), await eventImageVersion(id))
+    toJson(
+      updated!,
+      await listTicketTypes(id),
+      await checkedInTotal(id),
+      await eventImageVersion(id),
+      await collectedForEvent(id)
+    )
   );
 }

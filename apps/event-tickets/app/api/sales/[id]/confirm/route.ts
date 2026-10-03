@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
-import { findPaymentHashByMemo, verifyPaymentOnHorizon } from "@/lib/horizon";
+import { findVerifiedPaymentByMemo, searchSince, verifyPaymentOnHorizon } from "@/lib/horizon";
 import { settlePayment } from "@/lib/sales";
 import { appOrigin, isDeliverableEmail, sendTicketEmail } from "@/lib/mail";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/locales";
@@ -18,6 +18,7 @@ type SaleRow = {
   reference: string;
   amount_stroops: string;
   status: string;
+  created_at: string;
   organizer_pollar_id: string;
   event_name: string;
   event_datetime_utc: string;
@@ -87,11 +88,18 @@ export async function POST(request: Request, ctx: Ctx) {
     // that page and break this recovery path. The destination and amount are
     // re-checked by verifyPaymentOnHorizon either way, so searching the
     // quieter account costs nothing.
-    const found = await findPaymentHashByMemo({
+    //
+    // Every candidate with this memo goes through the full check, newest
+    // first: the memo is public, so a newer 1-stroop payment carrying it must
+    // not hide the buyer's real one.
+    const found = await findVerifiedPaymentByMemo({
       account: sale.buyer_pollar_id,
       memo: sale.reference,
+      destination: sale.organizer_pollar_id,
+      amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
+      since: searchSince(sale.created_at),
     });
-    if (found === undefined) {
+    if (found.status === "inconclusive") {
       return NextResponse.json(
         {
           error: "No pudimos consultar la red de Stellar. Intenta de nuevo en un momento.",
@@ -100,13 +108,13 @@ export async function POST(request: Request, ctx: Ctx) {
         { status: 503 }
       );
     }
-    if (found === null) {
+    if (found.status === "none") {
       return NextResponse.json(
         { error: "Todavía no vemos ningún pago para esta reserva.", code: "no_payment" },
         { status: 404 }
       );
     }
-    hash = found;
+    hash = found.hash;
   }
 
   const check = await verifyPaymentOnHorizon({

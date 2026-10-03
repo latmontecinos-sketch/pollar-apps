@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
+import { enforce } from "@/lib/rate-limit";
+import { shortAddressForLog } from "@/lib/security-log";
 import { expireSale } from "@/lib/sales";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -19,6 +21,9 @@ export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const auth = requireSignedAddress(request);
   if (!auth.ok) return auth.response;
+
+  const limited = await enforce("releaseSale", auth.address, { actor: shortAddressForLog(auth.address) });
+  if (limited) return limited;
 
   await dbReady();
   const result = await db.execute({

@@ -1,5 +1,7 @@
 /** Shared between client (signs) and server (verifies) — no server-only or browser-only imports here. */
 
+import { NETWORK } from "./network.ts";
+
 export const POLLAR_PROOF_HEADER = "x-pollar-proof";
 
 /**
@@ -7,7 +9,7 @@ export const POLLAR_PROOF_HEADER = "x-pollar-proof";
  * verification instead of being interpreted under the new rules — which is
  * the point of signing a version in the first place.
  */
-const VERSION = "v2";
+const VERSION = "v3";
 
 /** Collections whose next path segment is an id, not a route. */
 const ID_PARENTS = new Set(["events", "sales", "tickets"]);
@@ -37,12 +39,27 @@ export function normalizeRoute(path: string): string {
     .join("/");
 }
 
-/** What actually gets signed: who, until when, and which endpoint it unlocks. */
+/**
+ * Who a proof is addressed to: the Stellar network and the deployment's host.
+ * A proof signed for a staging copy, or for the testnet build, no longer
+ * verifies on the production deployment (and vice versa).
+ *
+ * Honest limit: this stops proofs crossing deployments *by accident*. A
+ * hostile page that can ask the wallet to sign anything can write any
+ * audience it likes, so it is not a defence against a deliberate phishing
+ * clone — nothing a server can add to the message is.
+ */
+export function authAudience(host: string): string {
+  return `${NETWORK}@${host.trim().toLowerCase()}`;
+}
+
+/** What actually gets signed: who, for whom, until when, and which endpoint it unlocks. */
 export function authMessage(
   address: string,
   exp: number,
   method: string,
-  path: string
+  path: string,
+  audience: string
 ): string {
-  return `pollarpass-auth:${VERSION}:${method.toUpperCase()} ${normalizeRoute(path)}:${address}:${exp}`;
+  return `pollarpass-auth:${VERSION}:${audience}:${method.toUpperCase()} ${normalizeRoute(path)}:${address}:${exp}`;
 }

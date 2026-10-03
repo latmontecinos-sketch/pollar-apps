@@ -134,12 +134,28 @@ export async function POST(request: Request) {
     );
   }
   if (!result.ok) {
-    return result.reason === "key_taken"
-      ? NextResponse.json(
-          { error: "Esa reserva ya se usó. Recarga la página e intenta de nuevo.", code: "key_taken" },
-          { status: 409 }
-        )
-      : NextResponse.json({ error: "Evento agotado", code: "sold_out" }, { status: 409 });
+    if (result.reason === "key_taken") {
+      return NextResponse.json(
+        { error: "Esa reserva ya se usó. Recarga la página e intenta de nuevo.", code: "key_taken" },
+        { status: 409 }
+      );
+    }
+    if (result.reason === "key_conflict") {
+      return NextResponse.json(
+        { error: "Esa reserva es de otra compra. Recarga la página e intenta de nuevo.", code: "key_conflict" },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: "Evento agotado", code: "sold_out" }, { status: 409 });
+  }
+  // A replay of a key whose sale is no longer waiting for payment (paid,
+  // expired, refunded) is not something to pay: handing it out again would
+  // invite a second payment against a sale that can't use it.
+  if (result.sale.status !== "pending") {
+    return NextResponse.json(
+      { error: "Esa reserva ya no está activa. Recarga la página e intenta de nuevo.", code: "sale_not_pending" },
+      { status: 409 }
+    );
   }
 
   return NextResponse.json(
@@ -154,10 +170,15 @@ export async function POST(request: Request) {
       // verifies afterwards (that it was this USDC, from this issuer) was
       // the one thing the client was left to guess.
       asset: usdcAsset(),
-      ticketTypeId: ticketType.id,
-      ticketTypeName: ticketType.name,
+      // From the persisted sale, never from this request: the plan the buyer
+      // pays is the plan the server stored (the key check already guarantees
+      // they agree, this keeps them from ever drifting apart).
+      ticketTypeId: result.sale.ticketTypeId,
+      ticketTypeName: types.find((type) => type.id === result.sale.ticketTypeId)?.name ?? ticketType.name,
       expiresAtUtc: result.sale.expiresAtUtc,
       status: result.sale.status,
+      /** An existing sale came back: look for a payment on it before sending another. */
+      reused: result.reused === true,
     },
     { status: 201 }
   );

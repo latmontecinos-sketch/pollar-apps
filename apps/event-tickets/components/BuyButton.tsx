@@ -7,7 +7,9 @@ import { usePollar } from "@pollar/react";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useBalance } from "@/hooks/useBalance";
 import { pollarFetch } from "@/lib/auth-client";
-import { creditAsset } from "@/lib/payments";
+import { creditAsset, classifySubmit } from "@/lib/payments";
+import { canForgetUnpaid, parseInFlight, type InFlight } from "@/lib/checkout";
+import { withClaim } from "@/lib/claim";
 import { USDC_CODE } from "@/lib/network";
 import { isFreePrice } from "@/lib/price-label";
 import { formatAmount } from "@/lib/format";
@@ -35,12 +37,25 @@ type Sale = {
   organizerAddress: string;
   /** What to pay with, decided by the server — never by this component. */
   asset: { code: string; issuer: string };
+  expiresAtUtc: string;
+  /** An existing sale came back: a payment on it may already exist. */
+  reused?: boolean;
 };
 
-type Ticket = { code: string; doorCode: string };
+type ApiBody = { error?: string; code?: string };
 
-/** A checkout that may already have money in flight: only ever *verified* again, never re-paid. */
-type InFlight = { saleId: string; hash?: string };
+/** What one ask of `/confirm` came to. */
+type ConfirmResult =
+  | { kind: "ticket"; ticket: Ticket; emailed: boolean }
+  | { kind: "unclaimed"; data: ApiBody }
+  | { kind: "tx_failed"; data: ApiBody }
+  /** The server looked everywhere it can and found no payment (yet). */
+  | { kind: "no_payment" }
+  /** Network, Horizon or a transient server error: ask again. */
+  | { kind: "retry" }
+  | { kind: "fail"; data: ApiBody };
+
+type Ticket = { code: string; doorCode: string };
 
 type State =
   | { step: "idle" }
@@ -63,8 +78,7 @@ const storageKey = (key: string) => `pollarpass:compra:${key}`;
 
 function readInFlight(key: string): InFlight | null {
   try {
-    const raw = localStorage.getItem(storageKey(key));
-    return raw ? (JSON.parse(raw) as InFlight) : null;
+    return parseInFlight(localStorage.getItem(storageKey(key)));
   } catch {
     return null;
   }
@@ -130,7 +144,8 @@ export function BuyButton({
   useEffect(() => {
     pollarRef.current = pollar;
   });
-  const { asset, balance, isLoading: balanceLoading, refresh } = useBalance();
+  const { asset, balance, isLoading: balanceLoading, loaded: balanceLoaded, error: balanceError, refresh } =
+    useBalance();
   const [state, setState] = useState<State>({ step: "idle" });
   const [receiveOpen, setReceiveOpen] = useState(false);
   // Ticket prices are always USDC, so this checks the code instead of merely
@@ -142,55 +157,79 @@ export function BuyButton({
   // Remembered per tier, so a paused General checkout doesn't collide with a VIP one.
   const flightKey = `${eventId}:${ticketTypeId}`;
 
-  async function verify(inFlight: InFlight, opts: { fromReload: boolean }) {
+  /** One ask of the server. A hash settles that payment; none makes it look the sale's memo up on Stellar. */
+  async function confirmOnce(saleId: string, hash?: string): Promise<ConfirmResult> {
+    if (!address) return { kind: "retry" };
+    try {
+      const res = await pollarFetch(pollarRef.current.getClient(), address, `/api/sales/${saleId}/confirm`, {
+        method: "POST",
+        // `locale` so the ticket email arrives in the buyer's language.
+        body: JSON.stringify({ hash, email: user?.profile?.mail, locale }),
+      });
+      const data = (await res.json()) as ApiBody & {
+        ticket?: Ticket;
+        emailed?: boolean;
+        status?: string;
+      };
+      if (res.ok && data.ticket) return { kind: "ticket", ticket: data.ticket, emailed: data.emailed === true };
+      if (res.status === 409 && data.status === "unclaimed") return { kind: "unclaimed", data };
+      if (res.status === 422 && data.code === "tx_failed") return { kind: "tx_failed", data };
+      if (res.status === 404 && data.code === "no_payment") return { kind: "no_payment" };
+      if (res.status === 503 || res.status === 404) return { kind: "retry" };
+      return { kind: "fail", data };
+    } catch {
+      return { kind: "retry" };
+    }
+  }
+
+  /**
+   * Asks until the payment is found, with backoff (Horizon can lag a few
+   * seconds behind a just-submitted payment). The ONLY ways out are a ticket,
+   * a transaction the network failed, an expired reservation, or — for a
+   * checkout that never got a hash — a deadline long enough that a payment
+   * still missing is the refund flow's problem (see `canForgetUnpaid`). A
+   * single "no payment" is never taken as "nothing was sent".
+   */
+  async function verify(inFlight: InFlight) {
     if (!address) return;
-    const client = pollarRef.current.getClient();
+    let sawNoPayment = false;
     for (let attempt = 1; attempt <= MAX_VERIFY_ATTEMPTS; attempt++) {
       setState({ step: "verifying", attempt });
-      let res: Response;
-      let data: { ticket?: Ticket; emailed?: boolean; error?: string; code?: string; status?: string };
-      try {
-        res = await pollarFetch(client, address, `/api/sales/${inFlight.saleId}/confirm`, {
-          method: "POST",
-          // `locale` so the ticket email arrives in the buyer's language.
-          body: JSON.stringify({ hash: inFlight.hash, email: user?.profile?.mail, locale }),
-        });
-        data = (await res.json()) as typeof data;
-      } catch {
-        await sleep(1500 * attempt);
-        continue;
+      const result = await confirmOnce(inFlight.saleId, inFlight.hash);
+      switch (result.kind) {
+        case "ticket":
+          writeInFlight(flightKey, null);
+          void refresh();
+          setState({ step: "done", ticket: result.ticket, emailed: result.emailed });
+          return;
+        case "unclaimed":
+          writeInFlight(flightKey, null);
+          setState({ step: "unclaimed", message: apiErrorMessage(t, result.data, t.buy.errorExpired) });
+          return;
+        case "tx_failed":
+          writeInFlight(flightKey, null);
+          setState({ step: "error", message: apiErrorMessage(t, result.data, t.buy.errorTxFailed) });
+          return;
+        case "fail":
+          setState({ step: "unverified", message: apiErrorMessage(t, result.data, t.buy.errorVerify) });
+          return;
+        case "no_payment":
+          sawNoPayment = true;
+          if (canForgetUnpaid(inFlight, Date.now())) {
+            writeInFlight(flightKey, null);
+            setState({ step: "idle" });
+            return;
+          }
+          break;
+        case "retry":
+          break;
       }
-
-      if (res.ok && data.ticket) {
-        writeInFlight(flightKey, null);
-        void refresh();
-        setState({ step: "done", ticket: data.ticket, emailed: data.emailed === true });
-        return;
-      }
-      if (res.status === 409 && data.status === "unclaimed") {
-        writeInFlight(flightKey, null);
-        setState({ step: "unclaimed", message: apiErrorMessage(t, data, t.buy.errorExpired) });
-        return;
-      }
-      if (res.status === 422 && data.code === "tx_failed") {
-        writeInFlight(flightKey, null);
-        setState({ step: "error", message: apiErrorMessage(t, data, t.buy.errorTxFailed) });
-        return;
-      }
-      if (res.status === 404 && data.code === "no_payment" && opts.fromReload && !inFlight.hash) {
-        // Came back to a checkout that never got paid: nothing to recover.
-        writeInFlight(flightKey, null);
-        setState({ step: "idle" });
-        return;
-      }
-      if (res.status === 503 || res.status === 404) {
-        await sleep(1500 * attempt);
-        continue;
-      }
-      setState({ step: "unverified", message: apiErrorMessage(t, data, t.buy.errorVerify) });
-      return;
+      await sleep(1500 * attempt);
     }
-    setState({ step: "unverified", message: t.buy.errorNetworkLag });
+    setState({
+      step: "unverified",
+      message: inFlight.hash || !sawNoPayment ? t.buy.errorNetworkLag : t.buy.errorNotSeenYet,
+    });
   }
 
   // Resume a checkout interrupted by a reload / closed tab. Read through a
@@ -235,7 +274,7 @@ export function BuyButton({
     // would otherwise cancel the only scheduled run.
     const timer = setTimeout(() => {
       resumed.current = true;
-      void verifyRef.current(inFlight, { fromReload: true });
+      void verifyRef.current(inFlight);
     }, 0);
     return () => clearTimeout(timer);
   }, [address, verified, flightKey]);
@@ -252,9 +291,101 @@ export function BuyButton({
     }
   }
 
+  /**
+   * Sends the payment for `sale`. Runs under a claim named after the sale, so
+   * a second tab holding the same reservation cannot send a second payment.
+   */
+  async function pay(sale: Sale) {
+    // Another tab may have started this very sale in the instant before the claim.
+    const raced = readInFlight(flightKey);
+    if (raced) {
+      await verify(raced);
+      return;
+    }
+
+    // An existing sale came back (a reload, a second tab, a repeated tap):
+    // a payment for it may already be on the chain, so look before sending.
+    if (sale.reused) {
+      setState({ step: "verifying", attempt: 1 });
+      const probe = await confirmOnce(sale.id);
+      if (probe.kind === "ticket") {
+        void refresh();
+        setState({ step: "done", ticket: probe.ticket, emailed: probe.emailed });
+        return;
+      }
+      if (probe.kind === "unclaimed") {
+        setState({ step: "unclaimed", message: apiErrorMessage(t, probe.data, t.buy.errorExpired) });
+        return;
+      }
+      if (probe.kind !== "no_payment") {
+        // Couldn't rule a payment out: never send into the doubt.
+        writeInFlight(flightKey, { saleId: sale.id, expiresAtUtc: sale.expiresAtUtc, at: Date.now() });
+        setState({ step: "unverified", message: t.buy.errorVerify });
+        return;
+      }
+    }
+
+    let asset;
+    try {
+      // From the sale, so the asset paid is the asset the server will look
+      // for on Horizon. The wallet's balance list only decides whether the
+      // buyer *can* pay, never with what.
+      asset = creditAsset(sale.asset);
+    } catch {
+      void release(sale.id);
+      setState({ step: "error", message: t.buy.errorPay });
+      return;
+    }
+
+    // Written BEFORE the SDK is called: from here on a payment may exist, and
+    // a reload, a crash or a second tab must find that out instead of paying.
+    const started: InFlight = { saleId: sale.id, expiresAtUtc: sale.expiresAtUtc, at: Date.now() };
+    writeInFlight(flightKey, started);
+    setState({ step: "paying" });
+
+    let outcome: Awaited<ReturnType<typeof pollar.runTx>> | undefined;
+    try {
+      outcome = await pollarRef.current.runTx(
+        "payment",
+        { destination: sale.organizerAddress, amount: sale.amountDecimal, asset },
+        { memo: { type: "text", value: sale.reference } }
+      );
+    } catch {
+      // Unknown outcome: possibly paid, so only verification is offered.
+    }
+
+    // The SDK returns most failures instead of throwing them, and a failure
+    // with no hash is the same shape whether the request never left or only
+    // its answer never came back. Only a provable "never left" gives the
+    // seat back; anything else is looked up on the chain by memo.
+    if (outcome && outcome.status === "error" && classifySubmit(outcome) === "rejected") {
+      writeInFlight(flightKey, null);
+      void release(sale.id);
+      setState({
+        step: "error",
+        message: outcome.message ?? outcome.details ?? t.buy.errorPay,
+      });
+      return;
+    }
+
+    const hash = outcome?.hash;
+    const next: InFlight = hash ? { ...started, hash } : started;
+    writeInFlight(flightKey, next);
+    await verify(next);
+  }
+
   async function buy() {
     if (!user || !usdcAsset) return;
     const client = pollarRef.current.getClient();
+
+    // Something may already be in flight for this tier (a reload that hasn't
+    // resumed yet, another tab): look at it, never open a checkout beside it.
+    const pending = readInFlight(flightKey);
+    if (pending) {
+      await verify(pending);
+      return;
+    }
+
     setState({ step: "creating_sale" });
     let sale: Sale;
     try {
@@ -276,42 +407,11 @@ export function BuyButton({
       return;
     }
 
-    writeInFlight(flightKey, { saleId: sale.id });
-    setState({ step: "paying" });
-    let hash: string | undefined;
-    try {
-      const payResult = await pollarRef.current.runTx(
-        "payment",
-        {
-          destination: sale.organizerAddress,
-          amount: sale.amountDecimal,
-          // From the sale, so the asset paid is the asset the server will
-          // look for on Horizon. The wallet's balance list only decides
-          // whether the buyer *can* pay, never with what.
-          asset: creditAsset(sale.asset),
-        },
-        { memo: { type: "text", value: sale.reference } }
-      );
-      if (payResult.status === "error" && !payResult.hash) {
-        // Rejected before reaching the network (no XLM for fees, user
-        // cancelled…): nothing was charged, so give the seat back at once
-        // instead of holding it for the whole window.
-        writeInFlight(flightKey, null);
-        void release(sale.id);
-        setState({
-          step: "error",
-          message: payResult.message ?? payResult.details ?? t.buy.errorPay,
-        });
-        return;
-      }
-      hash = payResult.hash;
-    } catch {
-      // Unknown outcome: treat as possibly paid and only offer verification.
+    const claimed = await withClaim(`pay:${sale.id}`, () => pay(sale));
+    if (!claimed.held) {
+      // Another tab is paying this same reservation: it, not this one, sends.
+      setState({ step: "unverified", message: t.buy.otherTab });
     }
-
-    const inFlight = { saleId: sale.id, hash };
-    writeInFlight(flightKey, inFlight);
-    await verify(inFlight, { fromReload: false });
   }
 
   /** A free tier: one request, and the answer is the ticket. No balance, no payment, nothing to verify. */
@@ -417,7 +517,7 @@ export function BuyButton({
         <Button
           onClick={() => {
             const inFlight = readInFlight(flightKey);
-            if (inFlight) void verify(inFlight, { fromReload: false });
+            if (inFlight) void verify(inFlight);
             else setState({ step: "idle" });
           }}
           className="w-full"
@@ -463,7 +563,11 @@ export function BuyButton({
   // payment would fail with a network error the buyer can't act on.
   const walletNotReady = user.wallet.existsOnStellar === false;
   const enough = covers(usdcAsset?.balance ?? (usdcAsset ? balance : null), priceDecimal);
-  const balanceKnown = !balanceLoading && asset !== null;
+  // "Known" means the wallet was read, even if it came back empty. It used to
+  // mean "an asset is present", so a failed read (or a brand-new wallet with
+  // no balances) left the button on "checking your balance" forever.
+  const balanceKnown = balanceLoaded;
+  const balanceFailed = !balanceLoaded && !balanceLoading && balanceError !== null;
   const noUsdc = balanceKnown && !usdcAsset;
   const short = balanceKnown && (noUsdc || enough === false);
 
@@ -491,6 +595,20 @@ export function BuyButton({
           </Button>
           <Button onClick={() => void buy()}>{t.buy.pay}</Button>
         </div>
+      </div>
+    );
+  }
+
+  if (balanceFailed) {
+    return (
+      <div className="flex flex-col gap-2 rounded-2xl border border-warning-border bg-warning-light p-4 text-sm leading-6">
+        <p className="flex items-start gap-2">
+          <Icon name="alert" size={18} className="mt-0.5 text-warning" />
+          <span>{t.buy.balanceError}</span>
+        </p>
+        <Button onClick={() => void refresh()} className="w-full">
+          {t.buy.balanceRetry}
+        </Button>
       </div>
     );
   }

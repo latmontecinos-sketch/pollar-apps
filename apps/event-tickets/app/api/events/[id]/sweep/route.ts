@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
-import { db, dbReady } from "@/lib/db";
+import { dbReady } from "@/lib/db";
+import { organizerOf } from "@/lib/event-owner";
 import { purgeStaleBuyerEmails, purgeStaleOrganizerData } from "@/lib/retention";
 import { sweepExpiredSales } from "@/lib/sales";
 import { enforce } from "@/lib/rate-limit";
@@ -18,15 +19,12 @@ export async function POST(request: Request, ctx: Ctx) {
   const { id: eventId } = await ctx.params;
   await dbReady();
 
-  const eventRow = await db.execute({
-    sql: "SELECT organizer_pollar_id FROM events WHERE id = ?",
-    args: [eventId],
-  });
-  if (eventRow.rows.length === 0) {
+  const organizer = await organizerOf(eventId);
+  if (!organizer) {
     return NextResponse.json({ error: "No encontrado", code: "event_not_found" }, { status: 404 });
   }
 
-  const auth = requireAddress(request, String(eventRow.rows[0].organizer_pollar_id));
+  const auth = requireAddress(request, organizer);
   if (!auth.ok) return auth.response;
 
   const limited = await enforce("sweep", auth.address, { actor: shortAddressForLog(auth.address) });

@@ -33,6 +33,11 @@ export function useBalance(): {
   /** The full balance record (type, issuer, available amount…). */
   asset: WalletBalanceRecord | null;
   isLoading: boolean;
+  /**
+   * The wallet was read successfully. A new wallet can load with no balances
+   * at all (`asset` stays null), which is "empty", not "still loading".
+   */
+  loaded: boolean;
   error: string | null;
   refresh: () => Promise<void>;
 } {
@@ -66,6 +71,7 @@ export function useBalance(): {
     isLoading:
       walletBalance.step === "loading" ||
       (isAuthenticated && walletBalance.step === "idle"),
+    loaded: walletBalance.step === "loaded",
     error: walletBalance.step === "error" ? walletBalance.message : null,
     refresh: refreshWalletBalance,
   };

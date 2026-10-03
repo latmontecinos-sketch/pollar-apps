@@ -3,6 +3,7 @@ import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { PRICE_RANGE_COLUMNS } from "@/lib/public-events";
+import { collectedByEvent } from "@/lib/revenue";
 import { sweepExpiredSales } from "@/lib/sales";
 
 /**
@@ -27,15 +28,15 @@ export async function GET(request: Request) {
                  ${PRICE_RANGE_COLUMNS},
                  (SELECT COALESCE(SUM(t.capacity), 0) FROM ticket_types t WHERE t.event_id = e.id) AS capacity,
                  (SELECT COALESCE(SUM(t.reserved), 0) FROM ticket_types t WHERE t.event_id = e.id) AS reserved,
-                 (SELECT count(*) FROM sales s WHERE s.event_id = e.id AND s.status = 'paid') AS paid,
-                 (SELECT COALESCE(SUM(s.amount_stroops), 0) FROM sales s
-                  WHERE s.event_id = e.id AND s.status = 'paid') AS collected
+                 (SELECT count(*) FROM sales s WHERE s.event_id = e.id AND s.status = 'paid') AS paid
           FROM events e
           WHERE e.organizer_pollar_id = ?
           ORDER BY e.created_at DESC`,
     args: [auth.address],
   });
 
+  // Summed in BigInt, not with SQL SUM(): see lib/revenue.ts.
+  const collected = await collectedByEvent(auth.address);
   const events = result.rows.map((row) => ({
     id: String(row.id),
     name: String(row.name),
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
     capacity: Number(row.capacity),
     reserved: Number(row.reserved),
     paid: Number(row.paid),
-    collectedDecimal: stroopsToDecimal(BigInt(row.collected as number)),
+    collectedDecimal: stroopsToDecimal(collected.get(String(row.id)) ?? 0n),
   }));
 
   return NextResponse.json({ events });

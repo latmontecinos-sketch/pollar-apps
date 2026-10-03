@@ -34,9 +34,10 @@ export async function POST(request: Request, ctx: Ctx) {
   const access = requireDoorAccess(request, eventResult.rows[0] as unknown as EventRow);
   if (!access.ok) return access.response;
 
-  // Shares the door budget with the check-in itself: peeking is free to
-  // repeat by design, which is exactly what makes it worth guessing codes on.
-  const limited = await enforce("door", id, { event: id });
+  // Peeking is free to repeat by design, which is what makes it worth
+  // guessing codes on — so it has a ceiling. Its own bucket, though: sharing
+  // one with the check-in made every person cost two hits of a single budget.
+  const limited = await enforce("doorCheck", id, { event: id });
   if (limited) return limited;
 
   let body: { code?: string };

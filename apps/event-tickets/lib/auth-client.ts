@@ -1,7 +1,7 @@
 "use client";
 
 import type { PollarClient } from "@pollar/core";
-import { authMessage, normalizeRoute, POLLAR_PROOF_HEADER } from "./auth-message.ts";
+import { authAudience, authMessage, normalizeRoute, POLLAR_PROOF_HEADER } from "./auth-message.ts";
 
 type CachedProof = { address: string; exp: number; signature: string };
 
@@ -27,7 +27,9 @@ async function proofFor(
   if (hit && hit.exp - 30_000 > Date.now()) return hit;
 
   const exp = Date.now() + PROOF_TTL_MS;
-  const signed = await client.stellar.sep53.signMessage(authMessage(address, exp, method, path));
+  // The host the person is actually on: the server checks it against its own.
+  const audience = authAudience(window.location.host);
+  const signed = await client.stellar.sep53.signMessage(authMessage(address, exp, method, path, audience));
   if (signed.status !== "signed") {
     throw new Error(signed.details ?? "No se pudo firmar la sesión Pollar");
   }

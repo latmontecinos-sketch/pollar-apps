@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
-import { db, dbReady } from "@/lib/db";
 import { newId } from "@/lib/ids";
 import { enforce } from "@/lib/rate-limit";
 import { shortAddressForLog } from "@/lib/security-log";
 import {
-  createTicketTypes,
+  createEventWithTypes,
   MAX_DESCRIPTION_CHARS,
   MAX_NAME_CHARS,
   parseTicketTypes,
   TicketTypeError,
   type TicketTypeInput,
 } from "@/lib/ticket-types";
-import { decimalToStroops } from "@/lib/money";
 import { isVisibility, newAccessCode } from "@/lib/visibility";
 
 type CreateEventBody = {
@@ -79,36 +77,24 @@ export async function POST(request: Request) {
   const visibility = isVisibility(body.visibility) ? body.visibility : "public";
   const accessCode = visibility === "private" ? newAccessCode() : null;
 
-  await dbReady();
   const id = newId();
-  // `price_stroops` / `capacity` on the event are a summary for listings;
-  // the seats that get sold live on the tiers (lib/ticket-types.ts).
-  const cheapest = ticketTypes
-    .map((type) => decimalToStroops(type.priceDecimal))
-    .reduce((a, b) => (a < b ? a : b));
-  const totalCapacity = ticketTypes.reduce((sum, type) => sum + type.capacity, 0);
-
-  await db.execute({
-    sql: `INSERT INTO events (id, organizer_pollar_id, name, description, datetime_utc, place,
-                              price_stroops, capacity, organizer_name, organizer_contact,
-                              visibility, access_code)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [
+  // Event and tiers in one transaction (lib/ticket-types.ts): no moment
+  // where the event exists without its tiers for the backfill to fill.
+  await createEventWithTypes(
+    {
       id,
-      auth.address,
+      organizerPollarId: auth.address,
       name,
       description,
-      new Date(datetimeUtc).toISOString(),
+      datetimeUtc: new Date(datetimeUtc).toISOString(),
       place,
-      cheapest.toString(),
-      totalCapacity,
       organizerName,
       organizerContact,
       visibility,
       accessCode,
-    ],
-  });
-  await createTicketTypes(id, ticketTypes);
+    },
+    ticketTypes
+  );
 
   return NextResponse.json({ id }, { status: 201 });
 }

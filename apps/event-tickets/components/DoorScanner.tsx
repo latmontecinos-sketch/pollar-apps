@@ -180,7 +180,7 @@ export function DoorScanner({
         body: JSON.stringify({ code }),
       });
       const data = (await res.json()) as
-        | { result: "VALID"; checkedIn?: number }
+        | { result: "VALID"; checkedIn?: number; notified?: "none" | "sent" | "failed" }
         | { result: "USED"; usedAt?: string }
         | { result: "UNKNOWN" }
         | { error: string; code?: string };
@@ -191,7 +191,15 @@ export function DoorScanner({
           const checkedIn = data.checkedIn;
           setEvent((current) => (current ? { ...current, checkedIn } : current));
         }
-        show({ kind: "VALID", title: t.checkin.approved, detail: t.checkin.approvedDetail });
+        // Rule 14: the email is best-effort, so the screen says when it did not go.
+        show({
+          kind: "VALID",
+          title: t.checkin.approved,
+          detail:
+            data.notified === "failed"
+              ? `${t.checkin.approvedDetail} ${t.checkin.notifyFailed}`
+              : t.checkin.approvedDetail,
+        });
       } else if (data.result === "USED") {
         // Someone else let them in between the scan and the tap.
         show({

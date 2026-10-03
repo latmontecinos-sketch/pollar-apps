@@ -39,8 +39,18 @@ after(() => {
   }
 });
 
-/** The headers of a baseline JPEG (SOI, APP0, SOF0, SOS) — all `jpegSize` reads. */
-function jpeg(width: number, height: number, { sof = 0xc0, padTo = 0 } = {}): Uint8Array {
+/**
+ * The skeleton of a baseline JPEG: SOI, APP0, DQT, SOF, DHT, SOS, some
+ * "compressed" bytes, EOI. Not decodable, but structurally what
+ * `wellFormedJpegSize` walks. `tables: false` leaves out DQT and DHT;
+ * `data` is how many entropy bytes sit between SOS and EOI (default: just
+ * enough for the size claimed).
+ */
+function jpeg(
+  width: number,
+  height: number,
+  { sof = 0xc0, padTo = 0, tables = true, data = Math.ceil((width * height) / 2000) + 8 } = {}
+): Uint8Array {
   const app0 = [0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
   const sofSegment = [
     0xff, sof, 0x00, 0x11, 0x08,
@@ -48,8 +58,13 @@ function jpeg(width: number, height: number, { sof = 0xc0, padTo = 0 } = {}): Ui
     0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
   ];
   const sos = [0xff, 0xda, 0x00, 0x0c, 0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00];
-  const bytes = [0xff, 0xd8, ...app0, ...sofSegment, ...sos];
-  while (bytes.length < padTo) bytes.push(0x00);
+  const dqt = [0xff, 0xdb, 0x00, 0x43, 0x00, ...new Array(64).fill(8)];
+  const dht = [0xff, 0xc4, 0x00, 0x14, 0x00, ...new Array(16).fill(0).map((_, k) => (k === 0 ? 1 : 0)), 0x00];
+  const bytes = [
+    0xff, 0xd8, ...app0, ...(tables ? dqt : []), ...sofSegment, ...(tables ? dht : []), ...sos,
+    ...new Array(data).fill(0x55),
+  ];
+  while (bytes.length < padTo - 2) bytes.push(0x55);
   return Uint8Array.from([...bytes, 0xff, 0xd9]);
 }
 
@@ -68,6 +83,31 @@ test("anything that isn't a JPEG is refused — an SVG above all", () => {
   for (const bytes of [svg, png, new Uint8Array(0), Uint8Array.from([0xff, 0xd8])]) {
     assert.deepEqual(checkEventImage(bytes), { ok: false, code: "image_invalid" });
   }
+});
+
+test("a forged header with nothing behind it is refused", () => {
+  const real = jpeg(1080, 1350);
+  const invalid = { ok: false, code: "image_invalid" };
+  // The frame header claims 1080 x 1350; no image data follows it.
+  assert.deepEqual(checkEventImage(jpeg(1080, 1350, { data: 0 })), invalid);
+  // No quantisation or Huffman tables: nothing could decode it.
+  assert.deepEqual(checkEventImage(jpeg(1080, 1350, { tables: false })), invalid);
+  // Cut short: the end-of-image marker is missing.
+  assert.deepEqual(checkEventImage(real.slice(0, real.length - 2)), invalid);
+  // Something appended after the end of the image.
+  assert.deepEqual(checkEventImage(Uint8Array.from([...real, 0x00, 0x01, 0x02])), invalid);
+  // A stray marker inside the data, which no decoder would take as image data.
+  const withGarbage = Uint8Array.from(real);
+  withGarbage[withGarbage.length - 10] = 0xff;
+  withGarbage[withGarbage.length - 9] = 0x12;
+  assert.deepEqual(checkEventImage(withGarbage), invalid);
+  // A frame header whose length doesn't match its component count.
+  const badFrame = Uint8Array.from(real);
+  const sofAt = badFrame.findIndex((b, k) => b === 0xff && badFrame[k + 1] === 0xc0);
+  badFrame[sofAt + 3] = 0x0b;
+  assert.deepEqual(checkEventImage(badFrame), invalid);
+  // And the genuine skeleton still passes.
+  assert.equal(checkEventImage(real).ok, true);
 });
 
 test("a JPEG in the wrong shape is refused: the pages are laid out for 4:5", () => {
