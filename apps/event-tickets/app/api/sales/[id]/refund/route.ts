@@ -89,8 +89,12 @@ export async function POST(request: Request, ctx: Ctx) {
   if (!hash) {
     // An empty search lets ANOTHER refund go out only when this attempt is
     // dead, so only then must Horizon's history reach past its deadline.
-    const state = attemptState(sale.refund_started_at, Date.now());
-    const found = await findRefund(sale, historyPastFor(sale.refund_started_at, Date.now()));
+    // The instant is taken BEFORE the search and used for everything after it:
+    // an attempt alive when the search began is not reopened because it crossed
+    // its deadline while the search ran.
+    const searchStartedAt = Date.now();
+    const state = attemptState(sale.refund_started_at, searchStartedAt);
+    const found = await findRefund(sale, historyPastFor(sale.refund_started_at, searchStartedAt));
     if (found.status === "inconclusive") {
       return NextResponse.json(
         { error: "No pudimos consultar la red de Stellar.", code: "horizon_unreachable" },
@@ -103,7 +107,7 @@ export async function POST(request: Request, ctx: Ctx) {
       // be started again; if it is still alive, it may yet land.
       let retryable = state === "none";
       if (state === "dead" && sale.refund_started_at !== null) {
-        retryable = await reopenDeadRefund(sale.id, auth.address, sale.refund_started_at);
+        retryable = await reopenDeadRefund(sale.id, auth.address, sale.refund_started_at, searchStartedAt);
       }
       return NextResponse.json(
         { error: "Todavía no vemos la devolución en la red.", code: "no_payment", retryable },

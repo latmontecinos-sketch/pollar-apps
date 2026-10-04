@@ -162,3 +162,27 @@ export function historyPastFor(startedAt: string | null | undefined, now: number
   if (attemptState(startedAt, now) !== "dead") return undefined;
   return attemptDeadlineMs(Date.parse(startedAt as string));
 }
+
+/**
+ * Everything a search whose "none" might end a checkout decides, taken from ONE
+ * instant: `searchStartedAt`, read BEFORE the search begins. Never recomputed
+ * after it, because a search can take seconds and an attempt can cross its
+ * deadline meanwhile: judged at the end, an attempt that was still in flight
+ * when the search started (so no history watermark was demanded) would read as
+ * dead and be released on the strength of a "none" that nobody vouched for.
+ *
+ * - `historyPast`: pass it to the search (see {@link historyPastFor}).
+ * - `startOver`: whether that "none" may end the checkout ({@link mayStartOver}).
+ *
+ * Invariant (tested): `startOver` on a started attempt implies `historyPast` is
+ * set, so a release is never authorised without the watermark.
+ */
+export function releaseGate(
+  sale: SaleAttemptView,
+  searchStartedAt: number
+): { historyPast: number | undefined; startOver: boolean } {
+  return {
+    historyPast: historyPastFor(sale.payStartedAt, searchStartedAt),
+    startOver: mayStartOver(sale, searchStartedAt),
+  };
+}

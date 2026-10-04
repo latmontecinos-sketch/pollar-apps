@@ -14,6 +14,7 @@ import {
   attemptState,
   deadStartedBeforeIso,
   historyPastFor,
+  releaseGate,
   MIN_SEND_WINDOW_SEC,
   SEND_MARGIN_SEC,
   sendWindowSec,
@@ -165,4 +166,38 @@ test("Horizon history is demanded only for an attempt that is dead", () => {
   // No attempt, or one we cannot read: no demand (nothing was started, or nothing is decided).
   assert.equal(historyPastFor(null, DEADLINE + 1), undefined);
   assert.equal(historyPastFor("not a date", DEADLINE + 1), undefined);
+});
+
+// --- One instant, taken before the search, decides what its "none" may do ---------
+
+test("an attempt in flight when the search began is not released by it, however long it ran", () => {
+  const s = sale({ payStartedAt: STARTED });
+  const before = T0 + 11 * 60_000 + 59_000; // 11:59: the search starts here...
+  const after = T0 + 12 * 60_000 + 2_000; //  ...and "none" comes back at 12:02.
+  // Judged at the instant the search began: alive, so nothing is released and no watermark is asked for.
+  assert.deepEqual(releaseGate(s, before), { historyPast: undefined, startOver: false });
+  // Judged at the end (the bug): dead, release authorised, yet no watermark was ever demanded.
+  assert.equal(mayStartOver(s, after), true);
+  assert.equal(historyPastFor(STARTED, before), undefined);
+});
+
+test("a dead attempt is released only together with the watermark demand", () => {
+  const s = sale({ payStartedAt: STARTED });
+  assert.deepEqual(releaseGate(s, DEADLINE + 1), { historyPast: DEADLINE, startOver: true });
+});
+
+test("a release is never authorised without the watermark, at any instant", () => {
+  for (const status of ["pending", "expired"]) {
+    const s = sale({ status, payStartedAt: STARTED, expiresAtUtc: new Date(T0 + 60_000).toISOString() });
+    for (let t = T0; t <= DEADLINE + 5 * 60_000; t += 1_000) {
+      const gate = releaseGate(s, t);
+      if (gate.startOver) assert.notEqual(gate.historyPast, undefined, `${status} at +${(t - T0) / 1000}s`);
+    }
+  }
+});
+
+test("a sale nobody started is released by its hold alone, with no watermark to ask for", () => {
+  const s = sale();
+  assert.deepEqual(releaseGate(s, T0 + 9 * 60_000), { historyPast: undefined, startOver: false });
+  assert.deepEqual(releaseGate(s, T0 + 10 * 60_000 + 1), { historyPast: undefined, startOver: true });
 });

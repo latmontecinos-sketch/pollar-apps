@@ -3,7 +3,7 @@ import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { findVerifiedPaymentByMemo, searchSince, verifyPaymentOnHorizon } from "@/lib/horizon";
-import { historyPastFor, mayStartOver } from "@/lib/pay-attempt";
+import { releaseGate } from "@/lib/pay-attempt";
 import { releaseIfDead, settlePayment } from "@/lib/sales";
 import { appOrigin, isDeliverableEmail, sendTicketEmail } from "@/lib/mail";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/locales";
@@ -100,13 +100,23 @@ export async function POST(request: Request, ctx: Ctx) {
     // must be backed by evidence that Horizon's ingested history reaches past
     // that attempt's deadline: a Horizon that answers while it lags would
     // otherwise read "nothing there" for a payment that already landed.
+    //
+    // Both halves (what the search must prove, and whether its "none" may end
+    // the checkout) come from ONE instant taken BEFORE the search. Judged
+    // after it, an attempt that was in flight when the search began could have
+    // crossed its deadline during it and be released with no watermark asked.
+    const searchStartedAt = Date.now();
+    const gate = releaseGate(
+      { status: sale.status, payStartedAt: sale.pay_started_at, expiresAtUtc: sale.expires_at_utc },
+      searchStartedAt
+    );
     const found = await findVerifiedPaymentByMemo({
       account: sale.buyer_pollar_id,
       memo: sale.reference,
       destination: sale.organizer_pollar_id,
       amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
       since: searchSince(sale.created_at),
-      historyPast: historyPastFor(sale.pay_started_at, Date.now()),
+      historyPast: gate.historyPast,
     });
     if (found.status === "inconclusive") {
       return NextResponse.json(
@@ -122,10 +132,7 @@ export async function POST(request: Request, ctx: Ctx) {
       // which knows who holds the claim and when its transaction dies, says
       // whether this checkout is over (lib/pay-attempt.ts). The browser never
       // decides that from a clock of its own.
-      const startOver = mayStartOver(
-        { status: sale.status, payStartedAt: sale.pay_started_at, expiresAtUtc: sale.expires_at_utc },
-        Date.now()
-      );
+      const startOver = gate.startOver;
       // A pending sale nobody can pay any more gives its seat back now,
       // instead of waiting for the next sweep to notice. The row above is
       // minutes old by now (a Horizon search sits between), so the expiry is a
@@ -133,7 +140,7 @@ export async function POST(request: Request, ctx: Ctx) {
       // meanwhile (same `pay_started_at`, still dead / hold still over), and
       // `released` is what the database did, not what that old row said.
       const { released } = startOver
-        ? await releaseIfDead(sale.id, sale.pay_started_at)
+        ? await releaseIfDead(sale.id, sale.pay_started_at, searchStartedAt)
         : { released: false };
       return NextResponse.json(
         {

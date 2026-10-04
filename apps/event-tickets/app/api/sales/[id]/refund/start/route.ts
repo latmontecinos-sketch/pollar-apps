@@ -39,13 +39,18 @@ export async function POST(request: Request, ctx: Ctx) {
 
   let claim: RefundClaim = await claimRefund(id, auth.address);
 
-  if (claim.outcome === "held" && attemptState(claim.startedAt, Date.now()) === "dead") {
+  // One instant, taken BEFORE the chain search, decides both "is this attempt
+  // dead" and what the search must prove (the history watermark) and is the
+  // instant the takeover's WHERE judges by: an attempt still alive when the
+  // search began is never taken over on the strength of that search's "none".
+  const searchStartedAt = Date.now();
+  if (claim.outcome === "held" && attemptState(claim.startedAt, searchStartedAt) === "dead") {
     // Someone started it and its transaction can no longer land. Before
     // taking over, make sure it left nothing behind. An empty search only
     // counts if Horizon's ingested history reaches past that attempt's
     // deadline: a Horizon that is behind answers "nothing" about a refund
     // that already landed.
-    const found = await findRefund(sale, historyPastFor(claim.startedAt, Date.now()));
+    const found = await findRefund(sale, historyPastFor(claim.startedAt, searchStartedAt));
     if (found.status === "inconclusive") return unreachable;
     if (found.status === "found") {
       return NextResponse.json(
@@ -53,7 +58,7 @@ export async function POST(request: Request, ctx: Ctx) {
         { status: 409 }
       );
     }
-    if (await reopenDeadRefund(id, auth.address, claim.startedAt)) {
+    if (await reopenDeadRefund(id, auth.address, claim.startedAt, searchStartedAt)) {
       claim = await claimRefund(id, auth.address);
     }
   }

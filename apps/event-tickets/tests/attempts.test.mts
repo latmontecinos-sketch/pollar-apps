@@ -509,3 +509,30 @@ test("the sweep never takes a sale whose attempt can still land, whatever its ho
   assert.equal(await sweepExpiredSales({ eventId }), 1);
   assert.equal(await reserved(typeId), 0);
 });
+
+// --- The search's own instant: 11:59 -> 12:02 ------------------------------------
+
+test("a sale whose attempt was alive when confirm's search began is not released when it ends past the deadline", async () => {
+  const { eventId, typeId } = await newEvent(1);
+  const sale = await reservation(eventId, typeId, "GBUYER1");
+  const startedMs = Date.now();
+  const won = await claimPayment(sale.id, "GBUYER1", startedMs);
+  const startedAt = won.outcome === "won" ? won.startedAt : "";
+  // The search began at 11:59 of the attempt's life; the route releases by THAT instant.
+  const searchStartedAt = startedMs + 11 * 60_000 + 59_000;
+  assert.deepEqual(await releaseIfDead(sale.id, startedAt, searchStartedAt), { released: false });
+  assert.equal((await saleRow(sale.id)).status, "pending");
+  assert.equal(await reserved(typeId), 1);
+  // A search that began at 12:02 may release it (the route also demanded the watermark for it).
+  assert.deepEqual(await releaseIfDead(sale.id, startedAt, startedMs + 12 * 60_000 + 2_000), { released: true });
+});
+
+test("a refund attempt alive when the search began is not taken over when it ends past the deadline", async () => {
+  const sale = await unclaimedSale();
+  const startedMs = Date.now();
+  const won = await claimRefund(sale.id, ORGANIZER, startedMs);
+  const startedAt = won.outcome === "won" ? won.startedAt : "";
+  assert.equal(await reopenDeadRefund(sale.id, ORGANIZER, startedAt, startedMs + 11 * 60_000 + 59_000), false);
+  assert.equal((await claimRefund(sale.id, ORGANIZER)).outcome, "held");
+  assert.equal(await reopenDeadRefund(sale.id, ORGANIZER, startedAt, startedMs + 12 * 60_000 + 2_000), true);
+});

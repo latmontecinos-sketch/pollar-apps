@@ -332,10 +332,12 @@ export async function claimRefund(
  * the first one's claim back while its transfer was still on its way.
  *
  * Trusting the winner's own "this never left" classification (`classifySubmit`
- * in lib/payments.ts) is acceptable for exactly this reason: only the tab that
- * won holds the token, and a wrong classification costs that tab a second
- * refund it chose to risk, not someone else's. A refund that was in fact sent
- * is still caught by the chain search before the next claim sends.
+ * in lib/payments.ts) is accepted by design, for exactly this reason: only the
+ * tab that won holds the token, and the client releases only on a proven
+ * rejection. If it were wrong (or a winner released a refund it had sent), the
+ * only cost is that organizer sending the refund twice from their OWN wallet;
+ * no third party can cause or profit from it. The next claim's chain search
+ * still catches a refund that is already indexed.
  */
 export async function releaseRefundClaim(
   saleId: string,
@@ -406,10 +408,12 @@ export type SaleRelease =
  *  - An attempt started: only with that attempt's `startedAt` AND the
  *    `claimToken` the winning `/pay` answered with (a loser never gets it).
  *    This is the winner saying "my transaction provably never left", on the
- *    strength of `classifySubmit` in its own tab. That trust is acceptable
- *    precisely because only the winner holds the token; a wrong call releases a
- *    sale whose payment then lands as `unclaimed` and goes through the refund
- *    flow (money is refunded, not lost). Anyone else waits for the deadline.
+ *    strength of `classifySubmit` in its own tab. That trust is accepted by
+ *    design, because only the winner holds the token: a buyer who sends and
+ *    then releases with their own token strands only their OWN payment, which
+ *    lands as `unclaimed` and goes through the refund flow (money is
+ *    refunded, not lost). No third party can use it. Anyone else waits for
+ *    the deadline.
  *
  * Only ever `pending` -> `expired`: a paid sale can't be released this way.
  */

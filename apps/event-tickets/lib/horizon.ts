@@ -158,20 +158,37 @@ export function settleSearch(
 }
 
 type HorizonRoot = { history_latest_ledger_closed_at?: unknown };
+type LedgersPage = { _embedded?: { records?: Array<{ closed_at?: unknown }> } };
+
+function parseClosedAt(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
 
 /**
  * When the newest ledger Horizon has INGESTED into its history closed (ms), or
- * `null` when it can't be told (the request failed, an older Horizon without
- * the field, an unreadable date). Not the network's latest ledger: what the
+ * `null` when it can't be told. Not the network's latest ledger: what the
  * payment queries can actually see.
+ *
+ * The root document says it directly (`history_latest_ledger_closed_at`). A
+ * Horizon without that field (an older or custom one) is asked for its latest
+ * ledger record instead (`/ledgers?order=desc&limit=1`, `closed_at`): the
+ * ledgers endpoint reads the same ingested history, so the newest record there
+ * is the newest ledger the searches can see. Both failing is `null`, which
+ * callers read as "cannot vouch for an empty search" and stay inconclusive.
  */
 export async function horizonHistoryClosedAt(deadline?: Deadline): Promise<number | null> {
   try {
     const root = await horizonGet<HorizonRoot>("/", deadline);
-    const closedAt = root?.history_latest_ledger_closed_at;
-    if (typeof closedAt !== "string") return null;
-    const ms = Date.parse(closedAt);
-    return Number.isNaN(ms) ? null : ms;
+    const fromRoot = parseClosedAt(root?.history_latest_ledger_closed_at);
+    if (fromRoot !== null) return fromRoot;
+  } catch {
+    // Fall through to the ledger record.
+  }
+  try {
+    const page = await horizonGet<LedgersPage>("/ledgers?order=desc&limit=1", deadline);
+    return parseClosedAt(page?._embedded?.records?.[0]?.closed_at);
   } catch {
     return null;
   }

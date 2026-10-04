@@ -90,13 +90,27 @@ devoluciones usan un derecho exclusivo de envío (`pay_started_at` /
   (`classifySubmit`) es la única confianza que queda, y se acepta porque solo
   su pestaña tiene el token; si se equivoca, el pago aterriza como `unclaimed`
   y se devuelve (el dinero no se pierde). Sin intento iniciado, `/release`
-  sigue sirviendo para un checkout abandonado.
+  sigue sirviendo para un checkout abandonado. Aceptado por diseño: un
+  comprador que envía y después suelta con su propio token solo deja
+  varado **su** pago (`unclaimed`, que va al flujo de devolución); un
+  organizador que hace lo mismo con una devolución solo puede devolver dos
+  veces desde **su** billetera. Ningún tercero puede provocarlo ni
+  aprovecharlo, y el cliente solo suelta tras un rechazo comprobado.
 - La transacción se construye acotada a lo que queda del derecho: el servidor
   responde con `remainingSec` y el cliente pide `timeoutSec = remainingSec -
   tiempo que lleva con la respuesta - margen`; con menos de 30 s no envía y
-  devuelve el derecho (`lib/pay-attempt.ts`, `sendWindowSec`). Depende de que
-  el SDK/backend de Pollar respete `timeoutSec` como `maxTime` de la
-  transacción: ver "Pendiente".
+  devuelve el derecho (`lib/pay-attempt.ts`, `sendWindowSec`). El
+  `remainingSec` lo calcula el servidor al responder, a partir del
+  `startedAt` del propio derecho, así que un derecho viejo nunca vuelve con
+  una ventana grande; el cronómetro del cliente arranca *antes* de pedir el
+  derecho (cuenta también la ida y vuelta y una pestaña congelada mientras la
+  respuesta viaja) y la ventana se calcula justo antes de `runTx`, sin
+  ningún `await` en medio. **Riesgo residual:** una pestaña que se congele
+  entre ese cálculo y la llegada de la petición de construcción a Pollar solo
+  queda cubierta por `SEND_MARGIN_SEC` (15 s) más `ATTEMPT_SLACK_MS` (2 min):
+  el SDK solo acepta un `timeoutSec` relativo, no un vencimiento absoluto.
+  Todo esto depende además de que el SDK/backend de Pollar respete
+  `timeoutSec` como `maxTime` de la transacción: ver "Pendiente".
 - Dar un intento por muerto y soltar su cupo (o reabrir una devolución) es un
   `UPDATE` que vuelve a comprobar, al escribir, que el intento sigue siendo el
   que se leyó y que ya venció (`releaseIfDead`, `reopenDeadRefund`, el barrido).
@@ -104,10 +118,16 @@ devoluciones usan un derecho exclusivo de envío (`pay_started_at` /
   allá del vencimiento del intento (`history_latest_ledger_closed_at`,
   `historyReaches` en `lib/horizon.ts`); si Horizon va atrasado el resultado
   es "no concluyente" y el derecho se queda.
-- Las ventas `pending` y las devoluciones `unclaimed` de antes de que
-  existieran estas columnas se marcan en la migración como si su intento
-  hubiera empezado (`FIRST_ADD_BACKFILLS` en `lib/db.ts`): NULL nunca quiere
-  decir "nunca se envió" para una fila anterior.
+- Las ventas `pending` y las devoluciones `unclaimed` con NULL de antes del
+  protocolo se marcan como si su intento hubiera empezado, una sola vez, en
+  una migración versionada (`claim-fence-v1` en `schema_migrations`, `lib/db.ts`)
+  que no depende de que las columnas se creen en ese arranque: sirve igual
+  para una base que ya corrió una versión intermedia. NULL nunca quiere decir
+  "nunca se envió" para una fila anterior; después de la migración, una venta
+  nueva sí conserva su NULL.
+- Un "no hay pago" solo puede terminar un checkout si la decisión se toma con
+  el instante anterior a la búsqueda (`releaseGate`): un intento vivo al
+  empezar la búsqueda no se libera porque venció mientras corría.
 
 **La firma vale 2 minutos y no es de un solo uso.** Atarla a un solo uso
 obligaría a firmar en cada petición, y en una billetera externa
@@ -215,11 +235,12 @@ correo o una URL) y `Expires:` (una fecha futura, máximo un año).
   transacción pedida con 40 s caduca a los ~40 s). Toda la cota del intento
   (`sendWindowSec`) descansa en eso; ningún test automático lo puede probar.
 - La raíz de la Horizon pública de testnet trae `history_latest_ledger_closed_at`
-  (visto con un GET de lectura el 4 de octubre de 2026). Si se usa otra Horizon
-  (`HORIZON_URL` propia, mainnet) hay que comprobar que también lo trae: si no,
-  el "no hay pago" tras vencer un intento queda siempre "no concluyente" (falla
-  del lado seguro: el derecho nunca se libera solo, y el comprador sigue en
-  "verificar" hasta que lo arregle quien opera la app).
+  (visto con un GET de lectura el 4 de octubre de 2026). Una Horizon que no lo
+  traiga cae a la hora de cierre de su último ledger ingerido
+  (`/ledgers?order=desc&limit=1`). Si fallan las dos, el "no hay pago" tras
+  vencer un intento queda "no concluyente" (falla del lado seguro: el derecho
+  nunca se libera solo, y el comprador sigue en "verificar" hasta que lo
+  arregle quien opera la app).
 - Rotar el token de Turso: estuvo en `.env`, que cargan todos los scripts.
 - Marcar `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `SMTP_PASS` y `RESEND_API_KEY` como
   *Sensitive* en Vercel; hoy son legibles desde el panel.

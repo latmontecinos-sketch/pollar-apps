@@ -83,11 +83,12 @@ export async function sendUnderClaim<T>(deps: {
   now?: () => number;
 }): Promise<ClaimedSend> {
   const now = deps.now ?? Date.now;
+  // Started BEFORE the claim request goes out, so everything after the server
+  // computed `remainingSec` is counted: the answer's trip back, its parsing,
+  // and a tab frozen while either was pending. That over-counts by one round
+  // trip, which only ever shortens the window.
+  const requestedAt = now();
   const answer = await deps.claim();
-  // Started the moment the winning answer reached us; `remainingSec` was
-  // computed by the server just before it left, so the trip is not counted
-  // here (the margin in `sendWindowSec` covers it).
-  const receivedAt = now();
   if (answer.kind !== "won") return { kind: "not_claimed", answer };
   const won: WonClaim<T> = { startedAt: answer.startedAt, claimToken: answer.claimToken, value: answer.value };
 
@@ -96,7 +97,12 @@ export async function sendUnderClaim<T>(deps: {
   // lifetime; if too little is left, do not send at all. Without this a tab
   // that was suspended for twelve minutes could build a fresh ten-minute
   // transaction after another sender had already taken the attempt over.
-  const timeoutSec = sendWindowSec(answer.remainingSec, now() - receivedAt);
+  //
+  // This is computed immediately before the SDK call with nothing awaited in
+  // between (`remember` is synchronous). What it cannot cover is the tab
+  // freezing between here and the SDK's build request reaching Pollar: that
+  // is bounded only by SEND_MARGIN_SEC plus ATTEMPT_SLACK_MS (docs/SEGURIDAD.md).
+  const timeoutSec = sendWindowSec(answer.remainingSec, now() - requestedAt);
   if (timeoutSec === null) {
     try {
       await deps.release(won);

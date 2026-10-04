@@ -367,3 +367,25 @@ test("an unreadable balance is unknown, not zero", () => {
   ];
   assert.equal(holdsAtLeast(balances, usdc, "1.0000000"), null);
 });
+
+test("time spent waiting for the claim's own answer counts against the window", async () => {
+  // The stopwatch starts before the request: a tab frozen while the answer was on its way
+  // does not get a fresh window just because the answer arrived late.
+  let clock = 5_000_000;
+  let sent = 0;
+  const result = await sendUnderClaim({
+    claim: async () => {
+      clock += 11 * 60_000; // eleven minutes pass before the answer is in hand
+      return WON;
+    },
+    remember: () => {},
+    send: async () => {
+      sent++;
+      return { status: "success", hash: HASH };
+    },
+    release: async () => {},
+    now: () => clock,
+  });
+  assert.deepEqual(result, { kind: "stale", startedAt: "T1" });
+  assert.equal(sent, 0);
+});

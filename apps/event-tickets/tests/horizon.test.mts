@@ -440,13 +440,22 @@ test("only an empty search is downgraded, and only when a deadline was asked for
 });
 
 /** A Horizon whose root says how far its history goes, in front of the usual chain stub. */
-function stubChainWithRoot(root: Json | "boom" | null, chain: Parameters<typeof stubChain>[0]) {
+function stubChainWithRoot(
+  root: Json | "boom" | null,
+  chain: Parameters<typeof stubChain>[0],
+  ledgers: Json | "boom" | null = null
+) {
   stubChain(chain);
   const chainFetch = globalThis.fetch;
   const requests: string[] = [];
   globalThis.fetch = (async (input: string | URL) => {
     const url = new URL(String(input));
     requests.push(url.pathname);
+    if (url.pathname === "/ledgers") {
+      if (ledgers === "boom") throw new Error("network down");
+      if (ledgers === null) return new Response("not found", { status: 404 });
+      return new Response(JSON.stringify(ledgers), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     if (url.pathname !== "/") return chainFetch(input);
     if (root === "boom") throw new Error("network down");
     if (root === null) return new Response("not found", { status: 404 });
@@ -505,4 +514,48 @@ test("the watermark reader answers null for anything that is not a date", async 
   assert.equal(await horizonHistoryClosedAt(), DEADLINE);
   stubChainWithRoot({ history_latest_ledger_closed_at: null }, { pages: [] });
   assert.equal(await horizonHistoryClosedAt(), null);
+});
+
+// --- A Horizon whose root has no watermark falls back to its latest ingested ledger ---
+
+const ledgerPage = (ms: number) => ({ _embedded: { records: [{ closed_at: closedAt(ms) }] } });
+
+test("a root without the watermark falls back to the latest ledger's close time", async () => {
+  stubChainWithRoot({}, { pages: [] }, ledgerPage(DEADLINE + 7_000));
+  assert.equal(await horizonHistoryClosedAt(), DEADLINE + 7_000);
+});
+
+test("the fallback is used when the root itself fails or says something unreadable", async () => {
+  for (const root of ["boom", null, { history_latest_ledger_closed_at: "soon" }] as const) {
+    stubChainWithRoot(root, { pages: [] }, ledgerPage(DEADLINE + 1_000));
+    assert.equal(await horizonHistoryClosedAt(), DEADLINE + 1_000, JSON.stringify(root));
+  }
+});
+
+test("the root wins when it has the watermark: the ledger record is not asked for", async () => {
+  const stub = stubChainWithRoot({ history_latest_ledger_closed_at: closedAt(DEADLINE + 1) }, { pages: [] }, ledgerPage(0));
+  assert.equal(await horizonHistoryClosedAt(), DEADLINE + 1);
+  assert.equal(stub.requests.includes("/ledgers"), false);
+});
+
+test("when both fail the watermark is unknown", async () => {
+  for (const ledgers of ["boom", null, {}, { _embedded: { records: [] } }, { _embedded: { records: [{ closed_at: 5 }] } }] as const) {
+    stubChainWithRoot({}, { pages: [] }, ledgers);
+    assert.equal(await horizonHistoryClosedAt(), null, JSON.stringify(ledgers));
+  }
+});
+
+test("a lagging Horizon without a root watermark is still inconclusive, via the ledger fallback", async () => {
+  stubChainWithRoot({}, { pages: [[]] }, ledgerPage(DEADLINE - 3 * 60_000));
+  assert.deepEqual(await findVerifiedPaymentByMemo({ ...lookup, historyPast: DEADLINE }), { status: "inconclusive" });
+});
+
+test("an empty search is believed through the ledger fallback once history passed the deadline", async () => {
+  stubChainWithRoot({}, { pages: [[]] }, ledgerPage(DEADLINE + 5_000));
+  assert.deepEqual(await findVerifiedPaymentByMemo({ ...lookup, historyPast: DEADLINE }), { status: "none" });
+});
+
+test("with neither source the empty search stays inconclusive", async () => {
+  stubChainWithRoot("boom", { pages: [[]] }, "boom");
+  assert.deepEqual(await findVerifiedPaymentByMemo({ ...lookup, historyPast: DEADLINE }), { status: "inconclusive" });
 });
