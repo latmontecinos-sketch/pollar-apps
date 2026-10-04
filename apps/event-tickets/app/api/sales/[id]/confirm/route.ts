@@ -3,8 +3,8 @@ import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { findVerifiedPaymentByMemo, searchSince, verifyPaymentOnHorizon } from "@/lib/horizon";
-import { mayStartOver } from "@/lib/pay-attempt";
-import { expireSale, settlePayment } from "@/lib/sales";
+import { historyPastFor, mayStartOver } from "@/lib/pay-attempt";
+import { releaseIfDead, settlePayment } from "@/lib/sales";
 import { appOrigin, isDeliverableEmail, sendTicketEmail } from "@/lib/mail";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/locales";
 import { enforce } from "@/lib/rate-limit";
@@ -95,12 +95,18 @@ export async function POST(request: Request, ctx: Ctx) {
     // Every candidate with this memo goes through the full check, newest
     // first: the memo is public, so a newer 1-stroop payment carrying it must
     // not hide the buyer's real one.
+    //
+    // A "none" can end the checkout only when an attempt is dead, and then it
+    // must be backed by evidence that Horizon's ingested history reaches past
+    // that attempt's deadline: a Horizon that answers while it lags would
+    // otherwise read "nothing there" for a payment that already landed.
     const found = await findVerifiedPaymentByMemo({
       account: sale.buyer_pollar_id,
       memo: sale.reference,
       destination: sale.organizer_pollar_id,
       amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
       since: searchSince(sale.created_at),
+      historyPast: historyPastFor(sale.pay_started_at, Date.now()),
     });
     if (found.status === "inconclusive") {
       return NextResponse.json(
@@ -121,13 +127,19 @@ export async function POST(request: Request, ctx: Ctx) {
         Date.now()
       );
       // A pending sale nobody can pay any more gives its seat back now,
-      // instead of waiting for the next sweep to notice.
-      if (startOver && sale.status === "pending") await expireSale(sale.id);
+      // instead of waiting for the next sweep to notice. The row above is
+      // minutes old by now (a Horizon search sits between), so the expiry is a
+      // guarded UPDATE that re-checks, at write time, that nobody claimed it
+      // meanwhile (same `pay_started_at`, still dead / hold still over), and
+      // `released` is what the database did, not what that old row said.
+      const { released } = startOver
+        ? await releaseIfDead(sale.id, sale.pay_started_at)
+        : { released: false };
       return NextResponse.json(
         {
           error: "Todavía no vemos ningún pago para esta reserva.",
           code: "no_payment",
-          released: startOver,
+          released,
         },
         { status: 404 }
       );

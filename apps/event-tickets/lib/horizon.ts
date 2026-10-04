@@ -125,9 +125,57 @@ export type MemoSearch =
   | { status: "none" }
   /**
    * Couldn't tell: Horizon failed, the history was longer than we're willing
-   * to read, or a candidate couldn't be checked. Never "unpaid": retry.
+   * to read, a candidate couldn't be checked, or (when the caller asked for
+   * it) Horizon's ingested history does not yet reach past the attempt's
+   * deadline. Never "unpaid": retry.
    */
   | { status: "inconclusive" };
+
+/**
+ * May an empty memo search be believed? Only when Horizon's ingested history
+ * (`history_latest_ledger_closed_at` of its root document, as ms since epoch,
+ * `null` when it could not be read) closed AFTER `pastMs`, the instant after
+ * which the attempt being judged can no longer land. A ledger that closed
+ * after that instant cannot contain the attempt's transaction, so everything
+ * that could have carried it is already in the history we just searched.
+ * Without this, a Horizon that answers 200 while its ingestion lags reads as
+ * "nothing was sent" and a second payment goes out.
+ *
+ * Pure on purpose: it is the "may another payment go out" half of the search.
+ */
+export function historyReaches(historyClosedAtMs: number | null, pastMs: number): boolean {
+  return historyClosedAtMs !== null && Number.isFinite(historyClosedAtMs) && historyClosedAtMs > pastMs;
+}
+
+/** Applies {@link historyReaches} to a finished search: only `none` can be downgraded. */
+export function settleSearch(
+  search: MemoSearch,
+  historyClosedAtMs: number | null,
+  pastMs: number | undefined
+): MemoSearch {
+  if (search.status !== "none" || pastMs === undefined) return search;
+  return historyReaches(historyClosedAtMs, pastMs) ? search : { status: "inconclusive" };
+}
+
+type HorizonRoot = { history_latest_ledger_closed_at?: unknown };
+
+/**
+ * When the newest ledger Horizon has INGESTED into its history closed (ms), or
+ * `null` when it can't be told (the request failed, an older Horizon without
+ * the field, an unreadable date). Not the network's latest ledger: what the
+ * payment queries can actually see.
+ */
+export async function horizonHistoryClosedAt(deadline?: Deadline): Promise<number | null> {
+  try {
+    const root = await horizonGet<HorizonRoot>("/", deadline);
+    const closedAt = root?.history_latest_ledger_closed_at;
+    if (typeof closedAt !== "string") return null;
+    const ms = Date.parse(closedAt);
+    return Number.isNaN(ms) ? null : ms;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Recovery path when the client never delivered a hash (closed the tab,
@@ -142,7 +190,17 @@ export type MemoSearch =
  * check rejected it, and recovery never looked at the older one. Candidates
  * that don't verify are now skipped, not believed.
  */
-export async function findVerifiedPaymentByMemo(opts: {
+export async function findVerifiedPaymentByMemo(opts: MemoSearchOptions): Promise<MemoSearch> {
+  if (opts.historyPast === undefined) return searchByMemo(opts);
+  // The watermark is read BEFORE the search: history that was ingested when
+  // the search ran includes everything up to it. Read after, it could be
+  // newer than what the search actually saw, and vouch for a lag it missed.
+  const now = opts.now ?? Date.now;
+  const closedAt = await horizonHistoryClosedAt({ at: now() + HORIZON_TIMEOUT_MS, now });
+  return settleSearch(await searchByMemo(opts), closedAt, opts.historyPast);
+}
+
+type MemoSearchOptions = {
   account: string;
   memo: string;
   destination: string;
@@ -154,7 +212,17 @@ export async function findVerifiedPaymentByMemo(opts: {
   budgetMs?: number;
   /** The clock the budget is read against (tests inject one). */
   now?: () => number;
-}): Promise<MemoSearch> {
+  /**
+   * Set when an empty search will be used to let a SECOND payment go out (a
+   * takeover, a reopened claim, a start-over): the instant after which the
+   * attempt being judged can no longer land. A `none` is then returned only if
+   * Horizon's ingested history closed after it (see {@link historyReaches});
+   * otherwise it is `inconclusive`.
+   */
+  historyPast?: number;
+};
+
+async function searchByMemo(opts: MemoSearchOptions): Promise<MemoSearch> {
   const now = opts.now ?? Date.now;
   const deadline: Deadline = { at: now() + (opts.budgetMs ?? SEARCH_BUDGET_MS), now };
   let cursor = "";

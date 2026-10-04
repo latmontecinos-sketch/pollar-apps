@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Transaction } from "@libsql/client";
 import { db, dbReady, withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
-import { attemptDeadlineMs } from "./pay-attempt.ts";
+import { attemptDeadlineMs, attemptState, deadStartedBeforeIso } from "./pay-attempt.ts";
 import { issueTicket, type Ticket } from "./tickets.ts";
 
 /**
@@ -201,9 +201,20 @@ export async function reserveAndCreateSale(
   });
 }
 
+/**
+ * A random bearer proof of who won a claim. Generated when the claim is won,
+ * handed ONLY to the winner, and required (with the attempt's `startedAt`) to
+ * hand the claim back after the attempt started. A loser's answer never
+ * carries it, so what a loser can learn (that someone started, and when) is
+ * not enough to undo the winner's claim.
+ */
+function newClaimToken(): string {
+  return randomBytes(16).toString("hex");
+}
+
 export type PayClaim =
-  /** This caller, and only this caller, may now send the payment. */
-  | { outcome: "won"; startedAt: string }
+  /** This caller, and only this caller, may now send the payment; `claimToken` is theirs alone. */
+  | { outcome: "won"; startedAt: string; claimToken: string }
   /** Someone (another tab, another device, an earlier tap) already took it: look for their payment, never send. */
   | { outcome: "held"; startedAt: string }
   | { outcome: "not_pending"; status: SaleStatus }
@@ -225,7 +236,8 @@ export type PayClaim =
  * ({@link attemptDeadlineMs}), so the sweep cannot hand the seat to someone
  * else while a transaction that may still land is on its way. Once started,
  * the claim is never given back by the clock: only a rejection proven before
- * sending (`expireSale`) or the attempt's transaction dying frees the seat.
+ * sending (`releaseSale`, which needs the winner's claim token) or the
+ * attempt's transaction dying (`releaseIfDead`) frees the seat.
  */
 export async function claimPayment(
   saleId: string,
@@ -234,15 +246,16 @@ export async function claimPayment(
 ): Promise<PayClaim> {
   const startedAt = new Date(now).toISOString();
   const holdUntil = new Date(attemptDeadlineMs(now)).toISOString();
+  const claimToken = newClaimToken();
   return withTransaction(async (tx: Transaction) => {
     const won = await tx.execute({
-      sql: `UPDATE sales SET pay_started_at = ?, expires_at_utc = max(expires_at_utc, ?)
+      sql: `UPDATE sales SET pay_started_at = ?, pay_claim_token = ?, expires_at_utc = max(expires_at_utc, ?)
             WHERE id = ? AND buyer_pollar_id = ? AND status = 'pending'
               AND pay_started_at IS NULL AND datetime(expires_at_utc) >= datetime(?)
             RETURNING id`,
-      args: [startedAt, holdUntil, saleId, buyerPollarId, startedAt],
+      args: [startedAt, claimToken, holdUntil, saleId, buyerPollarId, startedAt],
     });
-    if (won.rows.length > 0) return { outcome: "won", startedAt };
+    if (won.rows.length > 0) return { outcome: "won", startedAt, claimToken };
 
     // Lost: say why. Only for the answer; the decision was the UPDATE above.
     const row = await tx.execute({
@@ -261,7 +274,7 @@ export async function claimPayment(
 }
 
 export type RefundClaim =
-  | { outcome: "won"; startedAt: string }
+  | { outcome: "won"; startedAt: string; claimToken: string }
   | { outcome: "held"; startedAt: string }
   | { outcome: "not_unclaimed"; status: SaleStatus }
   | { outcome: "not_found" }
@@ -281,14 +294,15 @@ export async function claimRefund(
   now: number = Date.now()
 ): Promise<RefundClaim> {
   const startedAt = new Date(now).toISOString();
+  const claimToken = newClaimToken();
   return withTransaction(async (tx: Transaction) => {
     const won = await tx.execute({
-      sql: `UPDATE sales SET refund_started_at = ?
+      sql: `UPDATE sales SET refund_started_at = ?, refund_claim_token = ?
             WHERE id = ? AND status = 'unclaimed' AND refund_started_at IS NULL AND ${OWNED_BY_ORGANIZER}
             RETURNING id`,
-      args: [startedAt, saleId, organizerPollarId],
+      args: [startedAt, claimToken, saleId, organizerPollarId],
     });
-    if (won.rows.length > 0) return { outcome: "won", startedAt };
+    if (won.rows.length > 0) return { outcome: "won", startedAt, claimToken };
 
     const row = await tx.execute({
       sql: `SELECT sales.status, sales.refund_started_at, events.organizer_pollar_id
@@ -307,47 +321,199 @@ export async function claimRefund(
 }
 
 /**
- * Hands a refund claim back, but only the attempt the caller names: a
- * compare-and-swap on `refund_started_at`, so a late "release" from an old
- * attempt can never undo a newer one. Used after a rejection proven before
- * anything was sent, and to take over an attempt whose transaction is dead
- * (after the chain was searched and showed no refund).
+ * The refund's winner hands its own claim back after a rejection it proved
+ * before anything was sent (no wallet, a fee above the cap, the person
+ * cancelling in their wallet).
+ *
+ * Needs BOTH the attempt's `startedAt` (a compare-and-swap, so a late release
+ * from an old attempt can't undo a newer one) AND the `claimToken` that only
+ * the winning response carried. The timestamp alone is not proof of identity:
+ * any losing answer used to carry it, so a second organizer session could hand
+ * the first one's claim back while its transfer was still on its way.
+ *
+ * Trusting the winner's own "this never left" classification (`classifySubmit`
+ * in lib/payments.ts) is acceptable for exactly this reason: only the tab that
+ * won holds the token, and a wrong classification costs that tab a second
+ * refund it chose to risk, not someone else's. A refund that was in fact sent
+ * is still caught by the chain search before the next claim sends.
  */
-export async function reopenRefund(
+export async function releaseRefundClaim(
   saleId: string,
   organizerPollarId: string,
-  startedAt: string
+  startedAt: string,
+  claimToken: string
+): Promise<boolean> {
+  if (!claimToken) return false;
+  await dbReady();
+  const released = await db.execute({
+    sql: `UPDATE sales SET refund_started_at = NULL, refund_claim_token = NULL
+          WHERE id = ? AND status = 'unclaimed' AND refund_started_at = ? AND refund_claim_token = ?
+            AND ${OWNED_BY_ORGANIZER}
+          RETURNING id`,
+    args: [saleId, startedAt, claimToken, organizerPollarId],
+  });
+  return released.rows.length > 0;
+}
+
+/**
+ * Takes over a refund attempt whose transaction can no longer land: the caller
+ * has already searched the chain, with evidence that Horizon's history reaches
+ * past the attempt's deadline (`historyPast` in lib/horizon.ts), and found
+ * nothing. Compare-and-swap on the attempt it saw, and the "dead" condition is
+ * repeated here, in the WHERE, so it is the write that decides, not an earlier
+ * read.
+ */
+export async function reopenDeadRefund(
+  saleId: string,
+  organizerPollarId: string,
+  startedAt: string,
+  now: number = Date.now()
 ): Promise<boolean> {
   await dbReady();
   const reopened = await db.execute({
-    sql: `UPDATE sales SET refund_started_at = NULL
-          WHERE id = ? AND status = 'unclaimed' AND refund_started_at = ? AND ${OWNED_BY_ORGANIZER}
+    sql: `UPDATE sales SET refund_started_at = NULL, refund_claim_token = NULL
+          WHERE id = ? AND status = 'unclaimed' AND refund_started_at = ?
+            AND datetime(refund_started_at) < datetime(?)
+            AND ${OWNED_BY_ORGANIZER}
           RETURNING id`,
-    args: [saleId, startedAt, organizerPollarId],
+    args: [saleId, startedAt, deadStartedBeforeIso(now), organizerPollarId],
   });
   return reopened.rows.length > 0;
 }
 
-/**
- * `pending` -> `expired`. The transition is the authority: only a genuine
- * pending->expired UPDATE releases the seat, so calling this twice on the
- * same sale decrements `reserved` exactly once.
- */
-export async function expireSale(saleId: string): Promise<{ expired: boolean }> {
-  return withTransaction(async (tx: Transaction) => {
-    const updated = await tx.execute({
-      sql: "UPDATE sales SET status = 'expired' WHERE id = ? AND status = 'pending' RETURNING ticket_type_id",
-      args: [saleId],
-    });
-    if (updated.rows.length === 0) return { expired: false };
-
-    await tx.execute({
-      sql: "UPDATE ticket_types SET reserved = reserved - 1 WHERE id = ? AND reserved > 0",
-      args: [String(updated.rows[0].ticket_type_id)],
-    });
-    return { expired: true };
+/** Gives one expired sale's seat back. Only ever called for a row an UPDATE just moved out of `pending`. */
+async function freeSeat(tx: Transaction, ticketTypeId: string): Promise<void> {
+  await tx.execute({
+    sql: "UPDATE ticket_types SET reserved = reserved - 1 WHERE id = ? AND reserved > 0",
+    args: [ticketTypeId],
   });
 }
+
+/** What the buyer's release did. */
+export type SaleRelease =
+  | { outcome: "released" }
+  /** Not released: the sale isn't pending, or an attempt started and the proof didn't match. */
+  | { outcome: "kept" }
+  | { outcome: "not_found" }
+  | { outcome: "forbidden" };
+
+/**
+ * The buyer gives a held seat back. Two cases, both decided by the UPDATE's own
+ * WHERE (rule 3), never by an earlier read:
+ *
+ *  - No attempt started (`pay_started_at IS NULL`): an abandoned checkout, the
+ *    buyer cancelled the review or the SDK refused to build. Needs no proof.
+ *  - An attempt started: only with that attempt's `startedAt` AND the
+ *    `claimToken` the winning `/pay` answered with (a loser never gets it).
+ *    This is the winner saying "my transaction provably never left", on the
+ *    strength of `classifySubmit` in its own tab. That trust is acceptable
+ *    precisely because only the winner holds the token; a wrong call releases a
+ *    sale whose payment then lands as `unclaimed` and goes through the refund
+ *    flow (money is refunded, not lost). Anyone else waits for the deadline.
+ *
+ * Only ever `pending` -> `expired`: a paid sale can't be released this way.
+ */
+export async function releaseSale(
+  saleId: string,
+  buyerPollarId: string,
+  proof?: { startedAt: string; claimToken: string }
+): Promise<SaleRelease> {
+  return withTransaction(async (tx: Transaction) => {
+    const attempt = proof
+      ? { sql: "pay_started_at = ? AND pay_claim_token = ?", args: [proof.startedAt, proof.claimToken] }
+      : { sql: "pay_started_at IS NULL", args: [] };
+    const updated = await tx.execute({
+      sql: `UPDATE sales SET status = 'expired'
+            WHERE id = ? AND buyer_pollar_id = ? AND status = 'pending' AND ${attempt.sql}
+            RETURNING ticket_type_id`,
+      args: [saleId, buyerPollarId, ...attempt.args],
+    });
+    if (updated.rows.length > 0) {
+      await freeSeat(tx, String(updated.rows[0].ticket_type_id));
+      return { outcome: "released" };
+    }
+
+    // Not released: say why. Only for the answer; the decision was the UPDATE above.
+    const row = await tx.execute({ sql: "SELECT buyer_pollar_id FROM sales WHERE id = ?", args: [saleId] });
+    if (row.rows.length === 0) return { outcome: "not_found" };
+    if (String(row.rows[0].buyer_pollar_id) !== buyerPollarId) return { outcome: "forbidden" };
+    return { outcome: "kept" };
+  });
+}
+
+/**
+ * `pending` -> `expired` for a sale nobody can pay any more, decided at write
+ * time. `observedStartedAt` is the `pay_started_at` the caller read before it
+ * went to ask Horizon (null if nobody had started); the UPDATE's WHERE
+ * re-checks, now, that
+ *
+ *  - `observedStartedAt` is null: still nobody started AND the hold is over, or
+ *  - it is set: `pay_started_at` is still that very value (compare-and-swap)
+ *    AND that attempt's transaction is dead.
+ *
+ * So a claim taken, or a hold stretched, while the caller waited on Horizon
+ * makes this a no-op instead of taking a live sender's seat. `released` comes
+ * from what the database did (the RETURNING, or, if nothing moved, the sale's
+ * state right now), never from the caller's earlier read.
+ *
+ * The caller must also have searched the chain, with evidence that Horizon's
+ * history reaches past the attempt's deadline (lib/horizon.ts), and found no
+ * payment: this decides the seat, not whether money is on its way.
+ */
+export async function releaseIfDead(
+  saleId: string,
+  observedStartedAt: string | null,
+  now: number = Date.now()
+): Promise<{ released: boolean }> {
+  return withTransaction(async (tx: Transaction) => {
+    const dead =
+      observedStartedAt === null
+        ? {
+            sql: "pay_started_at IS NULL AND datetime(expires_at_utc) < datetime(?)",
+            args: [new Date(now).toISOString()],
+          }
+        : {
+            sql: "pay_started_at = ? AND datetime(pay_started_at) < datetime(?)",
+            args: [observedStartedAt, deadStartedBeforeIso(now)],
+          };
+    const updated = await tx.execute({
+      sql: `UPDATE sales SET status = 'expired'
+            WHERE id = ? AND status = 'pending' AND ${dead.sql}
+            RETURNING ticket_type_id`,
+      args: [saleId, ...dead.args],
+    });
+    if (updated.rows.length > 0) {
+      await freeSeat(tx, String(updated.rows[0].ticket_type_id));
+      return { released: true };
+    }
+
+    // Nothing moved. Is the sale over right now anyway (an earlier release or a
+    // sweep got there first) with no attempt still able to land? Only for the answer.
+    const row = await tx.execute({
+      sql: "SELECT status, pay_started_at FROM sales WHERE id = ?",
+      args: [saleId],
+    });
+    if (row.rows.length === 0) return { released: false };
+    const { status, pay_started_at } = row.rows[0];
+    return {
+      released:
+        String(status) === "expired" &&
+        attemptState(pay_started_at == null ? null : String(pay_started_at), now) !== "in_flight",
+    };
+  });
+}
+
+/**
+ * What the sweep may expire: pending, hold over, and no attempt that could still
+ * land (none started, or one whose transaction is dead). The claim stretches the
+ * hold to the attempt's deadline, so the first two already imply the third; it
+ * is spelled out so the sweep never depends on that arithmetic staying true.
+ * `datetime()` on both sides, see the note on the sweep itself. Arguments: now,
+ * then the latest start an attempt can have and be dead (`deadStartedBeforeIso`).
+ */
+const SWEEPABLE = `sales.status = 'pending'
+  AND datetime(sales.expires_at_utc) < datetime(?)
+  AND (sales.pay_started_at IS NULL OR datetime(sales.pay_started_at) < datetime(?))`;
 
 /**
  * Expires every `pending` sale whose payment window closed, releasing its
@@ -371,25 +537,28 @@ export async function sweepExpiredSales(
   scope: { eventId: string } | { organizerPollarId: string } | { buyerPollarId: string }
 ): Promise<number> {
   await dbReady();
+  const sweepArgs = [new Date().toISOString(), deadStartedBeforeIso(Date.now())];
   const [filter, value] =
     "eventId" in scope
       ? ["sales.event_id = ?", scope.eventId]
       : "buyerPollarId" in scope
         ? ["sales.buyer_pollar_id = ?", scope.buyerPollarId]
         : ["events.organizer_pollar_id = ?", scope.organizerPollarId];
+  // The same predicate is in the UPDATE below. This SELECT only picks
+  // candidates (and lets the common case, nothing stale, skip the write
+  // transaction); it decides nothing.
   const stale = await db.execute({
     sql: `SELECT sales.id FROM sales JOIN events ON events.id = sales.event_id
-          WHERE ${filter} AND sales.status = 'pending'
-            AND datetime(sales.expires_at_utc) < datetime('now')
+          WHERE ${filter} AND ${SWEEPABLE}
           LIMIT ${MAX_SWEEP_PER_CALL}`,
-    args: [value],
+    args: [value, ...sweepArgs],
   });
   if (stale.rows.length === 0) return 0;
 
   /**
    * One transaction for the whole batch, not one per sale.
    *
-   * This used to call expireSale in a loop, and each of those opened its own
+   * This used to expire sales one at a time in a loop, and each of those opened its own
    * transaction: BEGIN, two UPDATEs, COMMIT, times the number of abandoned
    * checkouts — against a remote database, from inside the render of a page
    * that anyone with the link can open. A busy event turned every visit into
@@ -401,11 +570,13 @@ export async function sweepExpiredSales(
    */
   const ids = stale.rows.map((row) => String(row.id));
   return withTransaction(async (tx: Transaction) => {
+    // The expiry predicate is re-checked here, at write time: a hold stretched
+    // or an attempt started since the SELECT keeps its sale.
     const expired = await tx.execute({
       sql: `UPDATE sales SET status = 'expired'
-            WHERE id IN (${ids.map(() => "?").join(", ")}) AND status = 'pending'
+            WHERE id IN (${ids.map(() => "?").join(", ")}) AND ${SWEEPABLE}
             RETURNING ticket_type_id`,
-      args: ids,
+      args: [...ids, ...sweepArgs],
     });
     if (expired.rows.length === 0) return 0;
 
@@ -434,7 +605,7 @@ export type SettleResult =
  * Verified payment meets the sale record. `pending` -> `paid` and ticket
  * issuance happen in the same transaction (design: never a `paid` sale
  * without a ticket). If the sale already flipped to `expired` before this
- * payment landed (lost the race with `expireSale`), the seat is already
+ * payment landed (lost the race with an expiry (`releaseIfDead`, the sweep)), the seat is already
  * released — possibly resold — so this does NOT issue a ticket; it moves
  * the sale to `unclaimed` for manual handling instead of overselling.
  * Replays of an already-`paid` sale are idempotent (same ticket back).

@@ -70,6 +70,45 @@ Decirlo importa tanto como lo anterior:
 
 ## Decisiones que parecen flojas y no lo son
 
+**Una reserva hecha con acceso a un evento lo conserva hasta el pago.**
+`POST /api/sales/:id/pay` no vuelve a mirar la visibilidad del evento
+(`canView`): el código de acceso de un evento privado se exige al *reservar*
+(`POST /api/sales`). Si el organizador lo vuelve privado (o cambia el código)
+después, quien ya tiene un cupo apartado puede pagarlo igual; no se le deja
+una reserva que no puede usar. Una reserva nueva sí pide el código. Es una
+excepción consciente a la regla "toda ruta de venta llama a `canView`", y
+`confirm` y `release` nunca la aplican: reconcilian dinero que ya salió.
+
+**Quién puede dar por muerto un intento de pago.** Las compras y las
+devoluciones usan un derecho exclusivo de envío (`pay_started_at` /
+`refund_started_at`). Una vez iniciado:
+
+- Solo el ganador recibe `claimToken`; las respuestas de quien pierde no lo
+  llevan ni llevan la hora de inicio. Devolver el derecho después de iniciado
+  (`/release`, `/refund/release`) exige ese token **y** la hora del intento.
+  Que el ganador clasifique su propio fallo como "nunca salió"
+  (`classifySubmit`) es la única confianza que queda, y se acepta porque solo
+  su pestaña tiene el token; si se equivoca, el pago aterriza como `unclaimed`
+  y se devuelve (el dinero no se pierde). Sin intento iniciado, `/release`
+  sigue sirviendo para un checkout abandonado.
+- La transacción se construye acotada a lo que queda del derecho: el servidor
+  responde con `remainingSec` y el cliente pide `timeoutSec = remainingSec -
+  tiempo que lleva con la respuesta - margen`; con menos de 30 s no envía y
+  devuelve el derecho (`lib/pay-attempt.ts`, `sendWindowSec`). Depende de que
+  el SDK/backend de Pollar respete `timeoutSec` como `maxTime` de la
+  transacción: ver "Pendiente".
+- Dar un intento por muerto y soltar su cupo (o reabrir una devolución) es un
+  `UPDATE` que vuelve a comprobar, al escribir, que el intento sigue siendo el
+  que se leyó y que ya venció (`releaseIfDead`, `reopenDeadRefund`, el barrido).
+  Y un "no hay pago" de Horizon solo vale si su historial ingerido llegó más
+  allá del vencimiento del intento (`history_latest_ledger_closed_at`,
+  `historyReaches` en `lib/horizon.ts`); si Horizon va atrasado el resultado
+  es "no concluyente" y el derecho se queda.
+- Las ventas `pending` y las devoluciones `unclaimed` de antes de que
+  existieran estas columnas se marcan en la migración como si su intento
+  hubiera empezado (`FIRST_ADD_BACKFILLS` en `lib/db.ts`): NULL nunca quiere
+  decir "nunca se envió" para una fila anterior.
+
 **La firma vale 2 minutos y no es de un solo uso.** Atarla a un solo uso
 obligaría a firmar en cada petición, y en una billetera externa
 (Freighter, Albedo) cada firma es una ventana que el usuario tiene que
@@ -171,6 +210,16 @@ correo o una URL) y `Expires:` (una fecha futura, máximo un año).
 
 ## Pendiente
 
+- Comprobar en vivo, con una sesión Pollar iniciada, que el SDK/backend
+  respeta `timeoutSec` de `runTx` como `maxTime` de la transacción (que una
+  transacción pedida con 40 s caduca a los ~40 s). Toda la cota del intento
+  (`sendWindowSec`) descansa en eso; ningún test automático lo puede probar.
+- La raíz de la Horizon pública de testnet trae `history_latest_ledger_closed_at`
+  (visto con un GET de lectura el 4 de octubre de 2026). Si se usa otra Horizon
+  (`HORIZON_URL` propia, mainnet) hay que comprobar que también lo trae: si no,
+  el "no hay pago" tras vencer un intento queda siempre "no concluyente" (falla
+  del lado seguro: el derecho nunca se libera solo, y el comprador sigue en
+  "verificar" hasta que lo arregle quien opera la app).
 - Rotar el token de Turso: estuvo en `.env`, que cargan todos los scripts.
 - Marcar `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `SMTP_PASS` y `RESEND_API_KEY` como
   *Sensitive* en Vercel; hoy son legibles desde el panel.

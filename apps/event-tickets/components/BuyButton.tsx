@@ -39,8 +39,8 @@ type Sale = {
   /** What to pay with, decided by the server — never by this component. */
   asset: { code: string; issuer: string };
   expiresAtUtc: string;
-  /** Set when someone already won the right to pay this reservation: verify it, never pay it. */
-  payStartedAt?: string | null;
+  /** True when someone already won the right to pay this reservation: verify it, never pay it. */
+  payStarted?: boolean;
 };
 
 type ApiBody = { error?: string; code?: string };
@@ -311,12 +311,18 @@ export function BuyButton({
     return () => clearTimeout(timer);
   }, [address, verified, flightKey]);
 
-  /** Hands a held seat back to the event (pending -> expired). Fire-and-forget. */
-  async function release(saleId: string) {
+  /**
+   * Hands a held seat back to the event (pending -> expired). Fire-and-forget.
+   * Before any attempt started it needs nothing; after one started the server
+   * wants the winner's proof (`startedAt` and the claim token), which only this
+   * tab got.
+   */
+  async function release(saleId: string, proof?: { startedAt: string; claimToken: string }) {
     if (!address) return;
     try {
       await pollarFetch(pollarRef.current.getClient(), address, `/api/sales/${saleId}/release`, {
         method: "POST",
+        body: proof ? JSON.stringify(proof) : undefined,
       });
     } catch {
       // The seat expires on its own anyway; nothing to tell the buyer.
@@ -330,12 +336,30 @@ export function BuyButton({
       const res = await pollarFetch(pollarRef.current.getClient(), address, `/api/sales/${saleId}/pay`, {
         method: "POST",
       });
-      const data = (await res.json()) as ApiBody & { claimed?: boolean; startedAt?: string; saleStatus?: string };
-      if (res.ok && data.claimed === true && typeof data.startedAt === "string") {
-        return { kind: "won", startedAt: data.startedAt, value: undefined };
+      const data = (await res.json()) as ApiBody & {
+        claimed?: boolean;
+        startedAt?: string;
+        claimToken?: string;
+        remainingSec?: number;
+        saleStatus?: string;
+      };
+      if (
+        res.ok &&
+        data.claimed === true &&
+        typeof data.startedAt === "string" &&
+        typeof data.claimToken === "string" &&
+        typeof data.remainingSec === "number"
+      ) {
+        return {
+          kind: "won",
+          startedAt: data.startedAt,
+          claimToken: data.claimToken,
+          remainingSec: data.remainingSec,
+          value: undefined,
+        };
       }
       if (res.status === 409 && data.code === "pay_already_started") {
-        return { kind: "held", startedAt: data.startedAt };
+        return { kind: "held" };
       }
       // A server error says nothing about whether the claim was taken.
       if (res.status >= 500) return { kind: "unreachable" };
@@ -350,8 +374,8 @@ export function BuyButton({
    * earlier tap, a reload): remember it and go look for their payment. Never
    * pay from here.
    */
-  async function verifyHeld(saleId: string, startedAt: string | null | undefined) {
-    const record: InFlight = { saleId, startedAt: startedAt ?? undefined, at: Date.now() };
+  async function verifyHeld(saleId: string) {
+    const record: InFlight = { saleId, at: Date.now() };
     writeFlight(record);
     await verify(record, { heldNote: true });
   }
@@ -363,8 +387,8 @@ export function BuyButton({
    */
   async function pay(sale: Sale) {
     // Someone already started this one (the sale came back with it set).
-    if (sale.payStartedAt) {
-      await verifyHeld(sale.id, sale.payStartedAt);
+    if (sale.payStarted) {
+      await verifyHeld(sale.id);
       return;
     }
 
@@ -388,24 +412,25 @@ export function BuyButton({
         writeFlight({ saleId: sale.id, startedAt, at: Date.now() });
         setState({ step: "paying" });
       },
-      send: () =>
+      // `timeoutSec` is what is left of the claim's lifetime, never a fresh full window.
+      send: ({ timeoutSec }) =>
         pollarRef.current.runTx(
           "payment",
           { destination: sale.organizerAddress, amount: sale.amountDecimal, asset },
-          paymentOptions(sale.reference)
+          paymentOptions(sale.reference, timeoutSec)
         ),
-      release: () => release(sale.id),
+      release: ({ startedAt, claimToken }) => release(sale.id, { startedAt, claimToken }),
     });
 
     switch (result.kind) {
       case "not_claimed": {
         const answer = result.answer;
         if (answer.kind === "held") {
-          await verifyHeld(sale.id, answer.startedAt);
+          await verifyHeld(sale.id);
         } else if (answer.kind === "refused") {
           // A sale that is already paid (or paid late) has a payment to verify, not a retry to offer.
           if (answer.saleStatus === "paid" || answer.saleStatus === "unclaimed") {
-            await verifyHeld(sale.id, undefined);
+            await verifyHeld(sale.id);
           } else {
             setState({ step: "error", message: apiErrorMessage(t, answer, t.buy.errorReserve) });
           }
@@ -420,6 +445,12 @@ export function BuyButton({
         // Provably never left, and the seat was handed back.
         writeFlight(null);
         setState({ step: "error", message: t.payRejected[result.reason] });
+        return;
+      case "stale":
+        // This tab held the claim too long to send safely: nothing left, the seat
+        // was handed back (or its deadline will), and a new try is a fresh purchase.
+        writeFlight(null);
+        setState({ step: "error", message: t.buy.errorClaimStale });
         return;
       case "submitted": {
         // A failure with no hash is the same shape whether the request never

@@ -309,6 +309,7 @@ export const en: Dict = {
     alreadyOwnedTail: ". Buying another one charges you again.",
     errorReserve: "We couldn't hold your seat.",
     errorReserveRetry: "We couldn't hold your seat. Try again.",
+    errorClaimStale: "It took too long to confirm the payment, so it was not sent. You were not charged. Try again.",
     errorPay: "The payment couldn't be sent. You weren't charged.",
     errorVerify: "We couldn't verify the payment.",
     errorNetworkLag:
@@ -532,6 +533,7 @@ export const en: Dict = {
     retry: "Try again",
     errorPrepare: "We couldn't prepare the refund",
     errorSend: "The refund couldn't be sent.",
+    errorClaimStale: "Too much time passed before the refund could be sent, so nothing was sent. Try again.",
     errorNoFunds: "Your wallet doesn't hold enough of this sale's USDC to refund it.",
     otherTab: "Another tab is sending this refund. Don't send it from here: check again in a few seconds.",
     errorNotSeen:

@@ -315,6 +315,7 @@ export const es = {
     alreadyOwnedTail: ". Si compras otra, se cobra de nuevo.",
     errorReserve: "No se pudo reservar tu cupo.",
     errorReserveRetry: "No se pudo reservar tu cupo. Intenta de nuevo.",
+    errorClaimStale: "Tardaste demasiado en confirmar el pago y no salió. No se te cobró nada. Intenta de nuevo.",
     errorPay: "El pago no se pudo enviar. No se te cobró nada.",
     errorVerify: "No pudimos verificar el pago.",
     errorNetworkLag:
@@ -542,6 +543,7 @@ export const es = {
     retry: "Intentar otra vez",
     errorPrepare: "No se pudo preparar la devolución",
     errorSend: "No se pudo enviar la devolución.",
+    errorClaimStale: "Pasó demasiado tiempo antes de enviar la devolución y no salió. No se envió nada. Intenta otra vez.",
     errorNoFunds: "Tu billetera no tiene suficiente USDC de esta venta para devolver.",
     otherTab: "Otra pestaña está enviando esta devolución. No la envíes desde aquí: verifica en unos segundos.",
     errorNotSeen:

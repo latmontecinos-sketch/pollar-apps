@@ -12,6 +12,12 @@ import {
   ATTEMPT_TX_TIMEOUT_SEC,
   attemptDeadlineMs,
   attemptState,
+  deadStartedBeforeIso,
+  historyPastFor,
+  MIN_SEND_WINDOW_SEC,
+  SEND_MARGIN_SEC,
+  sendWindowSec,
+  txSecondsLeft,
   mayStartOver,
   pendingSaleIsDead,
 } from "../lib/pay-attempt.ts";
@@ -91,4 +97,72 @@ test("a sale with a payment behind it is never started over", () => {
   for (const status of ["paid", "unclaimed", "refunded"]) {
     assert.equal(mayStartOver(sale({ status }), DEADLINE + 1), false, status);
   }
+});
+
+// --- The transaction's own bound ---------------------------------------------------
+
+test("the server reports the lifetime left on the claim, floored and never negative", () => {
+  assert.equal(txSecondsLeft(T0, T0), ATTEMPT_TX_TIMEOUT_SEC);
+  assert.equal(txSecondsLeft(T0, T0 + 999), ATTEMPT_TX_TIMEOUT_SEC - 1, "a partial second is not promised");
+  assert.equal(txSecondsLeft(T0, T0 + 60_000), ATTEMPT_TX_TIMEOUT_SEC - 60);
+  assert.equal(txSecondsLeft(T0, T0 + ATTEMPT_TX_TIMEOUT_SEC * 1000), 0);
+  assert.equal(txSecondsLeft(T0, T0 + 24 * 60 * 60_000), 0);
+});
+
+test("the send window is what is left, minus the time held and the margin", () => {
+  assert.equal(sendWindowSec(600, 0), 600 - SEND_MARGIN_SEC);
+  assert.equal(sendWindowSec(600, 90_000), 600 - 90 - SEND_MARGIN_SEC);
+  // A fraction of a second held counts against the window, never for it.
+  assert.equal(sendWindowSec(600, 1), 600 - SEND_MARGIN_SEC - 1);
+});
+
+test("the window never exceeds the transaction lifetime, whatever the server said", () => {
+  assert.equal(sendWindowSec(10_000, 0), ATTEMPT_TX_TIMEOUT_SEC - SEND_MARGIN_SEC);
+});
+
+test("the send window ends before the attempt's deadline for every time held", () => {
+  // The property that matters: built `held` after the claim, the transaction expires no later
+  // than `startedAt + ATTEMPT_TX_TIMEOUT_SEC`, which is before the server calls the attempt dead.
+  for (let heldSec = 0; heldSec <= ATTEMPT_TX_TIMEOUT_SEC + 60; heldSec += 7) {
+    const window = sendWindowSec(txSecondsLeft(T0, T0), heldSec * 1000);
+    if (window === null) continue;
+    const expiresAt = T0 + (heldSec + window) * 1000;
+    assert.ok(expiresAt <= T0 + ATTEMPT_TX_TIMEOUT_SEC * 1000, `held ${heldSec}s`);
+    assert.ok(expiresAt < attemptDeadlineMs(T0));
+  }
+});
+
+test("under the minimum window nobody sends", () => {
+  assert.equal(sendWindowSec(MIN_SEND_WINDOW_SEC + SEND_MARGIN_SEC, 0), MIN_SEND_WINDOW_SEC);
+  assert.equal(sendWindowSec(MIN_SEND_WINDOW_SEC + SEND_MARGIN_SEC - 1, 0), null);
+  assert.equal(sendWindowSec(600, 600_000), null);
+  assert.equal(sendWindowSec(0, 0), null);
+});
+
+test("an unreadable lifetime or clock is never sent", () => {
+  assert.equal(sendWindowSec(Number.NaN, 0), null);
+  assert.equal(sendWindowSec(600, Number.NaN), null);
+  assert.equal(sendWindowSec(Number.POSITIVE_INFINITY, 0), null, "not a lifetime anyone computed");
+  // A clock that went backwards is read as no time held, never as extra time.
+  assert.equal(sendWindowSec(600, -5_000), 600 - SEND_MARGIN_SEC);
+});
+
+test("the dead-before cut-off agrees with attemptState", () => {
+  // A start strictly before the cut-off is dead; at it, still alive. Same arithmetic, written for SQL.
+  const now = T0 + 30 * 60_000;
+  const cutoff = Date.parse(deadStartedBeforeIso(now));
+  assert.equal(attemptState(new Date(cutoff - 1).toISOString(), now), "dead");
+  assert.equal(attemptState(new Date(cutoff).toISOString(), now), "in_flight");
+  assert.equal(attemptState(new Date(cutoff + 1).toISOString(), now), "in_flight");
+});
+
+test("Horizon history is demanded only for an attempt that is dead", () => {
+  // Alive: the answer decides nothing yet, so there is nothing to vouch for.
+  assert.equal(historyPastFor(STARTED, T0 + 60_000), undefined);
+  assert.equal(historyPastFor(STARTED, DEADLINE), undefined, "the deadline itself is still alive");
+  // Dead: it must reach past this attempt's own deadline.
+  assert.equal(historyPastFor(STARTED, DEADLINE + 1), DEADLINE);
+  // No attempt, or one we cannot read: no demand (nothing was started, or nothing is decided).
+  assert.equal(historyPastFor(null, DEADLINE + 1), undefined);
+  assert.equal(historyPastFor("not a date", DEADLINE + 1), undefined);
 });

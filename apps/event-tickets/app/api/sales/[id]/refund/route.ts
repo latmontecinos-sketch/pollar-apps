@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
 import { verifyPaymentOnHorizon } from "@/lib/horizon";
 import { stroopsToDecimal } from "@/lib/money";
-import { attemptState } from "@/lib/pay-attempt";
+import { attemptState, historyPastFor } from "@/lib/pay-attempt";
 import { enforce } from "@/lib/rate-limit";
 import { findRefund, loadRefundSale, refundPlan } from "@/lib/refund";
-import { markRefunded, refundMemo, reopenRefund } from "@/lib/sales";
+import { markRefunded, refundMemo, reopenDeadRefund } from "@/lib/sales";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -87,7 +87,10 @@ export async function POST(request: Request, ctx: Ctx) {
   const memo = refundMemo(sale.reference);
   let hash = body.hash?.trim() ?? "";
   if (!hash) {
-    const found = await findRefund(sale);
+    // An empty search lets ANOTHER refund go out only when this attempt is
+    // dead, so only then must Horizon's history reach past its deadline.
+    const state = attemptState(sale.refund_started_at, Date.now());
+    const found = await findRefund(sale, historyPastFor(sale.refund_started_at, Date.now()));
     if (found.status === "inconclusive") {
       return NextResponse.json(
         { error: "No pudimos consultar la red de Stellar.", code: "horizon_unreachable" },
@@ -98,10 +101,9 @@ export async function POST(request: Request, ctx: Ctx) {
       // Not on the chain. If the attempt that started it is dead (its
       // transaction can no longer be accepted), hand it back so the refund can
       // be started again; if it is still alive, it may yet land.
-      const state = attemptState(sale.refund_started_at, Date.now());
       let retryable = state === "none";
       if (state === "dead" && sale.refund_started_at !== null) {
-        retryable = await reopenRefund(sale.id, auth.address, sale.refund_started_at);
+        retryable = await reopenDeadRefund(sale.id, auth.address, sale.refund_started_at);
       }
       return NextResponse.json(
         { error: "Todavía no vemos la devolución en la red.", code: "no_payment", retryable },

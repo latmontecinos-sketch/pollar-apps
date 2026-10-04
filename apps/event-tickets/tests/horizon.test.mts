@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { findVerifiedPaymentByMemo, searchSince, verifyPaymentOnHorizon } from "../lib/horizon.ts";
+import {
+  findVerifiedPaymentByMemo,
+  historyReaches,
+  horizonHistoryClosedAt,
+  searchSince,
+  settleSearch,
+  verifyPaymentOnHorizon,
+} from "../lib/horizon.ts";
 import { expectedUsdcIssuer } from "../lib/network.ts";
 
 /**
@@ -407,4 +414,95 @@ test("a budget already spent is inconclusive without asking Horizon", async () =
   const result = await findVerifiedPaymentByMemo({ ...lookup, now: stub.now, budgetMs: 0 });
   assert.deepEqual(result, { status: "inconclusive" });
   assert.equal(stub.fetches(), 0);
+});
+
+// --- An empty search is only believed when Horizon's history reaches past the deadline ---
+
+const DEADLINE = Date.parse("2026-10-03T12:12:00.000Z");
+const closedAt = (ms: number) => new Date(ms).toISOString();
+
+test("history that closed after the deadline can vouch for an empty search; anything else cannot", () => {
+  assert.equal(historyReaches(DEADLINE + 1, DEADLINE), true);
+  assert.equal(historyReaches(DEADLINE, DEADLINE), false, "closing exactly at the deadline could still hold it");
+  assert.equal(historyReaches(DEADLINE - 60_000, DEADLINE), false, "a Horizon minutes behind");
+  assert.equal(historyReaches(null, DEADLINE), false, "an unreadable watermark vouches for nothing");
+  assert.equal(historyReaches(Number.NaN, DEADLINE), false);
+});
+
+test("only an empty search is downgraded, and only when a deadline was asked for", () => {
+  const behind = DEADLINE - 1;
+  assert.deepEqual(settleSearch({ status: "none" }, behind, DEADLINE), { status: "inconclusive" });
+  assert.deepEqual(settleSearch({ status: "none" }, null, DEADLINE), { status: "inconclusive" });
+  assert.deepEqual(settleSearch({ status: "none" }, DEADLINE + 1, DEADLINE), { status: "none" });
+  assert.deepEqual(settleSearch({ status: "none" }, behind, undefined), { status: "none" }, "no deadline, no demand");
+  assert.deepEqual(settleSearch({ status: "found", hash: HASH }, behind, DEADLINE), { status: "found", hash: HASH });
+  assert.deepEqual(settleSearch({ status: "inconclusive" }, DEADLINE + 1, DEADLINE), { status: "inconclusive" });
+});
+
+/** A Horizon whose root says how far its history goes, in front of the usual chain stub. */
+function stubChainWithRoot(root: Json | "boom" | null, chain: Parameters<typeof stubChain>[0]) {
+  stubChain(chain);
+  const chainFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = new URL(String(input));
+    requests.push(url.pathname);
+    if (url.pathname !== "/") return chainFetch(input);
+    if (root === "boom") throw new Error("network down");
+    if (root === null) return new Response("not found", { status: 404 });
+    return new Response(JSON.stringify(root), { status: 200, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  return { requests };
+}
+
+test("none stands when Horizon's history closed after the attempt's deadline", async () => {
+  stubChainWithRoot({ history_latest_ledger_closed_at: closedAt(DEADLINE + 5_000) }, { pages: [[]] });
+  assert.deepEqual(await findVerifiedPaymentByMemo({ ...lookup, historyPast: DEADLINE }), { status: "none" });
+});
+
+test("none is inconclusive while Horizon's ingestion lags behind the deadline", async () => {
+  // The chain answers 200 and its history is empty of our memo... because it is minutes behind.
+  stubChainWithRoot({ history_latest_ledger_closed_at: closedAt(DEADLINE - 3 * 60_000) }, { pages: [[]] });
+  assert.deepEqual(await findVerifiedPaymentByMemo({ ...lookup, historyPast: DEADLINE }), { status: "inconclusive" });
+});
+
+test("none is inconclusive when the watermark cannot be read", async () => {
+  for (const root of ["boom", null, {}, { history_latest_ledger_closed_at: 12 }, { history_latest_ledger_closed_at: "soon" }] as const) {
+    stubChainWithRoot(root, { pages: [[]] });
+    assert.deepEqual(
+      await findVerifiedPaymentByMemo({ ...lookup, historyPast: DEADLINE }),
+      { status: "inconclusive" },
+      JSON.stringify(root)
+    );
+  }
+});
+
+test("a payment that is found never waits for the watermark", async () => {
+  // A lagging Horizon that does show the payment: it was sent, whatever the watermark says.
+  stubChainWithRoot({ history_latest_ledger_closed_at: closedAt(DEADLINE - 3 * 60_000) }, {
+    pages: [[listed(HASH)]],
+    txs: { [HASH]: realPayment },
+  });
+  assert.deepEqual(await findVerifiedPaymentByMemo({ ...lookup, historyPast: DEADLINE }), { status: "found", hash: HASH });
+});
+
+test("without a deadline the root is never asked", async () => {
+  const stub = stubChainWithRoot({ history_latest_ledger_closed_at: closedAt(DEADLINE - 3 * 60_000) }, { pages: [[]] });
+  assert.deepEqual(await findVerifiedPaymentByMemo(lookup), { status: "none" });
+  assert.equal(stub.requests.includes("/"), false);
+});
+
+test("the watermark is read before the payments are searched", async () => {
+  // History read first can only be older than what the search sees; read after, it could vouch for a lag it missed.
+  const stub = stubChainWithRoot({ history_latest_ledger_closed_at: closedAt(DEADLINE + 5_000) }, { pages: [[]] });
+  await findVerifiedPaymentByMemo({ ...lookup, historyPast: DEADLINE });
+  assert.equal(stub.requests[0], "/");
+  assert.ok(stub.requests.slice(1).every((path) => path.includes("/payments")));
+});
+
+test("the watermark reader answers null for anything that is not a date", async () => {
+  stubChainWithRoot({ history_latest_ledger_closed_at: closedAt(DEADLINE) }, { pages: [] });
+  assert.equal(await horizonHistoryClosedAt(), DEADLINE);
+  stubChainWithRoot({ history_latest_ledger_closed_at: null }, { pages: [] });
+  assert.equal(await horizonHistoryClosedAt(), null);
 });

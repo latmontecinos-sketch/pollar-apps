@@ -190,12 +190,25 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
         `/api/sales/${saleId}/refund/start`,
         { method: "POST" }
       );
-      const data = (await res.json()) as RefundPlan & ApiBody & { claimed?: boolean; startedAt?: string };
-      if (res.ok && data.claimed === true && typeof data.startedAt === "string") {
-        return { kind: "won", startedAt: data.startedAt, value: data };
+      const data = (await res.json()) as RefundPlan &
+        ApiBody & { claimed?: boolean; startedAt?: string; claimToken?: string; remainingSec?: number };
+      if (
+        res.ok &&
+        data.claimed === true &&
+        typeof data.startedAt === "string" &&
+        typeof data.claimToken === "string" &&
+        typeof data.remainingSec === "number"
+      ) {
+        return {
+          kind: "won",
+          startedAt: data.startedAt,
+          claimToken: data.claimToken,
+          remainingSec: data.remainingSec,
+          value: data,
+        };
       }
       if (res.status === 409 && (data.code === "refund_already_started" || data.code === "refund_already_sent")) {
-        return { kind: "held", startedAt: data.startedAt };
+        return { kind: "held" };
       }
       // A server error says nothing about whether the claim was taken.
       if (res.status >= 500) return { kind: "unreachable" };
@@ -205,13 +218,13 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
     }
   }
 
-  /** Hands the claim back after a refusal proven before anything was sent. */
-  async function releaseRefund(startedAt: string) {
+  /** Hands the claim back after a refusal proven before anything was sent. Needs the winner's token. */
+  async function releaseRefund(startedAt: string, claimToken: string) {
     if (!user) return;
     try {
       await pollarFetch(pollarRef.current.getClient(), user.address, `/api/sales/${saleId}/refund/release`, {
         method: "POST",
-        body: JSON.stringify({ startedAt }),
+        body: JSON.stringify({ startedAt, claimToken }),
       });
     } catch {
       // The attempt's deadline hands it back anyway.
@@ -240,13 +253,14 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
         setState({ step: "paying" });
       },
       // The plan the server returned with the claim, not the one on screen.
-      send: ({ value: plan }) =>
+      // `timeoutSec` is what is left of the claim's lifetime, never a fresh full window.
+      send: ({ value: plan, timeoutSec }) =>
         pollarRef.current.runTx(
           "payment",
           { destination: plan.destination, amount: plan.amountDecimal, asset: creditAsset(plan.asset) },
-          paymentOptions(plan.memo)
+          paymentOptions(plan.memo, timeoutSec)
         ),
-      release: ({ startedAt }) => releaseRefund(startedAt),
+      release: ({ startedAt, claimToken }) => releaseRefund(startedAt, claimToken),
     });
 
     switch (result.kind) {
@@ -266,6 +280,12 @@ export function RefundButton({ saleId, onRefunded }: { saleId: string; onRefunde
         // Provably never left, and the claim was handed back.
         writeIntent(address, saleId, null);
         setState({ step: "error", message: t.payRejected[result.reason] });
+        return;
+      case "stale":
+        // This tab held the claim too long to send safely: nothing left and the
+        // claim was handed back, so "retry" asks for a new one.
+        writeIntent(address, saleId, null);
+        setState({ step: "error", message: t.refund.errorClaimStale });
         return;
       case "submitted":
         if (result.hash) writeIntent(address, saleId, { at: Date.now(), startedAt: result.startedAt, hash: result.hash });

@@ -19,7 +19,7 @@ import {
   serializeRefundIntent,
 } from "../lib/checkout.ts";
 import { paymentOptions, sendUnderClaim, type ClaimAnswer, type SendOutcome } from "../lib/claimed-send.ts";
-import { ATTEMPT_TX_TIMEOUT_SEC } from "../lib/pay-attempt.ts";
+import { ATTEMPT_TX_TIMEOUT_SEC, MIN_SEND_WINDOW_SEC, SEND_MARGIN_SEC } from "../lib/pay-attempt.ts";
 import { classifySubmit, holdsAtLeast, rejectionReason } from "../lib/payments.ts";
 
 const HASH = "a".repeat(64);
@@ -167,37 +167,61 @@ test("a stored refund intent only reads for the account that wrote it", () => {
 
 // --- Send only if the server says you may --------------------------------------
 
-type Calls = { remembered: string[]; sent: number; released: string[] };
+type Calls = {
+  remembered: string[];
+  sent: number;
+  released: { startedAt: string; claimToken: string }[];
+  timeouts: number[];
+};
 
-/** The I/O of one attempt, recorded: what the claim said, what the SDK will answer. */
+/**
+ * The I/O of one attempt, recorded: what the claim said, what the SDK will answer.
+ * `sitFor`: how long (ms) the tab holds the claim's answer before the send starts,
+ * on an injected clock.
+ */
 function attempt(opts: {
   answer: ClaimAnswer<{ plan: string }>;
   outcome?: SendOutcome | "throws";
   releaseFails?: boolean;
+  sitFor?: number;
 }) {
-  const calls: Calls = { remembered: [], sent: 0, released: [] };
+  const calls: Calls = { remembered: [], sent: 0, released: [], timeouts: [] };
+  let clock = 1_000_000;
   const run = () =>
     sendUnderClaim({
       claim: async () => opts.answer,
       remember: ({ startedAt }) => void calls.remembered.push(startedAt),
-      send: async () => {
+      send: async ({ timeoutSec }) => {
         calls.sent++;
+        calls.timeouts.push(timeoutSec);
         if (opts.outcome === "throws") throw new Error("socket closed");
         return opts.outcome;
       },
-      release: async ({ startedAt }) => {
-        calls.released.push(startedAt);
+      release: async ({ startedAt, claimToken }) => {
+        calls.released.push({ startedAt, claimToken });
         if (opts.releaseFails) throw new Error("offline");
+      },
+      // The clock jumps by `sitFor` between the answer arriving and the send being decided.
+      now: () => {
+        const at = clock;
+        clock += opts.sitFor ?? 0;
+        return at;
       },
     });
   return { calls, run };
 }
 
-const WON: ClaimAnswer<{ plan: string }> = { kind: "won", startedAt: "T1", value: { plan: "p" } };
+const WON: ClaimAnswer<{ plan: string }> = {
+  kind: "won",
+  startedAt: "T1",
+  claimToken: "TOK1",
+  remainingSec: ATTEMPT_TX_TIMEOUT_SEC,
+  value: { plan: "p" },
+};
 
 test("a caller that loses the claim never reaches the SDK", async () => {
   for (const answer of [
-    { kind: "held", startedAt: "T0" },
+    { kind: "held" },
     { kind: "refused", code: "sale_not_pending" },
     { kind: "unreachable" },
   ] as ClaimAnswer<{ plan: string }>[]) {
@@ -246,7 +270,8 @@ test("a lost answer or a throw is submitted without a hash, never released", asy
 test("a proven rejection hands the claim back and names why", async () => {
   const { calls, run } = attempt({ answer: WON, outcome: { status: "error", code: "TX_INSUFFICIENT_BALANCE" } });
   assert.deepEqual(await run(), { kind: "rejected", reason: "balance", startedAt: "T1" });
-  assert.deepEqual(calls.released, ["T1"]);
+  // The claim is handed back with the winner's proof: its attempt AND its token.
+  assert.deepEqual(calls.released, [{ startedAt: "T1", claimToken: "TOK1" }]);
 });
 
 test("a rejection is still a rejection when handing the claim back fails", async () => {
@@ -256,14 +281,62 @@ test("a rejection is still a rejection when handing the claim back fails", async
     releaseFails: true,
   });
   assert.deepEqual(await run(), { kind: "rejected", reason: "noWallet", startedAt: "T1" });
-  assert.deepEqual(calls.released, ["T1"]);
+  assert.deepEqual(calls.released, [{ startedAt: "T1", claimToken: "TOK1" }]);
 });
 
-test("payments carry the memo and a bounded transaction lifetime", () => {
-  assert.deepEqual(paymentOptions("p1a2b3c4d5"), {
+test("payments carry the memo and exactly the transaction lifetime they are given", () => {
+  assert.deepEqual(paymentOptions("p1a2b3c4d5", 123), {
     memo: { type: "text", value: "p1a2b3c4d5" },
-    timeoutSec: ATTEMPT_TX_TIMEOUT_SEC,
+    timeoutSec: 123,
   });
+});
+
+// --- A transaction is never built later than the claim allows --------------------
+
+test("an attempt sent at once asks for the claim's lifetime less the margin", async () => {
+  const { calls, run } = attempt({ answer: WON, outcome: { status: "success", hash: HASH } });
+  await run();
+  assert.deepEqual(calls.timeouts, [ATTEMPT_TX_TIMEOUT_SEC - SEND_MARGIN_SEC]);
+});
+
+test("the longer the tab held the claim, the shorter the transaction it may build", async () => {
+  // Two minutes between the answer and the send: the bound shrinks by exactly that.
+  const { calls, run } = attempt({ answer: WON, outcome: { status: "success", hash: HASH }, sitFor: 2 * 60_000 });
+  await run();
+  assert.deepEqual(calls.timeouts, [ATTEMPT_TX_TIMEOUT_SEC - SEND_MARGIN_SEC - 2 * 60]);
+});
+
+test("a claim held past its window is never sent: the claim goes back and the caller is told", async () => {
+  // Twelve minutes asleep: a fresh ten-minute transaction would outlive the attempt's deadline.
+  const { calls, run } = attempt({ answer: WON, outcome: { status: "success", hash: HASH }, sitFor: 12 * 60_000 });
+  assert.deepEqual(await run(), { kind: "stale", startedAt: "T1" });
+  assert.equal(calls.sent, 0, "the SDK was never reached");
+  assert.deepEqual(calls.remembered, [], "nothing in flight is remembered for something never sent");
+  assert.deepEqual(calls.released, [{ startedAt: "T1", claimToken: "TOK1" }]);
+});
+
+test("the cut-off is the minimum window: just above sends, just below does not", async () => {
+  const left = ATTEMPT_TX_TIMEOUT_SEC - SEND_MARGIN_SEC - MIN_SEND_WINDOW_SEC;
+  const above = attempt({ answer: WON, outcome: { status: "success", hash: HASH }, sitFor: left * 1000 });
+  assert.equal((await above.run()).kind, "submitted");
+  assert.deepEqual(above.calls.timeouts, [MIN_SEND_WINDOW_SEC]);
+  const below = attempt({ answer: WON, outcome: { status: "success", hash: HASH }, sitFor: (left + 1) * 1000 });
+  assert.equal((await below.run()).kind, "stale");
+  assert.equal(below.calls.sent, 0);
+});
+
+test("a stale claim whose release fails is still not sent", async () => {
+  const { calls, run } = attempt({ answer: WON, sitFor: 20 * 60_000, releaseFails: true });
+  assert.deepEqual(await run(), { kind: "stale", startedAt: "T1" });
+  assert.equal(calls.sent, 0);
+});
+
+test("an answer with an unreadable lifetime is not sent", async () => {
+  for (const remainingSec of [Number.NaN, Number.POSITIVE_INFINITY * -1, -5, 0]) {
+    const { calls, run } = attempt({ answer: { ...WON, remainingSec } as ClaimAnswer<{ plan: string }> });
+    assert.equal((await run()).kind, "stale", String(remainingSec));
+    assert.equal(calls.sent, 0);
+  }
 });
 
 // --- A refund draws on the sale's own asset -------------------------------------

@@ -16,7 +16,7 @@ process.env.DATABASE_URL = `file:./${DB_FILE}`;
 delete process.env.DATABASE_AUTH_TOKEN;
 
 const { db, dbReady } = await import("../lib/db.ts");
-const { expireSale, reserveAndCreateSale, settlePayment, sweepExpiredSales, markRefunded, refundMemo } =
+const { releaseSale, reserveAndCreateSale, settlePayment, sweepExpiredSales, markRefunded, refundMemo } =
   await import("../lib/sales.ts");
 const { createTicketTypes, extendCapacity, listTicketTypes, parseTicketTypes } = await import(
   "../lib/ticket-types.ts"
@@ -85,9 +85,9 @@ test("a reservation holds exactly one seat, and only while it lives", async () =
   assert.ok(first.ok);
   assert.equal(await reserved(eventId), 1);
 
-  assert.equal((await expireSale(first.sale.id)).expired, true);
+  assert.deepEqual(await releaseSale(first.sale.id, "GBUYER_A"), { outcome: "released" });
   assert.equal(await reserved(eventId), 0, "an expired hold gives the seat back");
-  assert.equal((await expireSale(first.sale.id)).expired, false, "expiring twice is a no-op");
+  assert.deepEqual(await releaseSale(first.sale.id, "GBUYER_A"), { outcome: "kept" }, "releasing twice is a no-op");
   assert.equal(await reserved(eventId), 0);
 });
 
@@ -103,7 +103,7 @@ test("one buyer cannot hold more than one seat of the same tier", async () => {
   assert.equal(await reserved(eventId), 2, "a different buyer still gets their own seat");
 
   assert.ok(first.ok);
-  await expireSale(first.sale.id);
+  await releaseSale(first.sale.id, buyer);
   const again = await reservation(eventId, typeId, buyer);
   assert.ok(again.ok && again.sale.id !== first.sale.id, "after expiry they can reserve again");
 });
@@ -229,7 +229,7 @@ test("a payment that lands after expiry becomes unclaimed, never a ticket", asyn
   const { eventId, typeId } = await newEvent(2);
   const sale = await reservation(eventId, typeId, "GBUYER_LATE");
   assert.ok(sale.ok);
-  await expireSale(sale.sale.id);
+  await releaseSale(sale.sale.id, "GBUYER_LATE");
 
   const settled = await settlePayment(sale.sale.id, eventId, "hash_late");
   assert.equal(settled.outcome, "unclaimed");

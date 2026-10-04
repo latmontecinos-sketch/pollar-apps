@@ -94,3 +94,71 @@ export function mayStartOver(sale: SaleAttemptView, now: number): boolean {
   if (!over) return false;
   return attemptState(sale.payStartedAt, now) !== "in_flight";
 }
+
+/**
+ * Seconds of transaction lifetime left for the attempt started at
+ * `startedAtMs`, on the SERVER's clock: the claim's own `startedAt +
+ * ATTEMPT_TX_TIMEOUT_SEC`, never negative. The claim responses carry it so the
+ * winner can bound a transaction it builds LATER to the same instant, however
+ * long its tab sat between receiving the claim and calling the SDK.
+ */
+export function txSecondsLeft(startedAtMs: number, nowMs: number): number {
+  const left = Math.floor((startedAtMs + ATTEMPT_TX_TIMEOUT_SEC * 1000 - nowMs) / 1000);
+  return left > 0 ? left : 0;
+}
+
+/**
+ * Shorter than this and the winner does not send: a wallet approval needs more
+ * than that, and the transaction would be built so close to the claim's end
+ * that clock drift alone could carry it past the server's deadline.
+ */
+export const MIN_SEND_WINDOW_SEC = 30;
+
+/**
+ * Taken off the window for the claim response's own travel time (the
+ * server's `remainingSec` was computed before the response left, and the
+ * client's stopwatch starts when it arrives) and for the SDK's build request.
+ * The attempt's slack ({@link ATTEMPT_SLACK_MS}) covers whatever is left.
+ */
+export const SEND_MARGIN_SEC = 15;
+
+/**
+ * The `timeoutSec` the winner may ask the SDK for, or `null` when it must NOT
+ * send: `remainingSec` is what the server said was left when it answered, and
+ * `elapsedMs` is how long this client has held that answer (a `Date.now()`
+ * delta, so it also counts time the tab spent suspended).
+ *
+ * The transaction's time bound is built from `timeoutSec` at the moment of the
+ * SDK call, so asking for `remaining - elapsed - margin` makes it end before
+ * `startedAt + ATTEMPT_TX_TIMEOUT_SEC`, which is itself before the server
+ * treats the attempt as dead. Anything unreadable is `null`: when in doubt,
+ * nobody sends.
+ */
+export function sendWindowSec(remainingSec: number, elapsedMs: number): number | null {
+  if (!Number.isFinite(remainingSec) || !Number.isFinite(elapsedMs)) return null;
+  const elapsedSec = Math.max(0, elapsedMs) / 1000;
+  const window = Math.floor(Math.min(remainingSec, ATTEMPT_TX_TIMEOUT_SEC) - elapsedSec - SEND_MARGIN_SEC);
+  return window >= MIN_SEND_WINDOW_SEC ? window : null;
+}
+
+/**
+ * The latest `started_at` (ISO UTC) an attempt can have and already be dead at
+ * `nowMs`. Guarded UPDATEs compare against it inside their WHERE, so the
+ * decision "this attempt is dead" is taken at write time, not read earlier.
+ */
+export function deadStartedBeforeIso(nowMs: number): string {
+  return new Date(nowMs - (ATTEMPT_TX_TIMEOUT_SEC * 1000 + ATTEMPT_SLACK_MS)).toISOString();
+}
+
+/**
+ * The instant Horizon's ingested history must have passed before an empty
+ * memo search may be believed, for the attempt that started at `startedAt`:
+ * its deadline, but only when the attempt is DEAD (the one case where "nothing
+ * on the chain" lets a second payment, a takeover or a start-over go ahead).
+ * `undefined` (no demand on the watermark) for no attempt, an attempt that may
+ * still land (the answer decides nothing yet) or a start time we cannot read.
+ */
+export function historyPastFor(startedAt: string | null | undefined, now: number): number | undefined {
+  if (attemptState(startedAt, now) !== "dead") return undefined;
+  return attemptDeadlineMs(Date.parse(startedAt as string));
+}

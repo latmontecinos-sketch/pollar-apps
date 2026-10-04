@@ -1,6 +1,7 @@
 import { createClient, type Client, type Transaction } from "@libsql/client";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { ATTEMPT_SLACK_MS, ATTEMPT_TX_TIMEOUT_SEC } from "./pay-attempt.ts";
 
 /**
  * Local: unset -> `file:./dev.db`, no setup beyond the Pollar key (bounty
@@ -159,6 +160,11 @@ const SCHEMA_STATEMENTS = [
  * EXISTS, so each one is attempted and a "duplicate column" error (already
  * applied on an earlier boot) is the expected no-op.
  */
+const ADD_PAY_STARTED_AT = "ALTER TABLE sales ADD COLUMN pay_started_at TEXT";
+const ADD_REFUND_STARTED_AT = "ALTER TABLE sales ADD COLUMN refund_started_at TEXT";
+/** What a claim stretches a sale's hold to (lib/pay-attempt.ts attemptDeadlineMs), in seconds. */
+const ATTEMPT_HOLD_SECONDS = ATTEMPT_TX_TIMEOUT_SEC + ATTEMPT_SLACK_MS / 1000;
+
 const ADDED_COLUMNS = [
   // Shown to buyers on the public page, so they know who they're paying and how to reach them.
   `ALTER TABLE events ADD COLUMN organizer_name TEXT NOT NULL DEFAULT ''`,
@@ -183,10 +189,15 @@ const ADDED_COLUMNS = [
   // When someone won the right to send the payment of this sale (lib/sales.ts
   // claimPayment); NULL until then. Set once, never cleared: it is what keeps a
   // second tab or device from paying the same reservation.
-  `ALTER TABLE sales ADD COLUMN pay_started_at TEXT`,
+  ADD_PAY_STARTED_AT,
   // The same for the organizer's refund of an `unclaimed` sale (claimRefund).
   // Cleared only by a proven rejection or the attempt's transaction dying.
-  `ALTER TABLE sales ADD COLUMN refund_started_at TEXT`,
+  ADD_REFUND_STARTED_AT,
+  // Bearer proof of WHO won each claim, handed only to the winner (lib/sales.ts).
+  // A release after an attempt started must present it, so a losing tab or a
+  // second organizer session that learned the timestamp cannot hand the claim back.
+  `ALTER TABLE sales ADD COLUMN pay_claim_token TEXT`,
+  `ALTER TABLE sales ADD COLUMN refund_claim_token TEXT`,
   // Showcase and calendar data (lib/city.ts, lib/doors-open.ts, lib/accent.ts). All optional,
   // so rows from before read as "no city / no doors time / no accent".
   // The city, normalised: the showcase filters by it and lists the ones in use.
@@ -196,6 +207,36 @@ const ADDED_COLUMNS = [
   // `#rrggbb` taken from the photo; written only together with the photo (lib/event-image.ts).
   `ALTER TABLE events ADD COLUMN accent TEXT`,
 ];
+
+/**
+ * Run once, in the same transaction as the ALTER that adds the column (so a
+ * crash between the two cannot leave the column without its backfill), keyed
+ * by that ALTER's text. A duplicate-column error rolls the whole batch back:
+ * the backfill never runs on a database that already has the column.
+ *
+ * Rows from BEFORE the claim columns existed have NULL there, and for them NULL
+ * must not mean "nobody ever sent": a payment may have left from the old client
+ * and not been recorded yet. So they are written as if an attempt had started
+ * at their creation (a purchase), or at this migration (a refund, whose old
+ * client kept no start time). They then go through the normal rules: dead only
+ * after the attempt's deadline, and a reuse needs a conclusive "none" from
+ * Horizon first (lib/pay-attempt.ts, lib/horizon.ts historyReaches).
+ *
+ * `pay_started_at` is an ISO string like every value the claim writes, so
+ * the guarded comparisons in lib/sales.ts read it the same way.
+ */
+const FIRST_ADD_BACKFILLS: Record<string, string[]> = {
+  [ADD_PAY_STARTED_AT]: [
+    `UPDATE sales SET
+       pay_started_at = strftime('%Y-%m-%dT%H:%M:%fZ', created_at),
+       expires_at_utc = max(expires_at_utc, strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+${ATTEMPT_HOLD_SECONDS} seconds'))
+     WHERE status = 'pending'`,
+  ],
+  [ADD_REFUND_STARTED_AT]: [
+    `UPDATE sales SET refund_started_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE status = 'unclaimed'`,
+  ],
+};
 
 /**
  * Indexes over columns that arrived by ALTER TABLE, so they can only be
@@ -256,7 +297,9 @@ async function runMigrations(): Promise<void> {
   }
   for (const statement of ADDED_COLUMNS) {
     try {
-      await db.execute(statement);
+      const backfill = FIRST_ADD_BACKFILLS[statement];
+      if (backfill) await db.batch([statement, ...backfill], "write");
+      else await db.execute(statement);
     } catch (err) {
       if (!(err instanceof Error && /duplicate column/i.test(err.message))) throw err;
     }

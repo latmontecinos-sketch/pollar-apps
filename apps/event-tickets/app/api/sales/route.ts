@@ -176,8 +176,12 @@ export async function POST(request: Request) {
       ticketTypeId: result.sale.ticketTypeId,
       ticketTypeName: types.find((type) => type.id === result.sale.ticketTypeId)?.name ?? ticketType.name,
       expiresAtUtc: result.sale.expiresAtUtc,
-      /** Set when someone already won the right to pay this reservation: the caller verifies, never pays. */
-      payStartedAt: result.sale.payStartedAt,
+      /**
+       * True when someone already won the right to pay this reservation: the
+       * caller verifies, never pays. A flag, not the timestamp: nothing a
+       * caller can do with the instant it started is meant to matter.
+       */
+      payStarted: result.sale.payStartedAt !== null,
       status: result.sale.status,
       /** An existing sale came back: look for a payment on it before sending another. */
       reused: result.reused === true,

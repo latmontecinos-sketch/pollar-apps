@@ -39,8 +39,14 @@ export async function loadRefundSale(id: string): Promise<RefundSaleRow | null> 
  * Looks for the organizer's refund of this sale on the chain, by its memo.
  * Both starting a refund (is there already one?) and recording it (which hash
  * is it?) need exactly this answer.
+ *
+ * `historyPast`: pass `historyPastFor(refund_started_at, now)` (lib/pay-attempt.ts)
+ * whenever an empty answer will let ANOTHER refund go out (a takeover, a
+ * reopened claim). A `none` then needs Horizon's ingested history to reach
+ * past the attempt's deadline, else it is `inconclusive` (see `historyPast`
+ * in lib/horizon.ts).
  */
-export function findRefund(sale: RefundSaleRow) {
+export function findRefund(sale: RefundSaleRow, historyPast?: number) {
   return findVerifiedPaymentByMemo({
     account: sale.buyer_pollar_id,
     memo: refundMemo(sale.reference),
@@ -48,6 +54,7 @@ export function findRefund(sale: RefundSaleRow) {
     source: sale.organizer_pollar_id,
     amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
     since: searchSince(sale.created_at),
+    historyPast,
   });
 }
 

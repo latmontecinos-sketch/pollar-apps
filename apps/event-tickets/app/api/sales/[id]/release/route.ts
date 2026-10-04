@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
-import { db, dbReady } from "@/lib/db";
 import { enforce } from "@/lib/rate-limit";
 import { shortAddressForLog } from "@/lib/security-log";
-import { expireSale } from "@/lib/sales";
+import { releaseSale } from "@/lib/sales";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -17,12 +16,16 @@ type Ctx = { params: Promise<{ id: string }> };
  * Only ever `pending` -> `expired`, and only for the buyer's own sale: a
  * paid sale can't be released this way.
  *
- * The one caller after a payment attempt started is the tab that won the
- * claim (`/pay`) and then saw the SDK refuse before sending anything. A tab
- * that lost the claim never calls this. If a stale or wrong call ever did
- * release a sale whose payment then landed, the payment settles as
- * `unclaimed` and goes through the refund flow: money is not lost, it is
- * refunded.
+ * Two shapes, decided by the UPDATE itself (`releaseSale`):
+ *  - No body, for a checkout nobody started paying (cancelled review, an
+ *    asset the SDK couldn't build): releases only while no attempt started.
+ *  - `{ startedAt, claimToken }`, for the tab that won `/pay` and then saw the
+ *    SDK refuse before sending anything. The token is in no response but the
+ *    winner's, so a losing tab, a second device or a replayed timestamp
+ *    cannot free a seat whose transaction may still land. That the winner's
+ *    "it never left" is its own classification (`classifySubmit`) is the one
+ *    trust left, and it is acceptable because only the winner holds the token;
+ *    if it is ever wrong, the payment settles as `unclaimed` and is refunded.
  */
 export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -32,21 +35,25 @@ export async function POST(request: Request, ctx: Ctx) {
   const limited = await enforce("releaseSale", auth.address, { actor: shortAddressForLog(auth.address) });
   if (limited) return limited;
 
-  await dbReady();
-  const result = await db.execute({
-    sql: "SELECT buyer_pollar_id, status FROM sales WHERE id = ?",
-    args: [id],
-  });
-  if (result.rows.length === 0) {
-    return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
-  }
-  if (String(result.rows[0].buyer_pollar_id) !== auth.address) {
-    return NextResponse.json(
-      { error: "No tienes acceso a esta venta", code: "forbidden" },
-      { status: 403 }
-    );
+  let proof: { startedAt: string; claimToken: string } | undefined;
+  try {
+    const body = (await request.json()) as { startedAt?: unknown; claimToken?: unknown };
+    if (typeof body.startedAt === "string" && typeof body.claimToken === "string" && body.claimToken !== "") {
+      proof = { startedAt: body.startedAt, claimToken: body.claimToken };
+    }
+  } catch {
+    // No body: the abandoned-checkout shape, which only works before an attempt started.
   }
 
-  const { expired } = await expireSale(id);
-  return NextResponse.json({ released: expired });
+  const result = await releaseSale(id, auth.address, proof);
+  switch (result.outcome) {
+    case "released":
+      return NextResponse.json({ released: true });
+    case "kept":
+      return NextResponse.json({ released: false });
+    case "forbidden":
+      return NextResponse.json({ error: "No tienes acceso a esta venta", code: "forbidden" }, { status: 403 });
+    case "not_found":
+      return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
+  }
 }
