@@ -110,6 +110,10 @@ export type NewEvent = {
   organizerContact: string;
   visibility: "public" | "private";
   accessCode: string | null;
+  /** Normalised (lib/city.ts), or none. */
+  city?: string | null;
+  /** Already checked against the start (lib/doors-open.ts), or none. */
+  doorsOpenUtc?: string | null;
 };
 
 /**
@@ -138,8 +142,8 @@ export async function createEventWithTypes(
     await tx.execute({
       sql: `INSERT INTO events (id, organizer_pollar_id, name, description, datetime_utc, place,
                                 price_stroops, capacity, organizer_name, organizer_contact,
-                                visibility, access_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                visibility, access_code, city, doors_open_utc)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         event.id,
         event.organizerPollarId,
@@ -153,6 +157,8 @@ export async function createEventWithTypes(
         event.organizerContact,
         event.visibility,
         event.accessCode,
+        event.city ?? null,
+        event.doorsOpenUtc ?? null,
       ],
     });
     for (const [index, type] of types.entries()) {

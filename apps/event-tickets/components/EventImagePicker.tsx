@@ -6,6 +6,7 @@ import Cropper, { type Area } from "react-easy-crop";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { Modal } from "@/components/ui/Modal";
+import { dominantColor } from "@/lib/accent";
 import { useT } from "@/lib/i18n/client";
 
 /** Mirrors lib/event-image.ts (which imports the database, so it can't come to the browser). */
@@ -34,7 +35,7 @@ function toJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
  * stepping the quality down until it's a comfortable size. The server
  * accepts nothing else, so what's framed here is what everyone sees.
  */
-async function cropToJpeg(src: string, area: Area): Promise<Blob> {
+async function cropToJpeg(src: string, area: Area): Promise<{ jpeg: Blob; accent: string | null }> {
   const image = await loadImage(src);
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
@@ -43,11 +44,31 @@ async function cropToJpeg(src: string, area: Area): Promise<Blob> {
   if (!context) throw new Error("canvas");
   context.imageSmoothingQuality = "high";
   context.drawImage(image, area.x, area.y, area.width, area.height, 0, 0, WIDTH, HEIGHT);
+  const accent = sampleAccent(canvas);
   for (const quality of [0.86, 0.76, 0.66]) {
     const blob = await toJpeg(canvas, quality);
-    if (blob.size <= TARGET_BYTES) return blob;
+    if (blob.size <= TARGET_BYTES) return { jpeg: blob, accent };
   }
-  return toJpeg(canvas, 0.56);
+  return { jpeg: await toJpeg(canvas, 0.56), accent };
+}
+
+/**
+ * The poster's representative colour (lib/accent.ts `dominantColor`), read
+ * from a 32 × 40 copy of the framed photo. Cosmetic: any failure (a browser
+ * that won't read the canvas back) just means no accent.
+ */
+function sampleAccent(source: HTMLCanvasElement): string | null {
+  try {
+    const small = document.createElement("canvas");
+    small.width = 32;
+    small.height = 40;
+    const context = small.getContext("2d", { willReadFrequently: true });
+    if (!context) return null;
+    context.drawImage(source, 0, 0, small.width, small.height);
+    return dominantColor(context.getImageData(0, 0, small.width, small.height).data);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -65,7 +86,8 @@ export function EventImagePicker({
   /** The current photo, or null for none. */
   imageUrl: string | null;
   busy?: boolean;
-  onCropped: (jpeg: Blob) => void;
+  /** The framed JPEG and its accent colour (`#rrggbb`, or null when the photo has no clear one). */
+  onCropped: (jpeg: Blob, accent: string | null) => void;
   onRemove: () => void;
 }) {
   const t = useT();
@@ -105,7 +127,8 @@ export function EventImagePicker({
     if (!source || !area) return;
     setWorking(true);
     try {
-      onCropped(await cropToJpeg(source, area));
+      const { jpeg, accent } = await cropToJpeg(source, area);
+      onCropped(jpeg, accent);
       close();
     } catch {
       setError(t.eventImage.unreadable);

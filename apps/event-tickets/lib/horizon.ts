@@ -56,13 +56,25 @@ function sameAmount(a: string, b: string): boolean {
   }
 }
 
-async function horizonGet<T>(path: string): Promise<T | null> {
+/**
+ * A point in time (ms since epoch) that every request of one operation
+ * shares, with the clock it is read against. One deadline for the whole
+ * search, passed down to each request, is what keeps the number of candidates
+ * from multiplying the wait.
+ */
+export type Deadline = { at: number; now: () => number };
+
+async function horizonGet<T>(path: string, deadline?: Deadline): Promise<T | null> {
+  // Each request gets the smaller of its own timeout and what is left of the
+  // operation's budget, so the last one can't overrun it.
+  const left = deadline ? deadline.at - deadline.now() : Number.POSITIVE_INFINITY;
+  if (left <= 0) throw new Error("Horizon: the search budget is spent");
   const res = await fetch(`${HORIZON}${path}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
     // An abort surfaces as a throw, which every caller already maps to the
     // retryable "not_found" — a timeout must never read as "no payment".
-    signal: AbortSignal.timeout(HORIZON_TIMEOUT_MS),
+    signal: AbortSignal.timeout(Math.min(HORIZON_TIMEOUT_MS, left)),
   });
   if (res.status === 404) return null;
   if (!res.ok) {
@@ -90,7 +102,7 @@ const PAGE_LIMIT = 200;
 /** 5 x 200 = 1,000 payments looked at, at most: the search is bounded in requests... */
 const MAX_PAGES = 5;
 /** ...and in time, so a slow Horizon can't hold the buyer's request open. */
-const SEARCH_BUDGET_MS = 20_000;
+export const SEARCH_BUDGET_MS = 20_000;
 /** Slack between our clock (sale created_at) and the ledger's. */
 const CLOCK_SLACK_MS = 5 * 60 * 1000;
 
@@ -138,19 +150,28 @@ export async function findVerifiedPaymentByMemo(opts: {
   amountDecimal: string;
   /** From {@link searchSince}: stop reading history older than this. */
   since?: number;
+  /** Total time for the whole search, every request included. Defaults to {@link SEARCH_BUDGET_MS}. */
+  budgetMs?: number;
+  /** The clock the budget is read against (tests inject one). */
+  now?: () => number;
 }): Promise<MemoSearch> {
-  const started = Date.now();
+  const now = opts.now ?? Date.now;
+  const deadline: Deadline = { at: now() + (opts.budgetMs ?? SEARCH_BUDGET_MS), now };
   let cursor = "";
   let sawProblem = false;
+  // A transaction with several payment operations shows up once per
+  // operation; it is checked once, whatever it says the first time.
+  const checked = new Set<string>();
 
   for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
-    if (Date.now() - started > SEARCH_BUDGET_MS) return { status: "inconclusive" };
+    if (now() >= deadline.at) return { status: "inconclusive" };
 
     let page: PaymentsPage | null;
     try {
       page = await horizonGet<PaymentsPage>(
         `/accounts/${encodeURIComponent(opts.account)}/payments?order=desc&limit=${PAGE_LIMIT}&join=transactions` +
-          (cursor ? `&cursor=${encodeURIComponent(cursor)}` : "")
+          (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""),
+        deadline
       );
     } catch {
       return { status: "inconclusive" };
@@ -168,12 +189,18 @@ export async function findVerifiedPaymentByMemo(opts: {
       ) {
         continue;
       }
+      if (checked.has(record.transaction_hash)) continue;
+      // The budget is the whole search's, not each page's: a page can hold
+      // 200 candidates and each one costs two requests.
+      if (now() >= deadline.at) return { status: "inconclusive" };
+      checked.add(record.transaction_hash);
       const check = await verifyPaymentOnHorizon({
         hash: record.transaction_hash,
         destination: opts.destination,
         source: opts.source,
         amountDecimal: opts.amountDecimal,
         reference: opts.memo,
+        deadline,
       });
       if (check.ok) return { status: "found", hash: record.transaction_hash };
       // A real transaction that doesn't match is just not ours; one we
@@ -208,6 +235,8 @@ export async function verifyPaymentOnHorizon(opts: {
   source?: string;
   amountDecimal: string;
   reference: string;
+  /** Shared by a caller that makes several of these (the memo search); a lone check keeps each request's own timeout. */
+  deadline?: Deadline;
 }): Promise<HorizonCheck> {
   const hash = opts.hash.trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(hash)) {
@@ -221,8 +250,8 @@ export async function verifyPaymentOnHorizon(opts: {
   // the happy path while the buyer stares at "verificando". `allSettled` so a
   // failure on one still lets the other produce the more specific verdict.
   const [txResult, opsResult] = await Promise.allSettled([
-    horizonGet<HorizonTx>(`/transactions/${hash}`),
-    horizonGet<OpsPage>(`/transactions/${hash}/operations?limit=50`),
+    horizonGet<HorizonTx>(`/transactions/${hash}`, opts.deadline),
+    horizonGet<OpsPage>(`/transactions/${hash}/operations?limit=50`, opts.deadline),
   ]);
 
   if (txResult.status === "rejected") {

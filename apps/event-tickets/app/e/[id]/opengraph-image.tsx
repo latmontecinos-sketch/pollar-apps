@@ -22,6 +22,7 @@ const TILE_SOFT = "#d3e5f7"; // --tile-soft
 const SHEET = "#f2f7fc"; // --sheet
 const FOREGROUND = "#1a1a1a"; // --foreground
 const MUTED = "#6b7280"; // --muted
+const TICKET = "#ffb020"; // --ticket (the wordmark's "Pass", 3.6:1 on the band: large bold text)
 
 export const alt = "Evento en Pollar Pass";
 export const size = { width: 1200, height: 630 };
@@ -55,7 +56,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   const range = priceRange(types);
   const price = priceLabel(t, locale, range.minDecimal, range.maxDecimal);
   const photo = event ? await loadEventImage(id) : null;
-  const logo = await readFile(join(process.cwd(), "public/pollar-logo-dark.svg"), "utf8");
+  const logo = await readFile(join(process.cwd(), "public/pollar-pass-mark-on-band.svg"), "utf8");
   const logoSrc = `data:image/svg+xml;base64,${Buffer.from(logo).toString("base64")}`;
   const name = event?.name ?? "Pollar Pass";
 
@@ -83,7 +84,10 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- rendered by ImageResponse, not the browser */}
-            <img src={logoSrc} width={170} height={170} alt="" />
+            <img src={logoSrc} width={210} height={210} alt="" />
+            <div style={{ display: "flex", marginTop: 14, fontSize: 46, fontWeight: 800, color: "#ffffff" }}>
+              Pollar&nbsp;<span style={{ color: TICKET }}>Pass</span>
+            </div>
           </div>
         )}
         <div

@@ -3,7 +3,7 @@ import { requireDoorAccess } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { sqlUtcToIso } from "@/lib/format";
 import { notifyCheckin } from "@/lib/checkin-notify";
-import { enforce } from "@/lib/rate-limit";
+import { enforceDoor } from "@/lib/rate-limit";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
 import { validateAtDoor } from "@/lib/tickets";
 
@@ -70,9 +70,9 @@ export async function POST(request: Request, ctx: Ctx) {
   const access = requireDoorAccess(request, event);
   if (!access.ok) return access.response;
 
-  // Per event, not per actor: the staff link is one shared credential, and
-  // the limit is what a real door scans in an hour with room to spare.
-  const limited = await enforce("door", id, { event: id });
+  // One budget per actor (the organizer, or the staff link) plus the event's
+  // own: a staff link that spends its budget never locks the organizer out.
+  const limited = await enforceDoor("checkin", id, access.actor);
   if (limited) return limited;
 
   let body: { code?: string };

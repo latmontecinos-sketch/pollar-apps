@@ -52,6 +52,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/como-funciona" className="underline hover:text-primary">
               {t.footer.howItWorks}
             </Link>
+            {" · "}
+            {t.footer.madeWith}
           </footer>
         </I18nProvider>
       </body>

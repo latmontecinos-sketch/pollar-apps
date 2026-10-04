@@ -35,14 +35,15 @@
   --warning-light: #fffbeb;
   --warning-border: #fde68a;
 
-  /* Mascot (polar bear): brand illustration colors, same in both themes. */
-  --mascot: #ffffff;
-  --mascot-outline: #005db4;
-  --mascot-shade: #cde4fa;
-  --mascot-features: #0f2b46;
+  /* Pollar Pass mark (components/ui/PassMark.tsx): the white bear, its outline (the app blue, so it follows the theme) and its eye. */
+  --mark-body: #ffffff;
+  --mark-line: var(--primary);
+  --mark-eye: #0b3a8c;
+  /* The amber of the ticket the bear holds: graphics, and "Pass" on the band (3.6:1 on the light band, 7.6:1 on the dark one; the wordmark is large bold text, so 3:1 is the bar). */
+  --ticket: #ffb020;
+  /* "Pass" on a light surface: the logo amber, darkened until large bold text reaches 3.2:1 on the sheet (#e08e00 gives 2.6:1). Dark theme goes back to the bright amber. */
+  --pass-text: #c77700;
 
-  /* Official logo fill: brand blue on light (pollar-logo-light). */
-  --logo: var(--primary);
 
   /*
    * App shell (components/AppShell.tsx): a brand band on top, the content on
@@ -103,7 +104,6 @@
     --warning-light: #291d05;
     --warning-border: #57420f;
 
-    --logo: var(--foreground);
 
     --band: #0c2d52;
     --band-foreground: #eef2f6;
@@ -116,6 +116,7 @@
     --tile-strong: #1668c1;
     --tile-foreground: #ffffff;
     --primary-text: #8cc0f5;
+    --pass-text: #ffb020;
   }
 }
 
@@ -150,8 +151,6 @@
   --warning-light: #291d05;
   --warning-border: #57420f;
 
-  /* Near-white on dark, matching pollar-logo-dark. */
-  --logo: var(--foreground);
 
   /* A deeper band on dark: the light one's full blue would glare. */
   --band: #0c2d52;
@@ -165,6 +164,7 @@
   --tile-strong: #1668c1;
   --tile-foreground: #ffffff;
   --primary-text: #8cc0f5;
+  --pass-text: #ffb020;
 }
 
 /* Expose the tokens as Tailwind utilities (bg-primary, text-muted, border-border…). */
@@ -189,7 +189,6 @@
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
   --color-warning-border: var(--warning-border);
-  --color-logo: var(--logo);
   --color-band: var(--band);
   --color-band-foreground: var(--band-foreground);
   --color-sheet: var(--sheet);
@@ -201,6 +200,11 @@
   --color-tile-strong: var(--tile-strong);
   --color-tile-foreground: var(--tile-foreground);
   --color-primary-text: var(--primary-text);
+  --color-ticket: var(--ticket);
+  --color-pass: var(--pass-text);
+  --color-mark-body: var(--mark-body);
+  --color-mark-line: var(--mark-line);
+  --color-mark-eye: var(--mark-eye);
   --color-scrim: var(--scrim);
   --color-on-scrim: var(--on-scrim);
   --font-sans: var(--font-poppins);

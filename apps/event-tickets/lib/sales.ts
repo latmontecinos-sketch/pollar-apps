@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Transaction } from "@libsql/client";
 import { db, dbReady, withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
+import { attemptDeadlineMs } from "./pay-attempt.ts";
 import { issueTicket, type Ticket } from "./tickets.ts";
 
 /**
@@ -58,6 +59,8 @@ export type Sale = {
   status: SaleStatus;
   txHash: string | null;
   expiresAtUtc: string;
+  /** When someone won the right to pay this sale (see {@link claimPayment}); null until then. */
+  payStartedAt: string | null;
   createdAt: string;
 };
 
@@ -73,6 +76,7 @@ function rowToSale(row: Record<string, unknown>): Sale {
     status: String(row.status) as SaleStatus,
     txHash: row.tx_hash == null ? null : String(row.tx_hash),
     expiresAtUtc: String(row.expires_at_utc),
+    payStartedAt: row.pay_started_at == null ? null : String(row.pay_started_at),
     createdAt: String(row.created_at),
   };
 }
@@ -152,7 +156,9 @@ export async function reserveAndCreateSale(
     });
     if (live.rows.length > 0) {
       const renewed = await tx.execute({
-        sql: "UPDATE sales SET expires_at_utc = ? WHERE id = ? RETURNING *",
+        // max(): a renewal never shortens the hold a started payment attempt
+        // stretched (see claimPayment).
+        sql: "UPDATE sales SET expires_at_utc = max(expires_at_utc, ?) WHERE id = ? RETURNING *",
         args: [
           new Date(Date.now() + params.ttlMs).toISOString(),
           String(live.rows[0].id),
@@ -193,6 +199,133 @@ export async function reserveAndCreateSale(
     });
     return { ok: true, sale: rowToSale(inserted.rows[0]) };
   });
+}
+
+export type PayClaim =
+  /** This caller, and only this caller, may now send the payment. */
+  | { outcome: "won"; startedAt: string }
+  /** Someone (another tab, another device, an earlier tap) already took it: look for their payment, never send. */
+  | { outcome: "held"; startedAt: string }
+  | { outcome: "not_pending"; status: SaleStatus }
+  /** Still `pending` but its hold is over: the seat is about to be released, nothing may start. */
+  | { outcome: "expired" }
+  | { outcome: "not_found" }
+  | { outcome: "forbidden" };
+
+/**
+ * The right to send this sale's payment, decided here and not in the browser.
+ *
+ * Two tabs, two devices or a double tap can all reach "pay" for the same
+ * reservation, and the second payment is real money with nothing to settle
+ * it. Whoever wins this UPDATE sends; everyone else looks for the winner's
+ * payment by memo. The condition lives in the WHERE (rule 3) and `RETURNING`
+ * says who won.
+ *
+ * It also stretches the sale's hold to the attempt's deadline
+ * ({@link attemptDeadlineMs}), so the sweep cannot hand the seat to someone
+ * else while a transaction that may still land is on its way. Once started,
+ * the claim is never given back by the clock: only a rejection proven before
+ * sending (`expireSale`) or the attempt's transaction dying frees the seat.
+ */
+export async function claimPayment(
+  saleId: string,
+  buyerPollarId: string,
+  now: number = Date.now()
+): Promise<PayClaim> {
+  const startedAt = new Date(now).toISOString();
+  const holdUntil = new Date(attemptDeadlineMs(now)).toISOString();
+  return withTransaction(async (tx: Transaction) => {
+    const won = await tx.execute({
+      sql: `UPDATE sales SET pay_started_at = ?, expires_at_utc = max(expires_at_utc, ?)
+            WHERE id = ? AND buyer_pollar_id = ? AND status = 'pending'
+              AND pay_started_at IS NULL AND datetime(expires_at_utc) >= datetime(?)
+            RETURNING id`,
+      args: [startedAt, holdUntil, saleId, buyerPollarId, startedAt],
+    });
+    if (won.rows.length > 0) return { outcome: "won", startedAt };
+
+    // Lost: say why. Only for the answer; the decision was the UPDATE above.
+    const row = await tx.execute({
+      sql: "SELECT buyer_pollar_id, status, pay_started_at FROM sales WHERE id = ?",
+      args: [saleId],
+    });
+    if (row.rows.length === 0) return { outcome: "not_found" };
+    const sale = row.rows[0];
+    if (String(sale.buyer_pollar_id) !== buyerPollarId) return { outcome: "forbidden" };
+    if (String(sale.status) !== "pending") {
+      return { outcome: "not_pending", status: String(sale.status) as SaleStatus };
+    }
+    if (sale.pay_started_at != null) return { outcome: "held", startedAt: String(sale.pay_started_at) };
+    return { outcome: "expired" };
+  });
+}
+
+export type RefundClaim =
+  | { outcome: "won"; startedAt: string }
+  | { outcome: "held"; startedAt: string }
+  | { outcome: "not_unclaimed"; status: SaleStatus }
+  | { outcome: "not_found" }
+  | { outcome: "forbidden" };
+
+/** The organizer-owned sale, as a condition the UPDATEs below carry in their WHERE. */
+const OWNED_BY_ORGANIZER = "event_id IN (SELECT id FROM events WHERE organizer_pollar_id = ?)";
+
+/**
+ * The refund's counterpart of {@link claimPayment}: only whoever wins this
+ * UPDATE sends the organizer's refund; a second tab or device, or a page with
+ * a plan loaded minutes ago, loses and goes to reconcile with the chain.
+ */
+export async function claimRefund(
+  saleId: string,
+  organizerPollarId: string,
+  now: number = Date.now()
+): Promise<RefundClaim> {
+  const startedAt = new Date(now).toISOString();
+  return withTransaction(async (tx: Transaction) => {
+    const won = await tx.execute({
+      sql: `UPDATE sales SET refund_started_at = ?
+            WHERE id = ? AND status = 'unclaimed' AND refund_started_at IS NULL AND ${OWNED_BY_ORGANIZER}
+            RETURNING id`,
+      args: [startedAt, saleId, organizerPollarId],
+    });
+    if (won.rows.length > 0) return { outcome: "won", startedAt };
+
+    const row = await tx.execute({
+      sql: `SELECT sales.status, sales.refund_started_at, events.organizer_pollar_id
+            FROM sales JOIN events ON events.id = sales.event_id WHERE sales.id = ?`,
+      args: [saleId],
+    });
+    if (row.rows.length === 0) return { outcome: "not_found" };
+    const sale = row.rows[0];
+    if (String(sale.organizer_pollar_id) !== organizerPollarId) return { outcome: "forbidden" };
+    if (String(sale.status) !== "unclaimed") {
+      return { outcome: "not_unclaimed", status: String(sale.status) as SaleStatus };
+    }
+    // `unclaimed` and unowned by the UPDATE means a start time is already set.
+    return { outcome: "held", startedAt: String(sale.refund_started_at) };
+  });
+}
+
+/**
+ * Hands a refund claim back, but only the attempt the caller names: a
+ * compare-and-swap on `refund_started_at`, so a late "release" from an old
+ * attempt can never undo a newer one. Used after a rejection proven before
+ * anything was sent, and to take over an attempt whose transaction is dead
+ * (after the chain was searched and showed no refund).
+ */
+export async function reopenRefund(
+  saleId: string,
+  organizerPollarId: string,
+  startedAt: string
+): Promise<boolean> {
+  await dbReady();
+  const reopened = await db.execute({
+    sql: `UPDATE sales SET refund_started_at = NULL
+          WHERE id = ? AND status = 'unclaimed' AND refund_started_at = ? AND ${OWNED_BY_ORGANIZER}
+          RETURNING id`,
+    args: [saleId, startedAt, organizerPollarId],
+  });
+  return reopened.rows.length > 0;
 }
 
 /**

@@ -4,7 +4,7 @@ import { use, useState, useSyncExternalStore } from "react";
 import { DoorScanner } from "@/components/DoorScanner";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { useT } from "@/lib/i18n/client";
 import { DOOR_TOKEN_HEADER } from "@/lib/auth";
 
@@ -36,7 +36,7 @@ export default function StaffDoorPage({ params }: PageProps<"/puerta/[id]">) {
       <div className="bg-band text-band-foreground">
         <header className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-4 pt-5 pb-14 lg:max-w-lg">
           <div className="flex min-w-0 items-center gap-2.5">
-            <PollarLogo size={30} colorClass="bg-band-foreground" />
+            <PassLogo size={30} variant="band" wordmark={false} />
             <h1 className="truncate text-xl font-bold tracking-tight">{t.staff.pageTitle}</h1>
           </div>
           <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-background px-3 py-1 text-xs font-semibold text-primary shadow-sm">

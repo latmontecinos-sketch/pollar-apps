@@ -20,6 +20,8 @@ import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
 import { MAX_TICKET_TYPES } from "@/lib/ticket-limits";
 import { AppShell } from "@/components/AppShell";
 import { ScreenLoading } from "@/components/ScreenLoading";
+import { CityInput } from "@/components/CityInput";
+import { checkDoorsOpen } from "@/lib/doors-open";
 import { EventImagePicker } from "@/components/EventImagePicker";
 import { uploadEventPhoto } from "@/components/EventPhotoCard";
 import { Button } from "@/components/ui/Button";
@@ -27,7 +29,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import { LoginButton } from "@/components/LoginButton";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 
 /** One row of the tier editor, as typed (prices stay strings until validated). */
 type TierDraft = { name: string; price: string; capacity: string };
@@ -51,7 +53,10 @@ export default function CreateEventPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [place, setPlace] = useState("");
+  const [city, setCity] = useState("");
   const [datetimeLocal, setDatetimeLocal] = useState("");
+  /** Optional: when the doors open, as typed (La Paz time). */
+  const [doorsLocal, setDoorsLocal] = useState("");
   const [organizerName, setOrganizerName] = useState("");
   const [organizerContact, setOrganizerContact] = useState("");
   const [tiers, setTiers] = useState<TierDraft[]>([
@@ -62,7 +67,7 @@ export default function CreateEventPage() {
   /** Nothing is published until the organizer has seen it as a buyer will. */
   const [preview, setPreview] = useState(false);
   /** Framed in the form, shown in the preview, uploaded once the event exists. */
-  const [photo, setPhoto] = useState<{ jpeg: Blob; url: string } | null>(null);
+  const [photo, setPhoto] = useState<{ jpeg: Blob; url: string; accent: string | null } | null>(null);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   // Object URLs hold the whole image in memory until revoked.
   useEffect(() => () => {
@@ -75,7 +80,7 @@ export default function CreateEventPage() {
     return (
       <AppShell title={t.create.title} back={{ href: "/app", label: t.common.home }}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
-          <PollarLogo size={64} />
+          <PassLogo size={64} layout="stacked" />
           <p className="max-w-sm text-muted">{t.create.loginNote}</p>
           <LoginButton />
         </div>
@@ -134,6 +139,11 @@ export default function CreateEventPage() {
     if (isInThePast(laPazLocalToUtcIso(datetimeLocal))) {
       return setError(t.create.errorPastDate);
     }
+    if (doorsLocal) {
+      // The server checks it again; this only spares a round trip.
+      const doors = checkDoorsOpen(laPazLocalToUtcIso(doorsLocal), laPazLocalToUtcIso(datetimeLocal));
+      if (!doors.ok) return setError(t.apiErrors[doors.code]);
+    }
     setPreview(true);
   }
 
@@ -148,6 +158,8 @@ export default function CreateEventPage() {
           description,
           place,
           datetimeUtc: laPazLocalToUtcIso(datetimeLocal),
+          city,
+          doorsOpenUtc: doorsLocal ? laPazLocalToUtcIso(doorsLocal) : undefined,
           organizerName,
           organizerContact,
           visibility,
@@ -168,7 +180,7 @@ export default function CreateEventPage() {
       // uploaded again from the panel, which is told so.
       let photoFailed = false;
       if (photo) {
-        const uploaded = await uploadEventPhoto(getClient(), user!.address, data.id, photo.jpeg).catch(
+        const uploaded = await uploadEventPhoto(getClient(), user!.address, data.id, photo.jpeg, photo.accent).catch(
           () => ({ ok: false as const })
         );
         photoFailed = !uploaded.ok;
@@ -311,6 +323,7 @@ export default function CreateEventPage() {
               placeholder={t.create.placePlaceholder}
               required
             />
+            <CityInput value={city} onChange={setCity} />
             <Input
               label={t.create.datetime}
               type="datetime-local"
@@ -320,6 +333,13 @@ export default function CreateEventPage() {
               required
             />
             <Hint>{t.create.datetimeHint}</Hint>
+            <Input
+              label={t.create.doorsOpen}
+              type="datetime-local"
+              value={doorsLocal}
+              onChange={(e) => setDoorsLocal(e.target.value)}
+            />
+            <Hint>{t.create.doorsOpenHint}</Hint>
           </fieldset>
 
           <fieldset className="flex flex-col gap-4 border-t border-border pt-5">
@@ -328,7 +348,7 @@ export default function CreateEventPage() {
             </legend>
             <EventImagePicker
               imageUrl={photo?.url ?? null}
-              onCropped={(jpeg) => setPhoto({ jpeg, url: URL.createObjectURL(jpeg) })}
+              onCropped={(jpeg, accent) => setPhoto({ jpeg, url: URL.createObjectURL(jpeg), accent })}
               onRemove={() => setPhoto(null)}
             />
           </fieldset>

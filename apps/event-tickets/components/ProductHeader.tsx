@@ -5,7 +5,7 @@ import Link from "next/link";
 import { bandButton } from "@/components/band-button";
 import { PreferencesModal } from "@/components/PreferencesModal";
 import { Icon } from "@/components/ui/Icon";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { useT } from "@/lib/i18n/client";
 
 /** Header of the public product page, on its brand band: brand, preferences, and the way in. */
@@ -16,8 +16,7 @@ export function ProductHeader() {
   return (
     <header className="flex items-center justify-between gap-3 py-4">
       <Link href="/" className="flex items-center gap-2.5">
-        <PollarLogo size={32} colorClass="bg-band-foreground" />
-        <span className="whitespace-nowrap text-lg font-bold tracking-tight">{t.common.appName}</span>
+        <PassLogo size={32} variant="band" />
       </Link>
       <div className="flex items-center gap-2">
         <Link

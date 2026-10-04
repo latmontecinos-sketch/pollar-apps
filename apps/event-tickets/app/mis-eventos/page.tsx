@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { LoadError } from "@/components/LoadError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoginButton } from "@/components/LoginButton";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { Spinner } from "@/components/ui/Spinner";
 
 export default function MisEventosPage() {
@@ -24,7 +24,7 @@ export default function MisEventosPage() {
     return (
       <AppShell title={t.myEvents.title} back={{ href: "/app", label: t.common.home }}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
-          <PollarLogo size={64} />
+          <PassLogo size={64} layout="stacked" />
           <p className="max-w-sm text-muted">{t.myEvents.loginNote}</p>
           <LoginButton />
         </div>

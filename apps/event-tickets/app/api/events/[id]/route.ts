@@ -8,6 +8,8 @@ import { confirmCapacityCode } from "@/lib/capacity-code";
 import { eventImageVersion } from "@/lib/event-image";
 import { updateEventFields, type EventPatch } from "@/lib/event-update";
 import { isVisibility } from "@/lib/visibility";
+import { normalizeCity } from "@/lib/city";
+import { checkDoorsOpen, DOORS_ERRORS } from "@/lib/doors-open";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
 import {
   listTicketTypes,
@@ -45,6 +47,9 @@ type EventRow = {
   door_token: string | null;
   visibility: string;
   access_code: string | null;
+  city: string | null;
+  doors_open_utc: string | null;
+  accent: string | null;
 };
 
 async function loadEvent(id: string): Promise<EventRow | null> {
@@ -97,6 +102,11 @@ function toJson(
     accessCode: row.access_code,
     /** Null when the event has no photo; else part of its URL (lib/event-image-path.ts). */
     imageVersion,
+    city: row.city,
+    /** When the doors open, ISO UTC, or null. */
+    doorsOpenUtc: row.doors_open_utc,
+    /** `#rrggbb` taken from the photo, or null (lib/accent.ts turns it into safe UI colours). */
+    accent: row.accent,
   };
 }
 
@@ -140,6 +150,10 @@ type PatchBody = {
   datetimeUtc?: string;
   /** Switches between listed and code-only; a private event gets its code on the way in. */
   visibility?: "public" | "private";
+  /** Empty string or null clears it. */
+  city?: string | null;
+  /** ISO instant; empty string or null clears it. */
+  doorsOpenUtc?: string | null;
 };
 
 /** Owner-only edit. Prices are immutable after creation; capacity can only grow. */
@@ -164,6 +178,32 @@ export async function PATCH(request: Request, ctx: Ctx) {
     body = (await request.json()) as PatchBody;
   } catch {
     return NextResponse.json({ error: "JSON inválido", code: "invalid_json" }, { status: 400 });
+  }
+
+  // Checked before anything is written (a capacity code, once confirmed, is spent).
+  // The doors time is judged against the start this request leaves behind.
+  let newStartIso: string | undefined;
+  if (body.datetimeUtc) {
+    const parsed = new Date(body.datetimeUtc);
+    if (Number.isNaN(parsed.getTime())) {
+      return NextResponse.json({ error: "La fecha no es válida", code: "invalid_date" }, { status: 400 });
+    }
+    newStartIso = parsed.toISOString();
+  }
+  let doorsPatch: string | null | undefined;
+  if (body.doorsOpenUtc !== undefined) {
+    const doors = checkDoorsOpen(body.doorsOpenUtc, newStartIso ?? event.datetime_utc);
+    if (!doors.ok) {
+      return NextResponse.json({ error: DOORS_ERRORS[doors.code], code: doors.code }, { status: 400 });
+    }
+    doorsPatch = doors.value;
+  } else if (newStartIso && event.doors_open_utc) {
+    // Moving the start without touching the doors time: it must still fit. (The UPDATE
+    // checks it again against the row as it is then; this only gives the clear error.)
+    const doors = checkDoorsOpen(event.doors_open_utc, newStartIso);
+    if (!doors.ok) {
+      return NextResponse.json({ error: DOORS_ERRORS[doors.code], code: doors.code }, { status: 400 });
+    }
   }
 
   if (body.capacity !== undefined && body.ticketTypeId) {
@@ -211,15 +251,16 @@ export async function PATCH(request: Request, ctx: Ctx) {
   if (typeof body.organizerContact === "string") {
     patch.organizerContact = body.organizerContact.trim().slice(0, 120);
   }
-  if (body.datetimeUtc) {
-    const parsed = new Date(body.datetimeUtc);
-    if (Number.isNaN(parsed.getTime())) {
-      return NextResponse.json({ error: "La fecha no es válida", code: "invalid_date" }, { status: 400 });
-    }
-    patch.datetimeUtc = parsed.toISOString();
-  }
+  if (newStartIso) patch.datetimeUtc = newStartIso;
+  if (doorsPatch !== undefined) patch.doorsOpenUtc = doorsPatch;
+  if (typeof body.city === "string" || body.city === null) patch.city = normalizeCity(body.city);
   if (isVisibility(body.visibility)) patch.visibility = body.visibility;
-  await updateEventFields(id, patch);
+  const applied = await updateEventFields(id, patch);
+  if (!applied) {
+    // The only condition in that UPDATE besides the id: a racing edit moved the start or the
+    // doors time so that the two no longer fit.
+    return NextResponse.json({ error: DOORS_ERRORS.doors_after_start, code: "doors_after_start" }, { status: 400 });
+  }
 
   const updated = await loadEvent(id);
   return NextResponse.json(

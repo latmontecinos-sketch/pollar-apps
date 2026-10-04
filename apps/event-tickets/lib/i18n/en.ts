@@ -24,6 +24,7 @@ export const en: Dict = {
       "Pollar Pass · demo on Stellar's test network (testnet): these USDC have no real value ·",
     disclaimerLive: "Pollar Pass · payments in USDC on the Stellar network ·",
     howItWorks: "How it works",
+    madeWith: "Made with Pollar",
   },
   meta: {
     privateTitle: "Private event",
@@ -251,6 +252,15 @@ export const en: Dict = {
       "You get a QR: show it at the door.",
     ],
     fullGuide: "Read the full guide →",
+    doorsOpen: (time: string) => `Doors: ${time}`,
+    attendees: (n: number) => (n === 1 ? "1 person is going" : `${n} people are going`),
+    addToCalendar: "Add to calendar",
+    googleCalendar: "Google Calendar",
+    downloadIcs: "Download .ics file",
+    openInMaps: "Get directions",
+    googleMaps: "Google Maps",
+    appleMaps: "Apple Maps",
+    waze: "Waze",
   },
   buy: {
     freeCta: "Get free ticket",
@@ -367,6 +377,10 @@ export const en: Dict = {
     placePlaceholder: "e.g. Café Mirador, Av. 20 de Octubre, La Paz",
     datetime: "Date and time",
     datetimeHint: "Bolivian time, even if your phone is in another timezone.",
+    city: "City (optional)",
+    cityPlaceholder: "E.g. La Paz",
+    doorsOpen: "Doors open (optional)",
+    doorsOpenHint: "Up to 24 hours before the start. Shown on the event page and in the calendar.",
     organizerName: "Your name or organization",
     organizerNamePlaceholder: "e.g. Colectivo Jazz La Paz",
     organizerContact: "Contact for questions (optional)",
@@ -519,10 +533,23 @@ export const en: Dict = {
     errorNotSeen:
       "We don't see the refund on the network yet. Don't pay again: check back in a few seconds.",
   },
+  /**
+   * Why a payment (or a refund) provably never left, in the reader's language:
+   * what `rejectionReason` in lib/payments.ts decided, never the SDK's raw text.
+   */
+  payRejected: {
+    noWallet: "Your wallet isn't connected, so the payment didn't go out. You weren't charged.",
+    declined: "You cancelled the payment in your wallet. You weren't charged.",
+    balance: "Your wallet doesn't have enough balance for this payment. You weren't charged.",
+    fee: "There isn't enough XLM for the network fee, or the fee is too high. You weren't charged.",
+    destination: "The account receiving the payment can't receive it yet. You weren't charged.",
+    other: "The payment couldn't be sent. You weren't charged.",
+  },
   account: {
     login: "Sign in with Pollar",
     connecting: "Connecting…",
     accountLabel: "My account",
+    pollarAccount: "Your account and wallet are Pollar's.",
     email: "Email",
     wallet: "Wallet",
     addressCopied: "Copied ✓",
@@ -614,6 +641,11 @@ export const en: Dict = {
     next: "Next",
     goTo: (n: number) => `Go to featured ${n}`,
     myArea: "Your account",
+    cityAll: "All cities",
+    whenAll: "Any date",
+    whenToday: "Today",
+    whenWeek: "This week",
+    emptyFiltered: "No events match that filter. Try another city or date.",
   },
   visibility: {
     title: "Who can see it?",
@@ -721,6 +753,8 @@ export const en: Dict = {
     key_conflict: "That reservation belongs to another purchase. Reload the page and try again.",
     sale_not_pending: "That reservation is no longer active. Reload the page and try again.",
     refund_already_sent: "You already sent this refund: we're verifying it.",
+    pay_already_started: "A payment is already in progress for this reservation. Don't pay again: check it in a few seconds.",
+    refund_already_started: "This refund is already being sent. Don't send it again: check in a few seconds.",
     reference_generation_failed: "We couldn't create your reservation. Please try again.",
     no_payment: "We still don't see that payment on the network.",
     tx_failed:
@@ -751,5 +785,8 @@ export const en: Dict = {
     type_duplicate: "Two ticket types have the same name.",
     type_price: "A ticket type's price isn't valid.",
     type_capacity: "A ticket type's capacity isn't valid.",
+    doors_invalid: "The doors-open time isn't valid.",
+    doors_after_start: "Doors can't open after the event starts.",
+    doors_too_early: "Doors can't open more than 24 hours before the start.",
   },
 };

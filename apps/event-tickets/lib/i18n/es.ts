@@ -29,6 +29,7 @@ export const es = {
      *  someone their real money has no value is worse than saying nothing. */
     disclaimerLive: "Pollar Pass · pagos en USDC sobre la red Stellar ·",
     howItWorks: "Cómo funciona",
+    madeWith: "Hecho con Pollar",
   },
   meta: {
     privateTitle: "Evento privado",
@@ -257,6 +258,15 @@ export const es = {
       "Recibes un QR: muéstralo en la puerta.",
     ],
     fullGuide: "Ver la guía completa →",
+    doorsOpen: (time: string) => `Puertas: ${time}`,
+    attendees: (n: number) => (n === 1 ? "1 persona asistirá" : `${n} personas asistirán`),
+    addToCalendar: "Agregar al calendario",
+    googleCalendar: "Google Calendar",
+    downloadIcs: "Descargar archivo .ics",
+    openInMaps: "Cómo llegar",
+    googleMaps: "Google Maps",
+    appleMaps: "Apple Maps",
+    waze: "Waze",
   },
   buy: {
     freeCta: "Obtener entrada gratis",
@@ -373,6 +383,10 @@ export const es = {
     placePlaceholder: "Ej: Café Mirador, Av. 20 de Octubre, La Paz",
     datetime: "Fecha y hora",
     datetimeHint: "Hora de Bolivia, aunque tu celular esté en otra zona horaria.",
+    city: "Ciudad (opcional)",
+    cityPlaceholder: "Ej: La Paz",
+    doorsOpen: "Apertura de puertas (opcional)",
+    doorsOpenHint: "Hasta 24 horas antes del inicio. Aparece en la página del evento y en el calendario.",
     organizerName: "Tu nombre u organización",
     organizerNamePlaceholder: "Ej: Colectivo Jazz La Paz",
     organizerContact: "Contacto para consultas (opcional)",
@@ -529,10 +543,23 @@ export const es = {
     errorNotSeen:
       "Todavía no vemos la devolución en la red. No pagues de nuevo: verifica en unos segundos.",
   },
+  /**
+   * Why a payment (or a refund) provably never left, in the reader's language:
+   * what `rejectionReason` in lib/payments.ts decided, never the SDK's raw text.
+   */
+  payRejected: {
+    noWallet: "Tu billetera no está conectada, así que el pago no salió. No se cobró nada.",
+    declined: "Cancelaste el pago en tu billetera. No se cobró nada.",
+    balance: "Tu billetera no tiene saldo suficiente para este pago. No se cobró nada.",
+    fee: "No hay XLM suficiente para la comisión de red, o la comisión es demasiado alta. No se cobró nada.",
+    destination: "La cuenta que recibe el pago todavía no puede recibirlo. No se cobró nada.",
+    other: "El pago no se pudo enviar. No se cobró nada.",
+  },
   account: {
     login: "Ingresar con Pollar",
     connecting: "Conectando…",
     accountLabel: "Mi cuenta",
+    pollarAccount: "Tu cuenta y tu billetera son de Pollar.",
     email: "Correo",
     wallet: "Billetera",
     addressCopied: "Copiada ✓",
@@ -627,6 +654,11 @@ export const es = {
     next: "Siguiente",
     goTo: (n: number) => `Ir al destacado ${n}`,
     myArea: "Tu cuenta",
+    cityAll: "Todas las ciudades",
+    whenAll: "Todas las fechas",
+    whenToday: "Hoy",
+    whenWeek: "Esta semana",
+    emptyFiltered: "No hay eventos con ese filtro. Prueba con otra ciudad o fecha.",
   },
   visibility: {
     title: "¿Quién puede verlo?",
@@ -742,6 +774,8 @@ export const es = {
     key_conflict: "Esa reserva es de otra compra. Recarga la página e intenta de nuevo.",
     sale_not_pending: "Esa reserva ya no está activa. Recarga la página e intenta de nuevo.",
     refund_already_sent: "Ya enviaste esta devolución: la estamos verificando.",
+    pay_already_started: "Ya hay un pago en curso para esta reserva. No pagues de nuevo: verifícalo en unos segundos.",
+    refund_already_started: "Esta devolución ya se está enviando. No la envíes de nuevo: verifica en unos segundos.",
     reference_generation_failed: "No se pudo generar tu reserva. Intenta de nuevo.",
     no_payment: "Todavía no vemos ese pago en la red.",
     tx_failed:
@@ -772,6 +806,9 @@ export const es = {
     type_duplicate: "Hay dos tipos de entrada con el mismo nombre.",
     type_price: "El precio de un tipo de entrada no es válido.",
     type_capacity: "El cupo de un tipo de entrada no es válido.",
+    doors_invalid: "La hora de apertura de puertas no es válida.",
+    doors_after_start: "Las puertas no pueden abrir después del inicio del evento.",
+    doors_too_early: "Las puertas no pueden abrir más de 24 horas antes del inicio.",
   },
 };
 

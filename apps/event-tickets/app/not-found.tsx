@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { getDict } from "@/lib/i18n/server";
 
 export default async function NotFound() {
   const { t } = await getDict();
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-12 text-center">
-      <PollarLogo size={72} />
+      <PassLogo size={84} layout="stacked" />
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-bold tracking-tight">{t.notFound.title}</h1>
         <p className="max-w-sm text-sm text-muted">{t.notFound.body}</p>

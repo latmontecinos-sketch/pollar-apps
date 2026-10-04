@@ -3,7 +3,8 @@ import { requireSignedAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { stroopsToDecimal } from "@/lib/money";
 import { findVerifiedPaymentByMemo, searchSince, verifyPaymentOnHorizon } from "@/lib/horizon";
-import { settlePayment } from "@/lib/sales";
+import { mayStartOver } from "@/lib/pay-attempt";
+import { expireSale, settlePayment } from "@/lib/sales";
 import { appOrigin, isDeliverableEmail, sendTicketEmail } from "@/lib/mail";
 import { DEFAULT_LOCALE, isLocale } from "@/lib/i18n/locales";
 import { enforce } from "@/lib/rate-limit";
@@ -19,6 +20,8 @@ type SaleRow = {
   amount_stroops: string;
   status: string;
   created_at: string;
+  expires_at_utc: string;
+  pay_started_at: string | null;
   organizer_pollar_id: string;
   event_name: string;
   event_datetime_utc: string;
@@ -109,8 +112,23 @@ export async function POST(request: Request, ctx: Ctx) {
       );
     }
     if (found.status === "none") {
+      // "Not on the chain" is only half of "nobody will pay it": the server,
+      // which knows who holds the claim and when its transaction dies, says
+      // whether this checkout is over (lib/pay-attempt.ts). The browser never
+      // decides that from a clock of its own.
+      const startOver = mayStartOver(
+        { status: sale.status, payStartedAt: sale.pay_started_at, expiresAtUtc: sale.expires_at_utc },
+        Date.now()
+      );
+      // A pending sale nobody can pay any more gives its seat back now,
+      // instead of waiting for the next sweep to notice.
+      if (startOver && sale.status === "pending") await expireSale(sale.id);
       return NextResponse.json(
-        { error: "Todavía no vemos ningún pago para esta reserva.", code: "no_payment" },
+        {
+          error: "Todavía no vemos ningún pago para esta reserva.",
+          code: "no_payment",
+          released: startOver,
+        },
         { status: 404 }
       );
     }

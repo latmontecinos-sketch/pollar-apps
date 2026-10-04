@@ -1,9 +1,8 @@
-import { PollarBear } from "./PollarBear";
+import { PassMark } from "./PassMark";
 
 /**
- * Playful empty state. The `icon` slot is where the official Pollar mascot
- * asset goes once it lands; until then it falls back to the placeholder
- * <PollarBear /> illustration.
+ * Playful empty state: the Pollar Pass bear by default; the `icon` slot
+ * replaces it when a screen has a more specific picture.
  */
 export function EmptyState({
   icon,
@@ -19,7 +18,7 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary-light">
-        {icon ?? <PollarBear size={52} />}
+        {icon ?? <PassMark size={56} />}
       </div>
       <h3 className="text-lg font-bold tracking-tight">{title}</h3>
       {description && (

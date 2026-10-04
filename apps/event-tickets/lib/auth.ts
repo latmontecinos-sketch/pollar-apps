@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual, verify as verifySignature } from "node:crypto";
 import { ed25519PublicKeyFrom } from "./strkey.ts";
+import { acceptedHosts } from "./app-origin.ts";
 import { authAudience, authMessage, normalizeRoute, POLLAR_PROOF_HEADER } from "./auth-message.ts";
 import { securityLog, shortAddressForLog } from "./security-log.ts";
 
@@ -69,30 +70,17 @@ export function verifySep53(opts: {
 }
 
 /**
- * Hosts a proof may be addressed to. `APP_ORIGIN` (comma-separated for more
- * than one) is the configured answer; the request's own host is always
- * accepted as well, so a deployment that never set it — or that sits behind
- * a proxy answering on an alias — keeps signing in instead of locking
- * everyone out. Routing by Host is what keeps a request for one deployment
- * from landing on another.
+ * Hosts a proof may be addressed to: an explicit list. When `APP_ORIGIN`
+ * (comma-separated for more than one) is defined, only those hosts count and
+ * the request's own is not added, so a deployment that configured it cannot
+ * be reached through any other name. When it is not defined, the host the
+ * request arrived on (the public one a proxy forwards, see lib/app-origin.ts),
+ * so a deploy that never set it keeps signing in instead of locking everyone
+ * out. Routing by Host is what keeps a request for one deployment from
+ * landing on another.
  */
 export function acceptedAudiences(request: Request): string[] {
-  const hosts = new Set<string>();
-  for (const origin of (process.env.APP_ORIGIN ?? "").split(",")) {
-    const trimmed = origin.trim();
-    if (!trimmed) continue;
-    try {
-      hosts.add(new URL(trimmed).host);
-    } catch {
-      hosts.add(trimmed);
-    }
-  }
-  try {
-    hosts.add(new URL(request.url).host);
-  } catch {
-    /* no usable URL: only the configured hosts remain */
-  }
-  return [...hosts].map(authAudience);
+  return acceptedHosts(request).map(authAudience);
 }
 
 export type ProofPayload = { address: string; exp: number; signature: string };

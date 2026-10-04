@@ -1,49 +1,60 @@
 /**
- * What a checkout (or a refund) remembers between the moment money may have
- * left the account and the moment the server confirms it.
+ * What a checkout (or a refund) remembers in the browser while money may be
+ * in flight.
  *
- * Pure on purpose, with no browser or server imports: the one question these
- * answer — "may I let this person send the payment again?" — is exactly the
- * kind that must have a unit test, because a wrong "yes" charges twice.
+ * Pure on purpose, with no browser or server imports. This memory is a
+ * convenience for resuming after a reload (the sale to verify, the hash if the
+ * SDK gave one); it decides nothing about whether anyone may pay again. That
+ * is the server's call: the claim on the sale (`pay_started_at`) and the
+ * verdict in the `no_payment` answer (see lib/pay-attempt.ts).
  */
 
 /**
- * A purchase that may already have money in flight. Its mere existence means
- * "a payment could have been submitted": it is written *before* `runTx`
- * starts and only removed when the outcome is known (a ticket, a failed
- * transaction, a rejection that never reached the network, or a deadline
- * long enough that a late payment is the refund flow's problem, not ours).
+ * A purchase that may already have money in flight. Written *before* `runTx`
+ * starts and removed only when the server says the checkout is over: a
+ * ticket, a failed transaction, a rejection proven before sending, or a sale
+ * whose attempt can no longer land.
  */
 export type InFlight = {
   saleId: string;
   /** Known only once the SDK acknowledged the submission. */
   hash?: string;
-  /** When the seat hold ends: the earliest moment forgetting it is defensible. */
-  expiresAtUtc?: string;
-  /** When the payment was started (ms since epoch). */
+  /** The server's `pay_started_at` for this attempt. */
+  startedAt?: string;
+  /** When the payment was started in this browser (ms since epoch). */
   at?: number;
 };
 
 /**
- * After the hold ends the server stops turning a payment into a ticket (a
- * late one becomes `unclaimed` and is refunded). The grace covers a
- * submission the SDK gave up waiting for but the network still accepted.
+ * One in-flight checkout per account and tier. The buyer's address is part of
+ * the key: another person signing in on the same browser must not inherit (or
+ * be blocked by) someone else's half-finished purchase.
  */
-export const FORGET_GRACE_MS = 2 * 60 * 1000;
+export function checkoutKey(address: string, eventId: string, ticketTypeId: string): string {
+  return `pollarpass:compra:${address}:${eventId}:${ticketTypeId}`;
+}
 
-/** Used only when a record carries no deadline of its own. */
-const FALLBACK_HOLD_MS = 15 * 60 * 1000;
+/** One refund in flight per account and sale. */
+export function refundKey(address: string, saleId: string): string {
+  return `pollarpass:reembolso:${address}:${saleId}`;
+}
 
-export function parseInFlight(raw: string | null): InFlight | null {
+/**
+ * Reads a stored checkout. `owner` is the account asking: a record written
+ * for another account reads as nothing, even if it somehow sits under this
+ * key (the address is in the key and in the record, so either can fail safe).
+ */
+export function parseInFlight(raw: string | null, owner?: string): InFlight | null {
   if (!raw) return null;
   try {
     const value = JSON.parse(raw) as Record<string, unknown> | null;
     if (!value || typeof value !== "object") return null;
     if (typeof value.saleId !== "string" || value.saleId === "") return null;
+    if (owner !== undefined && value.owner !== owner) return null;
     return {
       saleId: value.saleId,
       hash: typeof value.hash === "string" && value.hash !== "" ? value.hash : undefined,
-      expiresAtUtc: typeof value.expiresAtUtc === "string" ? value.expiresAtUtc : undefined,
+      startedAt: typeof value.startedAt === "string" ? value.startedAt : undefined,
       at: typeof value.at === "number" && Number.isFinite(value.at) ? value.at : undefined,
     };
   } catch {
@@ -51,49 +62,34 @@ export function parseInFlight(raw: string | null): InFlight | null {
   }
 }
 
-/**
- * Is it safe to drop this record and let the person start over? Only when no
- * hash was ever seen and the seat hold is over (plus a grace). One negative
- * lookup on Horizon is never enough: the network may simply not have indexed
- * a payment that was accepted a second ago.
- *
- * A legacy record (written before this rule, with neither deadline nor
- * timestamp) is forgettable at once, so an upgrade can't leave anyone stuck.
- */
-export function canForgetUnpaid(inFlight: InFlight, now: number): boolean {
-  if (inFlight.hash) return false;
-  const expiry = inFlight.expiresAtUtc ? Date.parse(inFlight.expiresAtUtc) : Number.NaN;
-  const deadline = Number.isNaN(expiry) ? (inFlight.at ?? 0) + FALLBACK_HOLD_MS : expiry;
-  return now > deadline + FORGET_GRACE_MS;
+export function serializeInFlight(value: InFlight, owner: string): string {
+  return JSON.stringify({ ...value, owner });
 }
 
 /** An organizer's refund that may already be on its way. */
-export type RefundIntent = { hash?: string; at: number };
+export type RefundIntent = {
+  hash?: string;
+  /** The server's `refund_started_at` for this attempt. */
+  startedAt?: string;
+  at: number;
+};
 
-/**
- * A refund has no hold window, so its deadline is a fixed time: long enough
- * for the SDK's submit timeout plus its confirmation polling, with room to
- * spare.
- */
-export const REFUND_FORGET_AFTER_MS = 15 * 60 * 1000;
-
-export function parseRefundIntent(raw: string | null): RefundIntent | null {
+export function parseRefundIntent(raw: string | null, owner?: string): RefundIntent | null {
   if (!raw) return null;
   try {
     const value = JSON.parse(raw) as Record<string, unknown> | null;
     if (!value || typeof value !== "object") return null;
-    const at = typeof value.at === "number" && Number.isFinite(value.at) ? value.at : 0;
+    if (owner !== undefined && value.owner !== owner) return null;
     return {
-      at,
+      at: typeof value.at === "number" && Number.isFinite(value.at) ? value.at : 0,
       hash: typeof value.hash === "string" && value.hash !== "" ? value.hash : undefined,
+      startedAt: typeof value.startedAt === "string" ? value.startedAt : undefined,
     };
   } catch {
     return null;
   }
 }
 
-/** Same rule as {@link canForgetUnpaid}: no hash, and enough time has passed. */
-export function canForgetRefundIntent(intent: RefundIntent, now: number): boolean {
-  if (intent.hash) return false;
-  return now > intent.at + REFUND_FORGET_AFTER_MS;
+export function serializeRefundIntent(value: RefundIntent, owner: string): string {
+  return JSON.stringify({ ...value, owner });
 }

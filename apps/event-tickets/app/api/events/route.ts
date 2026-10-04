@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSignedAddress } from "@/lib/auth";
+import { normalizeCity } from "@/lib/city";
+import { checkDoorsOpen, DOORS_ERRORS } from "@/lib/doors-open";
 import { newId } from "@/lib/ids";
 import { enforce } from "@/lib/rate-limit";
 import { shortAddressForLog } from "@/lib/security-log";
@@ -24,6 +26,10 @@ type CreateEventBody = {
   ticketTypes: TicketTypeInput[];
   /** Listed in the showcase, or code-only. Public when omitted. */
   visibility?: "public" | "private";
+  /** Optional; normalised on the way in (lib/city.ts). */
+  city?: string;
+  /** Optional ISO instant, at most a day before `datetimeUtc` (lib/doors-open.ts). */
+  doorsOpenUtc?: string;
 };
 
 function badRequest(error: string, code?: string) {
@@ -66,6 +72,9 @@ export async function POST(request: Request) {
     return badRequest("La fecha del evento ya pasó — elige una fecha futura", "event_date_past");
   }
 
+  const doors = checkDoorsOpen(body.doorsOpenUtc, datetimeUtc);
+  if (!doors.ok) return badRequest(DOORS_ERRORS[doors.code], doors.code);
+
   let ticketTypes: TicketTypeInput[];
   try {
     ticketTypes = parseTicketTypes(body.ticketTypes);
@@ -92,6 +101,8 @@ export async function POST(request: Request) {
       organizerContact,
       visibility,
       accessCode,
+      city: normalizeCity(body.city),
+      doorsOpenUtc: doors.value,
     },
     ticketTypes
   );

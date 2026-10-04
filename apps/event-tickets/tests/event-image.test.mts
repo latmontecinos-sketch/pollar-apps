@@ -6,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { after, before, test } from "node:test";
 
 const DB_FILE = `test-event-image-${randomUUID()}.db`;
@@ -22,6 +22,7 @@ const {
   jpegSize,
   loadEventImage,
   saveEventImage,
+  wellFormedJpegSize,
 } = await import("../lib/event-image.ts");
 
 before(async () => {
@@ -71,6 +72,18 @@ function jpeg(
 test("reads the size from baseline and progressive JPEGs", () => {
   assert.deepEqual(jpegSize(jpeg(1080, 1350)), { width: 1080, height: 1350 });
   assert.deepEqual(jpegSize(jpeg(800, 1000, { sof: 0xc2 })), { width: 800, height: 1000 });
+});
+
+test("a JPEG from a real encoder passes the structure walk; it is refused only for its shape", () => {
+  // tests/fixtures/pollar.jpg: a real 400 x 400 photo (10 KB), not a skeleton.
+  const real = new Uint8Array(readFileSync(new URL("./fixtures/pollar.jpg", import.meta.url)));
+  assert.deepEqual(jpegSize(real), { width: 400, height: 400 });
+  assert.deepEqual(wellFormedJpegSize(real), { width: 400, height: 400 });
+  // Square, and the pages are laid out for 4:5: refused for that and nothing else.
+  assert.deepEqual(checkEventImage(real), { ok: false, code: "image_invalid" });
+  // Cut anywhere short of its end, it is no longer well formed.
+  assert.equal(wellFormedJpegSize(real.slice(0, real.length - 2)), null);
+  assert.equal(wellFormedJpegSize(real.slice(0, Math.floor(real.length / 2))), null);
 });
 
 test("the picker's output is accepted", () => {

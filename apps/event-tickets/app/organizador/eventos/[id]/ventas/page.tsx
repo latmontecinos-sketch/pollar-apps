@@ -14,7 +14,7 @@ import { RefundButton } from "@/components/RefundButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/Icon";
 import { LoginButton } from "@/components/LoginButton";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { Spinner } from "@/components/ui/Spinner";
 
 type SaleStatus = "pending" | "paid" | "expired" | "unclaimed" | "refunded";
@@ -91,7 +91,7 @@ export default function SalesPage({
     return (
       <AppShell title={t.sales.title} back={back}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
-          <PollarLogo size={64} />
+          <PassLogo size={64} layout="stacked" />
           <p className="max-w-sm text-muted">{t.sales.loginNote}</p>
           <LoginButton />
         </div>

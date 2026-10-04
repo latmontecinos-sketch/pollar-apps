@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { formatEventDateTime, formatTimestamp } from "./format.ts";
 import { dictFor, type Locale } from "./i18n/index.ts";
+import { publicOrigin } from "./app-origin.ts";
 import { maskEmail } from "./security-log.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
@@ -113,13 +114,15 @@ export function isDeliverableEmail(value: string): boolean {
 }
 
 /**
- * Where the QR in the email points. Taken from configuration, not from the
- * request's Host header: that header is attacker-controlled, and an email
- * we send should never take a stranger's word for which host to embed.
+ * Where the QR in the email points: the FIRST origin of `APP_ORIGIN` (it may
+ * list several, comma-separated; see lib/app-origin.ts). Taken from
+ * configuration, not from the request's Host header: that header is
+ * attacker-controlled, and an email we send should never take a stranger's
+ * word for which host to embed. Only with no `APP_ORIGIN` at all does it fall
+ * back to where the request arrived, so dev keeps working.
  */
 export function appOrigin(request: Request): string {
-  const configured = process.env.APP_ORIGIN?.trim().replace(/\/$/, "");
-  return configured || new URL(request.url).origin;
+  return publicOrigin(request);
 }
 
 type SendResult = { sent: boolean; error?: string };

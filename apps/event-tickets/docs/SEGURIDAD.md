@@ -27,6 +27,7 @@ Tres cosas, en orden:
 | Adivinar un código de entrada | 26 caracteres de un alfabeto de 31 = ~128 bits, CSPRNG con rejection sampling |
 | Decir "soy el organizador" | La identidad sale de una firma SEP-53 verificada, nunca de un campo del body (`lib/auth.ts`) |
 | Reusar una firma en otro endpoint | La firma incluye método y ruta; ventana de 2 minutos |
+| Reusar una firma en otra instalación (staging, otra red) | La firma incluye red y host; el servidor acepta una lista explícita de hosts (`APP_ORIGIN`, ver abajo) |
 | Decir "ya pagué" sin pagar | Todo pago se verifica contra Horizon: destinatario, emisor de USDC, monto en stroops y memo |
 | Cobrar dos veces el mismo pago | El memo es único por venta, y `sales.reference` es `UNIQUE` |
 | Quedarse con todos los cupos sin pagar | Una reserva viva por comprador y por tipo, 10 minutos, y barrido automático |
@@ -85,6 +86,53 @@ rompería el correo, que es justo donde vive esa imagen.
 
 **El límite de uso falla abierto.** Si la base de datos no responde, el
 limitador es lo menos importante que se acaba de romper.
+
+**`APP_ORIGIN` es una lista, y el primero manda en el correo.** Se lee en
+`lib/app-origin.ts`: uno o varios orígenes separados por comas.
+
+- *Definida*: solo esos hosts pueden ser el destinatario de una firma. El
+  host de la petición **no** se agrega (antes sí, y eso dejaba abierta
+  cualquier otra entrada a la misma instalación). Quien tenga un alias o un
+  dominio propio tiene que listarlo, o no podrá iniciar sesión por ahí.
+- *Sin definir* (desarrollo, o un deploy que nunca la usó): vale el host de
+  la petición, para que nadie quede sin poder entrar. En un route handler
+  eso es `x-forwarded-host` si hay proxy (Vercel lo pone y descarta el que
+  mande el cliente; Next.js lee el host de la app en ese orden, ver
+  `docs/01-app/03-api-reference/05-config/01-next-config-js/serverActions.md`),
+  si no `Host`, si no el de `request.url`.
+- El correo enlaza al **primer** origen de la lista, ya normalizado
+  (`https://host`), nunca a la lista entera: un valor con comas dentro de la
+  URL del QR la rompía. Sin la variable cae al origen de la petición, que
+  controla quien llama: por eso en producción hay que definirla.
+- Una entrada inválida se ignora; si no queda ninguna válida, se trata como
+  sin definir y el log lo dice.
+
+Límite que no se oculta: la audiencia frena que una firma cruce de una
+instalación a otra *por accidente*. No es defensa contra una página de
+phishing que pide firmar lo que quiera.
+
+**La puerta tiene cuota por actor y por evento.** Cada paso (mirar el código,
+aceptar la entrada) cuenta aparte, y cada uno tiene un presupuesto para el
+organizador y otro para el personal que usa el link de puerta (7200 y 3600
+por hora y actor), más un tope del evento que suma los de todos. Así un link
+de personal que agota su presupuesto no deja al organizador sin puerta, y un
+evento grande (más de 2000 personas por hora, varias puertas con un mismo
+link) no se frena a sí mismo. El link de puerta es un solo secreto: el
+personal cuenta como un único actor.
+
+**La cuota de códigos privados no es atómica, y se acepta.** Se mira si el
+contador está en el tope (`isOverLimit`) y, solo si el código era falso, se
+cuenta (`consume`): son dos sentencias. Peticiones que llegan juntas pasan
+todas la primera antes de que ninguna cuente, así que el exceso posible es
+el nivel de concurrencia (un IP, un evento), no algo que un atacante pueda
+seguir creciendo. No cambia que solo cuentan los fallos.
+
+**La foto del evento se valida por estructura, no se decodifica.**
+`lib/event-image.ts` recorre el JPEG entero pero no decodifica los datos
+comprimidos: bytes estructuralmente limpios que no son una imagen pasan, y
+la foto se vería rota para quien la abra. El daño lo recibe quien la subió;
+no puede llevar script (se sirve `image/jpeg`, `inline`). Decodificar pide
+una biblioteca (sharp, jpeg-js) que no justifica una sola función.
 
 ## Rutinas
 

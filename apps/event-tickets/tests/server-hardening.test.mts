@@ -20,7 +20,7 @@ const { db, dbReady } = await import("../lib/db.ts");
 const { notifyCheckin } = await import("../lib/checkin-notify.ts");
 const { organizerOf } = await import("../lib/event-owner.ts");
 const { updateEventFields } = await import("../lib/event-update.ts");
-const { QUOTAS, clientIpFrom, consume, isOverLimit } = await import("../lib/rate-limit.ts");
+const { QUOTAS, clientIpFrom, consume, enforceDoor, isOverLimit } = await import("../lib/rate-limit.ts");
 const { collectedByEvent, collectedForEvent, sumStroops } = await import("../lib/revenue.ts");
 const { createEventWithTypes, listTicketTypes } = await import("../lib/ticket-types.ts");
 const { canView } = await import("../lib/visibility.ts");
@@ -202,6 +202,41 @@ test("the door's quotas leave room for a busy event, and check and approve do no
   );
 });
 
+test("the door budget is per actor: a staff link that runs dry never locks the organizer out", async () => {
+  const event = randomUUID();
+  const organizer = "GORGANIZERADDRESS";
+  // The event-wide backstop covers every actor's budget together, so one
+  // actor cannot starve another through it.
+  assert.ok(QUOTAS.doorCheck.limit >= QUOTAS.doorCheckActor.limit * 2);
+  assert.ok(QUOTAS.door.limit >= QUOTAS.doorActor.limit * 2);
+  // A busy event: 2000+ people an hour through several scanners on one staff link.
+  assert.ok(QUOTAS.doorCheckActor.limit >= 4000 && QUOTAS.doorActor.limit >= 2000);
+
+  const silence = console.warn;
+  console.warn = () => {};
+  try {
+    // Staff spends its whole check-in budget.
+    for (let i = 0; i < QUOTAS.doorActor.limit; i++) assert.equal(await enforceDoor("checkin", event, "staff"), null);
+    const refused = await enforceDoor("checkin", event, "staff");
+    assert.equal(refused?.status, 429, "staff is over its own budget");
+    // The organizer, same event, same step, is untouched...
+    assert.equal(await enforceDoor("checkin", event, organizer), null);
+    // ...and so is staff's other step, and another event's staff.
+    assert.equal(await enforceDoor("check", event, "staff"), null);
+    assert.equal(await enforceDoor("checkin", randomUUID(), "staff"), null);
+  } finally {
+    console.warn = silence;
+  }
+
+  // Each call charged the actor bucket and the event's, and a refused staff
+  // call spent nothing of the event's.
+  const hits = async (bucket: string) =>
+    Number((await db.execute({ sql: "SELECT hits FROM rate_limits WHERE bucket = ?", args: [bucket] })).rows[0]?.hits);
+  assert.equal(await hits(`doorActor:${event}:staff`), QUOTAS.doorActor.limit + 1);
+  assert.equal(await hits(`doorActor:${event}:${organizer}`), 1);
+  assert.equal(await hits(`door:${event}`), QUOTAS.doorActor.limit + 1);
+});
+
 test("a failed notification never undoes an admission", async () => {
   const eventId = randomUUID();
   await createEventWithTypes(newEvent({ id: eventId }), TIERS);
@@ -302,7 +337,8 @@ test("every API route that writes carries enforce()", () => {
       else if (name === "route.ts") {
         const source = readFileSync(path, "utf8");
         const writes = /export (async )?function (POST|PUT|PATCH|DELETE)\b/.test(source);
-        if (writes && !source.includes("enforce(")) missing.push(path);
+        // enforceDoor charges the door's two budgets (lib/rate-limit.ts).
+        if (writes && !/\benforce(Door)?\(/.test(source)) missing.push(path);
       }
     }
   };

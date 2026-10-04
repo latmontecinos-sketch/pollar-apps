@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ProductHeader } from "@/components/ProductHeader";
 import { Icon } from "@/components/ui/Icon";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { getDict } from "@/lib/i18n/server";
 import { IS_MAINNET } from "@/lib/network";
 
@@ -50,7 +50,7 @@ export default async function ProductPage() {
         <div className="relative mx-auto flex w-full max-w-3xl flex-col px-5">
           <ProductHeader />
           <div className="flex flex-col items-center gap-6 pb-16 pt-10 text-center sm:pt-16">
-            <PollarLogo size={72} colorClass="bg-band-foreground" />
+            <PassLogo size={96} variant="band" wordmark={false} />
             <span className="rounded-full border border-band-foreground/25 bg-band-foreground/10 px-3 py-1 font-mono text-xs tracking-wide text-band-foreground/85">
               {t.product.badge}
             </span>

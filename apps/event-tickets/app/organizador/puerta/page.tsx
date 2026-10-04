@@ -8,7 +8,7 @@ import { CreateEventButton } from "@/components/OrganizerEventCard";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ListRow } from "@/components/ui/ListRow";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { Spinner } from "@/components/ui/Spinner";
 import { useMyEvents } from "@/hooks/useMyEvents";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
@@ -33,7 +33,7 @@ export default function DoorPickerPage() {
     return (
       <AppShell title={t.door.pickTitle} back={back}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
-          <PollarLogo size={64} />
+          <PassLogo size={64} layout="stacked" />
           <p className="max-w-sm text-muted">{t.door.loginNote}</p>
           <LoginButton />
         </div>

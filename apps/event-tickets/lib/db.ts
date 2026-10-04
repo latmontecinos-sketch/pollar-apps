@@ -180,6 +180,21 @@ const ADDED_COLUMNS = [
   `ALTER TABLE events ADD COLUMN visibility TEXT NOT NULL DEFAULT 'link'`,
   // The code a private event asks for; NULL for any other visibility.
   `ALTER TABLE events ADD COLUMN access_code TEXT`,
+  // When someone won the right to send the payment of this sale (lib/sales.ts
+  // claimPayment); NULL until then. Set once, never cleared: it is what keeps a
+  // second tab or device from paying the same reservation.
+  `ALTER TABLE sales ADD COLUMN pay_started_at TEXT`,
+  // The same for the organizer's refund of an `unclaimed` sale (claimRefund).
+  // Cleared only by a proven rejection or the attempt's transaction dying.
+  `ALTER TABLE sales ADD COLUMN refund_started_at TEXT`,
+  // Showcase and calendar data (lib/city.ts, lib/doors-open.ts, lib/accent.ts). All optional,
+  // so rows from before read as "no city / no doors time / no accent".
+  // The city, normalised: the showcase filters by it and lists the ones in use.
+  `ALTER TABLE events ADD COLUMN city TEXT`,
+  // When the doors open (ISO UTC), at most a day before `datetime_utc`.
+  `ALTER TABLE events ADD COLUMN doors_open_utc TEXT`,
+  // `#rrggbb` taken from the photo; written only together with the photo (lib/event-image.ts).
+  `ALTER TABLE events ADD COLUMN accent TEXT`,
 ];
 
 /**
@@ -195,6 +210,25 @@ const POST_COLUMN_INDEXES = [
   `CREATE INDEX IF NOT EXISTS sales_tier_status_idx ON sales (ticket_type_id, status)`,
   /** The showcase: public events, soonest first (lib/public-events.ts). */
   `CREATE INDEX IF NOT EXISTS events_visibility_date_idx ON events (visibility, datetime_utc)`,
+  /**
+   * The showcase's city filter and its list of cities (lib/public-events.ts).
+   * EXPLAIN QUERY PLAN, measured on 2,000 events (1,600 public, 10 cities):
+   *
+   * city filter (visibility = 'public' AND datetime_utc range AND city = ? ORDER BY datetime_utc):
+   *   before: SEARCH e USING INDEX events_visibility_date_idx (visibility=? AND datetime_utc>? AND datetime_utc<?)
+   *           (every upcoming public event is read from the table to test its city)
+   *   after:  SEARCH e USING INDEX events_visibility_city_date_idx (visibility=? AND city=? AND datetime_utc>? AND datetime_utc<?)
+   *           (only that city's events, already in date order: no sort)
+   *
+   * list of cities (GROUP BY city over public upcoming events):
+   *   before: SEARCH events USING INDEX events_visibility_date_idx (visibility=? AND datetime_utc>?)
+   *           + USE TEMP B-TREE FOR GROUP BY + USE TEMP B-TREE FOR ORDER BY
+   *   after:  SEARCH events USING COVERING INDEX events_visibility_city_date_idx (visibility=? AND city>?)
+   *           + USE TEMP B-TREE FOR ORDER BY   (grouping comes free in index order; no table reads)
+   *
+   * The showcase without a city filter keeps events_visibility_date_idx (plan unchanged).
+   */
+  `CREATE INDEX IF NOT EXISTS events_visibility_city_date_idx ON events (visibility, city, datetime_utc)`,
 ];
 
 /**

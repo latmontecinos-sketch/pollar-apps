@@ -16,6 +16,13 @@ type Ctx = { params: Promise<{ id: string }> };
  *
  * Only ever `pending` -> `expired`, and only for the buyer's own sale: a
  * paid sale can't be released this way.
+ *
+ * The one caller after a payment attempt started is the tab that won the
+ * claim (`/pay`) and then saw the SDK refuse before sending anything. A tab
+ * that lost the claim never calls this. If a stale or wrong call ever did
+ * release a sale whose payment then landed, the payment settles as
+ * `unclaimed` and goes through the refund flow: money is not lost, it is
+ * refunded.
  */
 export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;

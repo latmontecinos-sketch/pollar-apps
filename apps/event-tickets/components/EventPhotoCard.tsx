@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { pollarFetch } from "@/lib/auth-client";
+import { ACCENT_HEADER } from "@/lib/accent";
 import { eventImagePath } from "@/lib/event-image-path";
 import { useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
@@ -16,11 +17,13 @@ export async function uploadEventPhoto(
   client: Parameters<typeof pollarFetch>[0],
   address: string,
   eventId: string,
-  jpeg: Blob
+  jpeg: Blob,
+  accent: string | null = null
 ): Promise<{ ok: true; version: string } | { ok: false; data: { error?: string; code?: string } }> {
   const res = await pollarFetch(client, address, `/api/events/${eventId}/image`, {
     method: "PUT",
-    headers: { "Content-Type": "image/jpeg" },
+    // The server keeps the accent only if it is exactly #rrggbb.
+    headers: { "Content-Type": "image/jpeg", ...(accent ? { [ACCENT_HEADER]: accent } : {}) },
     body: jpeg,
   });
   const data = (await res.json().catch(() => ({}))) as { version?: string; error?: string; code?: string };
@@ -51,12 +54,12 @@ export function EventPhotoCard({
     uploadFailed ? { tone: "error", text: t.eventImage.uploadLater } : null
   );
 
-  async function upload(jpeg: Blob) {
+  async function upload(jpeg: Blob, accent: string | null) {
     if (!user) return;
     setBusy(true);
     setMessage(null);
     try {
-      const result = await uploadEventPhoto(pollarRef.current.getClient(), user.address, eventId, jpeg);
+      const result = await uploadEventPhoto(pollarRef.current.getClient(), user.address, eventId, jpeg, accent);
       if (result.ok) {
         setVersion(result.version);
         setMessage({ tone: "ok", text: t.eventImage.saved });
@@ -96,7 +99,7 @@ export function EventPhotoCard({
       <EventImagePicker
         imageUrl={version ? eventImagePath(eventId, version) : null}
         busy={busy}
-        onCropped={(jpeg) => void upload(jpeg)}
+        onCropped={(jpeg, accent) => void upload(jpeg, accent)}
         onRemove={() => void remove()}
       />
       {message && (

@@ -25,7 +25,7 @@ import { Icon } from "@/components/ui/Icon";
 import { IconTile } from "@/components/ui/ListRow";
 import { Segmented } from "@/components/ui/Segmented";
 import { LoginButton } from "@/components/LoginButton";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { Spinner } from "@/components/ui/Spinner";
 import { Stat } from "@/components/ui/Stat";
 import { SaveTicketButton } from "@/components/SaveTicketButton";
@@ -133,7 +133,7 @@ export default function MisPasesPage() {
     return (
       <AppShell title={t.tickets.title} back={{ href: "/app", label: t.common.home }}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
-          <PollarLogo size={64} />
+          <PassLogo size={64} layout="stacked" />
           <p className="max-w-sm text-muted">{t.tickets.loginNote}</p>
           <LoginButton />
         </div>

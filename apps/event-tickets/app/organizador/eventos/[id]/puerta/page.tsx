@@ -10,7 +10,7 @@ import { ScreenLoading } from "@/components/ScreenLoading";
 import { DoorScanner } from "@/components/DoorScanner";
 import { Card } from "@/components/ui/Card";
 import { LoginButton } from "@/components/LoginButton";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 
 /** Door mode in the organizer's own session. Staff use /puerta/[id] with the event's door link instead. */
 export default function DoorModePage({
@@ -30,7 +30,7 @@ export default function DoorModePage({
     return (
       <AppShell title={t.door.title} back={back}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
-          <PollarLogo size={64} />
+          <PassLogo size={64} layout="stacked" />
           <p className="max-w-sm text-muted">{t.door.loginNote}</p>
           <LoginButton />
         </div>

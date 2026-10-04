@@ -1,64 +1,29 @@
 import { NextResponse } from "next/server";
 import { requireAddress } from "@/lib/auth";
-import { db, dbReady } from "@/lib/db";
-import { findVerifiedPaymentByMemo, searchSince, verifyPaymentOnHorizon } from "@/lib/horizon";
+import { verifyPaymentOnHorizon } from "@/lib/horizon";
 import { stroopsToDecimal } from "@/lib/money";
-import { usdcAsset } from "@/lib/network";
+import { attemptState } from "@/lib/pay-attempt";
 import { enforce } from "@/lib/rate-limit";
-import { markRefunded, refundMemo } from "@/lib/sales";
+import { findRefund, loadRefundSale, refundPlan } from "@/lib/refund";
+import { markRefunded, refundMemo, reopenRefund } from "@/lib/sales";
 import { securityLog, shortAddressForLog } from "@/lib/security-log";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-type SaleRow = {
-  id: string;
-  buyer_pollar_id: string;
-  reference: string;
-  amount_stroops: string;
-  status: string;
-  created_at: string;
-  refund_tx_hash: string | null;
-  organizer_pollar_id: string;
-};
-
-async function loadSale(id: string): Promise<SaleRow | null> {
-  await dbReady();
-  const result = await db.execute({
-    sql: `SELECT sales.id, sales.buyer_pollar_id, sales.reference, sales.amount_stroops,
-                 sales.status, sales.created_at, sales.refund_tx_hash, events.organizer_pollar_id
-          FROM sales JOIN events ON events.id = sales.event_id
-          WHERE sales.id = ?`,
-    args: [id],
-  });
-  return result.rows.length > 0 ? (result.rows[0] as unknown as SaleRow) : null;
-}
-
 /**
- * Looks for the organizer's refund of this sale on the chain, by its memo.
- * Both the plan (is there already one on its way?) and the recording (which
- * hash is it?) need exactly this answer.
- */
-function findRefund(sale: SaleRow) {
-  return findVerifiedPaymentByMemo({
-    account: sale.buyer_pollar_id,
-    memo: refundMemo(sale.reference),
-    destination: sale.buyer_pollar_id,
-    source: sale.organizer_pollar_id,
-    amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
-    since: searchSince(sale.created_at),
-  });
-}
-
-/**
- * Owner-only: what the organizer's refund payment must look like (the client
- * builds it with `runTx`). The client asks again right before it sends, so
- * this is also the last check that the sale is still unclaimed and that no
- * refund of it is already on the chain — a plan loaded minutes ago, or in
- * another tab, must not become a second transfer.
+ * Owner-only: what the organizer's refund payment would look like, for the
+ * confirmation screen. It decides nothing and sends nothing: the right to send
+ * is taken by `POST …/refund/start`, which is also where the chain is searched
+ * for a refund already on its way. So this is a plain read, with no Horizon
+ * call, and it carries no quota of its own (the rule that every writing
+ * endpoint enforces one is about writes; browsing a plan writes nothing).
+ *
+ * `started` tells the screen that someone already took the refund: it goes to
+ * reconcile with the chain instead of offering to send.
  */
 export async function GET(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  const sale = await loadSale(id);
+  const sale = await loadRefundSale(id);
   if (!sale) {
     return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
   }
@@ -70,32 +35,7 @@ export async function GET(request: Request, ctx: Ctx) {
       { status: 409 }
     );
   }
-  // Each plan can cost Horizon requests, so it shares the refund quota.
-  const limited = await enforce("refundSale", auth.address, {
-    actor: shortAddressForLog(auth.address),
-  });
-  if (limited) return limited;
-
-  const existing = await findRefund(sale);
-  if (existing.status === "inconclusive") {
-    return NextResponse.json(
-      { error: "No pudimos consultar la red de Stellar.", code: "horizon_unreachable" },
-      { status: 503 }
-    );
-  }
-  if (existing.status === "found") {
-    return NextResponse.json(
-      { error: "Ya enviaste esta devolución.", code: "refund_already_sent", hash: existing.hash },
-      { status: 409 }
-    );
-  }
-  return NextResponse.json({
-    destination: sale.buyer_pollar_id,
-    amountDecimal: stroopsToDecimal(BigInt(sale.amount_stroops)),
-    memo: refundMemo(sale.reference),
-    // The sale's own asset, so the organizer's wallet can't pick another one.
-    asset: usdcAsset(),
-  });
+  return NextResponse.json({ ...refundPlan(sale), started: sale.refund_started_at !== null });
 }
 
 /**
@@ -104,17 +44,26 @@ export async function GET(request: Request, ctx: Ctx) {
  * Horizon — organizer -> buyer, same USDC amount, the refund memo — before
  * moving the sale to `refunded`. With no hash, looks it up by memo on the
  * buyer's account (e.g. the organizer's tab closed after paying).
+ *
+ * When nothing is on the chain it also says whether the refund may be tried
+ * again (`retryable`): never nobody-sent from a clock in the browser, but the
+ * server's own reading of the attempt (lib/pay-attempt.ts), and it takes over
+ * a dead attempt in the same breath.
+ *
+ * Its quota (`refundRecord`) is its own and generous: by the time this is
+ * called money may already have left, and plan browsing or an earlier retry
+ * must not be what stops it being recorded.
  */
 export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  const sale = await loadSale(id);
+  const sale = await loadRefundSale(id);
   if (!sale) {
     return NextResponse.json({ error: "No encontrado", code: "sale_not_found" }, { status: 404 });
   }
   const auth = requireAddress(request, sale.organizer_pollar_id);
   if (!auth.ok) return auth.response;
 
-  const limited = await enforce("refundSale", auth.address, {
+  const limited = await enforce("refundRecord", auth.address, {
     actor: shortAddressForLog(auth.address),
   });
   if (limited) return limited;
@@ -146,8 +95,16 @@ export async function POST(request: Request, ctx: Ctx) {
       );
     }
     if (found.status === "none") {
+      // Not on the chain. If the attempt that started it is dead (its
+      // transaction can no longer be accepted), hand it back so the refund can
+      // be started again; if it is still alive, it may yet land.
+      const state = attemptState(sale.refund_started_at, Date.now());
+      let retryable = state === "none";
+      if (state === "dead" && sale.refund_started_at !== null) {
+        retryable = await reopenRefund(sale.id, auth.address, sale.refund_started_at);
+      }
       return NextResponse.json(
-        { error: "Todavía no vemos la devolución en la red.", code: "no_payment" },
+        { error: "Todavía no vemos la devolución en la red.", code: "no_payment", retryable },
         { status: 404 }
       );
     }

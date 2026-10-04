@@ -6,7 +6,7 @@ import { LoginButton } from "@/components/LoginButton";
 import { NotificationsButton } from "@/components/NotificationsButton";
 import { PreferencesModal } from "@/components/PreferencesModal";
 import { Icon } from "@/components/ui/Icon";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { usePollarAuth } from "@/hooks/usePollarAuth";
 import { useT } from "@/lib/i18n/client";
 import { bandButton } from "@/components/band-button";
@@ -39,8 +39,7 @@ export function AppHeader({
           </Link>
         ) : (
           <Link href="/app" aria-label={t.common.home} className="flex min-w-0 items-center gap-2">
-            <PollarLogo size={30} colorClass="bg-band-foreground" />
-            <span className="truncate text-base font-bold tracking-tight">{t.common.appName}</span>
+            <PassLogo size={30} variant="band" wordmarkClassName={user ? "max-[400px]:hidden" : ""} />
           </Link>
         )}
         <div className="flex shrink-0 items-center gap-2">

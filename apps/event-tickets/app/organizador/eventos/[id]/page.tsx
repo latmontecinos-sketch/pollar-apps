@@ -17,6 +17,7 @@ import { apiErrorMessage } from "@/lib/i18n/errors";
 import { AppShell } from "@/components/AppShell";
 import { ScreenLoading } from "@/components/ScreenLoading";
 import { CapacityIncrease } from "@/components/CapacityIncrease";
+import { CityInput } from "@/components/CityInput";
 import { DoorStaffCard } from "@/components/DoorStaffCard";
 import { EventPhotoCard } from "@/components/EventPhotoCard";
 import { VisibilityCard } from "@/components/VisibilityCard";
@@ -26,7 +27,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import { LoginButton } from "@/components/LoginButton";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { Spinner } from "@/components/ui/Spinner";
 
 type EventDetails = {
@@ -50,6 +51,8 @@ type EventDetails = {
   imageVersion: string | null;
   visibility: string;
   accessCode: string | null;
+  city: string | null;
+  doorsOpenUtc: string | null;
 };
 
 type TicketTypeView = {
@@ -134,6 +137,8 @@ export default function OrganizerEventPage({
     description: "",
     place: "",
     datetimeLocal: "",
+    city: "",
+    doorsLocal: "",
     organizerName: "",
     organizerContact: "",
   });
@@ -164,6 +169,8 @@ export default function OrganizerEventPage({
         description: event.description,
         place: event.place,
         datetimeLocal: utcIsoToLaPazLocal(event.datetimeUtc),
+        city: event.city ?? "",
+        doorsLocal: event.doorsOpenUtc ? utcIsoToLaPazLocal(event.doorsOpenUtc) : "",
         organizerName: event.organizerName,
         organizerContact: event.organizerContact,
       });
@@ -180,7 +187,7 @@ export default function OrganizerEventPage({
     return (
       <AppShell title={t.panel.title} back={{ href: "/app", label: t.common.home }}>
         <div className="flex flex-1 flex-col items-center justify-center gap-5 py-10 text-center">
-          <PollarLogo size={64} />
+          <PassLogo size={64} layout="stacked" />
           <p className="max-w-sm text-muted">{t.panel.loginNote}</p>
           <LoginButton />
         </div>
@@ -207,6 +214,9 @@ export default function OrganizerEventPage({
         organizerName: form.organizerName,
         organizerContact: form.organizerContact,
         datetimeUtc: form.datetimeLocal ? laPazLocalToUtcIso(form.datetimeLocal) : undefined,
+        // Empty clears them.
+        city: form.city,
+        doorsOpenUtc: form.doorsLocal ? laPazLocalToUtcIso(form.doorsLocal) : null,
       });
       const data = (await res.json()) as EventDetails & { error?: string; code?: string };
       if (!res.ok) {
@@ -402,6 +412,7 @@ export default function OrganizerEventPage({
                   value={form.place}
                   onChange={(e) => setForm((f) => ({ ...f, place: e.target.value }))}
                 />
+                <CityInput value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
                 <Input
                   label={t.panel.editOrganizerName}
                   value={form.organizerName}
@@ -418,6 +429,12 @@ export default function OrganizerEventPage({
                   type="datetime-local"
                   value={form.datetimeLocal}
                   onChange={(e) => setForm((f) => ({ ...f, datetimeLocal: e.target.value }))}
+                />
+                <Input
+                  label={t.create.doorsOpen}
+                  type="datetime-local"
+                  value={form.doorsLocal}
+                  onChange={(e) => setForm((f) => ({ ...f, doorsLocal: e.target.value }))}
                 />
                 <p className="text-xs leading-5 text-muted">
                   {t.panel.immutable(formatAmount(event.priceDecimal, locale), event.capacity)}

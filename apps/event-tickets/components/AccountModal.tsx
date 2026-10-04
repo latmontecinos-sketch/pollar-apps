@@ -57,6 +57,8 @@ export function AccountModal({
         >
           {t.account.logout}
         </button>
+
+        <p className="text-center text-xs leading-5 text-muted">{t.account.pollarAccount}</p>
       </div>
     </Modal>
   );

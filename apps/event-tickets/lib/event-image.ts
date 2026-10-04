@@ -1,4 +1,5 @@
-import { db, dbReady } from "./db.ts";
+import { parseAccent } from "./accent.ts";
+import { db, dbReady, withTransaction } from "./db.ts";
 import { newId } from "./ids.ts";
 
 /**
@@ -79,9 +80,17 @@ const MIN_BYTES_PER_PIXEL = 1 / 2000;
  * - it ends with exactly one end-of-image marker, with enough data in front
  *   of it for the size the header claims.
  *
- * It can't prove the entropy-coded data decodes: forged data that is
- * structurally clean still passes, and catching that takes a real decoder
- * (sharp, jpeg-js) — see the note in the review report.
+ * Honest limit: this never decodes the entropy-coded data (Huffman symbols,
+ * restart intervals, run lengths), so it cannot prove the picture decodes.
+ * Bytes that are structurally clean but not a real image still pass, and the
+ * viewer's browser shows a broken photo. That costs the person who uploaded
+ * it (an organizer, for their own event) and nobody else: the response is
+ * served as `image/jpeg` with `Content-Disposition: inline`, and a JPEG
+ * cannot carry script. Telling a real image from a forged one would need a
+ * real decoder (sharp, jpeg-js), which rule 10 asks us not to pull in for
+ * this. tests/event-image.test.mts runs a JPEG from a real encoder through
+ * it, so the walk is checked against what a camera or canvas produces and
+ * not only against the skeletons the tests build by hand.
  */
 export function wellFormedJpegSize(bytes: Uint8Array): { width: number; height: number } | null {
   const n = bytes.length;
@@ -175,28 +184,42 @@ export function checkEventImage(bytes: Uint8Array): ImageCheck {
   return { ok: true, ...size };
 }
 
-/** Replaces the event's photo; the new `version` busts every cached copy of the old one. */
+/**
+ * Replaces the event's photo; the new `version` busts every cached copy of the
+ * old one. The photo's accent colour (lib/accent.ts) goes in the same
+ * transaction, so a page never shows a new photo with the old one's colour:
+ * a missing or malformed `accent` clears it (the UI then uses its tokens).
+ */
 export async function saveEventImage(
   eventId: string,
   bytes: Uint8Array,
-  size: { width: number; height: number }
+  size: { width: number; height: number },
+  accent?: unknown
 ): Promise<string> {
-  await dbReady();
   const version = newId().replace(/-/g, "").slice(0, 12);
-  await db.execute({
-    sql: `INSERT INTO event_images (event_id, data, width, height, bytes, version)
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(event_id) DO UPDATE SET
-            data = excluded.data, width = excluded.width, height = excluded.height,
-            bytes = excluded.bytes, version = excluded.version, updated_at = datetime('now')`,
-    args: [eventId, bytes, size.width, size.height, bytes.length, version],
+  await withTransaction(async (tx) => {
+    await tx.execute({
+      sql: `INSERT INTO event_images (event_id, data, width, height, bytes, version)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(event_id) DO UPDATE SET
+              data = excluded.data, width = excluded.width, height = excluded.height,
+              bytes = excluded.bytes, version = excluded.version, updated_at = datetime('now')`,
+      args: [eventId, bytes, size.width, size.height, bytes.length, version],
+    });
+    await tx.execute({
+      sql: "UPDATE events SET accent = ? WHERE id = ?",
+      args: [parseAccent(accent), eventId],
+    });
   });
   return version;
 }
 
 export async function deleteEventImage(eventId: string): Promise<void> {
-  await dbReady();
-  await db.execute({ sql: "DELETE FROM event_images WHERE event_id = ?", args: [eventId] });
+  await withTransaction(async (tx) => {
+    await tx.execute({ sql: "DELETE FROM event_images WHERE event_id = ?", args: [eventId] });
+    // No photo, no accent.
+    await tx.execute({ sql: "UPDATE events SET accent = NULL WHERE id = ?", args: [eventId] });
+  });
 }
 
 /** Just the version, for building the image URL without reading the bytes. */

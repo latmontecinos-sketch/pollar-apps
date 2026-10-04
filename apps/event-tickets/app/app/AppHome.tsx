@@ -14,7 +14,7 @@ import { WelcomeGiftCard } from "@/components/WelcomeGiftCard";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { IconTile, ListRow } from "@/components/ui/ListRow";
-import { PollarLogo } from "@/components/ui/PollarLogo";
+import { PassLogo } from "@/components/ui/PassLogo";
 import { Segmented } from "@/components/ui/Segmented";
 import { Spinner } from "@/components/ui/Spinner";
 import { Stat } from "@/components/ui/Stat";
@@ -35,7 +35,7 @@ function SignedOut({ events }: { events: PublicEvent[] }) {
     <AppShell
       hero={
         <section className="flex flex-col items-center gap-4 pt-2 text-center">
-          <PollarLogo size={72} colorClass="bg-band-foreground" />
+          <PassLogo size={96} variant="band" wordmark={false} />
           <h1 className="text-3xl font-extrabold leading-tight tracking-tight">
             {t.landing.titleLine1}
             <span className="block text-band-foreground/80">{t.landing.titleLine2}</span>
@@ -93,7 +93,7 @@ function ModeChooser({ onChoose }: { onChoose: (mode: AppMode) => void }) {
     <AppShell
       hero={
         <section className="flex flex-col items-center gap-3 pt-2 text-center">
-          <PollarLogo size={56} colorClass="bg-band-foreground" />
+          <PassLogo size={56} variant="band" wordmark={false} />
           <h1 className="text-2xl font-extrabold leading-tight tracking-tight">{t.mode.chooseTitle}</h1>
           <p className="max-w-sm text-sm text-band-foreground/80">{t.mode.chooseSubtitle}</p>
         </section>

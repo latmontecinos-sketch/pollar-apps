@@ -320,3 +320,91 @@ test("the search window starts a little before the sale was created", () => {
   assert.equal(searchSince("garbage"), undefined);
   assert.equal(searchSince(null), undefined);
 });
+
+// --- The search has one budget, shared by every request it makes ---------------
+
+/**
+ * Like `stubChain`, but every request costs `costMs` on a fake clock, so the
+ * budget can be spent without waiting for it. `fetches` counts all of them.
+ */
+function stubSlowChain(opts: { pages: Listed[][]; txs: Record<string, { tx: Json; ops: Json }>; costMs: number }) {
+  const clock = { ms: 1_000_000 };
+  let fetches = 0;
+  globalThis.fetch = (async (input: string | URL) => {
+    fetches++;
+    clock.ms += opts.costMs;
+    const url = new URL(String(input));
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    if (url.pathname.includes("/payments")) {
+      const cursor = url.searchParams.get("cursor");
+      const index = cursor ? Number(cursor.split("-").pop()) : 0;
+      return json({ _embedded: { records: opts.pages[index] ?? [] } });
+    }
+    const held = opts.txs[url.pathname.split("/")[2]];
+    if (!held) return new Response("not found", { status: 404 });
+    return json(url.pathname.endsWith("/operations") ? held.ops : held.tx);
+  }) as typeof fetch;
+  return { now: () => clock.ms, fetches: () => fetches };
+}
+
+const dustChain = { tx: transaction(), ops: opsWith(payment({ amount: "0.0000001" })) };
+
+test("a page full of candidates cannot outlast the search budget", async () => {
+  // 100 distinct transactions carrying the memo, none of them ours. Each costs two
+  // requests of 6 s; unchecked that is 20 minutes behind one buyer's request.
+  const hashes = Array.from({ length: 100 }, (_, i) => `${i}`.padStart(64, "0"));
+  const stub = stubSlowChain({
+    pages: [hashes.map((hash) => listed(hash))],
+    txs: Object.fromEntries(hashes.map((hash) => [hash, dustChain])),
+    costMs: 6000,
+  });
+  const result = await findVerifiedPaymentByMemo({ ...lookup, now: stub.now });
+  assert.deepEqual(result, { status: "inconclusive" });
+  // The page, then only as many candidates as 20 s allows: a handful of requests, not 201.
+  assert.ok(stub.fetches() <= 7, `made ${stub.fetches()} requests`);
+});
+
+test("the last request of a search is cut to what is left of the budget", async () => {
+  const seen: number[] = [];
+  const realTimeout = AbortSignal.timeout;
+  AbortSignal.timeout = ((ms: number) => {
+    seen.push(ms);
+    return realTimeout.call(AbortSignal, ms);
+  }) as typeof AbortSignal.timeout;
+  try {
+    const stub = stubSlowChain({ pages: [[]], txs: {}, costMs: 0 });
+    await findVerifiedPaymentByMemo({ ...lookup, now: stub.now, budgetMs: 2500 });
+  } finally {
+    AbortSignal.timeout = realTimeout;
+  }
+  assert.deepEqual(seen, [2500], "bounded by the budget, not by the per-request timeout of 6 s");
+});
+
+test("a transaction that shows up once per operation is verified once", async () => {
+  // One transaction with five payment operations to the same place: five records, one hash.
+  const stub = stubSlowChain({
+    pages: [Array.from({ length: 5 }, () => listed(DUST_HASH))],
+    txs: { [DUST_HASH]: dustChain },
+    costMs: 0,
+  });
+  assert.deepEqual(await findVerifiedPaymentByMemo({ ...lookup, now: stub.now }), { status: "none" });
+  // The page, the transaction, its operations: three requests, not eleven.
+  assert.equal(stub.fetches(), 3);
+});
+
+test("a deduplicated candidate that could not be read still leaves the answer open", async () => {
+  const stub = stubSlowChain({
+    pages: [[listed(HASH), listed(HASH)]],
+    txs: {},
+    costMs: 0,
+  });
+  assert.deepEqual(await findVerifiedPaymentByMemo({ ...lookup, now: stub.now }), { status: "inconclusive" });
+});
+
+test("a budget already spent is inconclusive without asking Horizon", async () => {
+  const stub = stubSlowChain({ pages: [[listed(HASH)]], txs: { [HASH]: realPayment }, costMs: 0 });
+  const result = await findVerifiedPaymentByMemo({ ...lookup, now: stub.now, budgetMs: 0 });
+  assert.deepEqual(result, { status: "inconclusive" });
+  assert.equal(stub.fetches(), 0);
+});

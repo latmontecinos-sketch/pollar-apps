@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ACCENT_HEADER } from "@/lib/accent";
 import { requireAddress } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { organizerOf } from "@/lib/event-owner";
@@ -91,7 +92,9 @@ export async function PUT(request: Request, ctx: Ctx) {
     );
   }
 
-  const version = await saveEventImage(id, bytes, checked);
+  // The browser reads a representative colour off the framed photo and sends it along
+  // (components/EventImagePicker.tsx). It ends up in CSS, so only `#rrggbb` is kept.
+  const version = await saveEventImage(id, bytes, checked, request.headers.get(ACCENT_HEADER));
   return NextResponse.json({ version });
 }
 

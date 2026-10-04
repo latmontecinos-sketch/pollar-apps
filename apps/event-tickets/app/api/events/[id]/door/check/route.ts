@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireDoorAccess } from "@/lib/auth";
 import { db, dbReady } from "@/lib/db";
 import { sqlUtcToIso } from "@/lib/format";
-import { enforce } from "@/lib/rate-limit";
+import { enforceDoor } from "@/lib/rate-limit";
 import { peekAtDoor } from "@/lib/tickets";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -37,7 +37,9 @@ export async function POST(request: Request, ctx: Ctx) {
   // Peeking is free to repeat by design, which is what makes it worth
   // guessing codes on — so it has a ceiling. Its own bucket, though: sharing
   // one with the check-in made every person cost two hits of a single budget.
-  const limited = await enforce("doorCheck", id, { event: id });
+  // Per actor as well as per event, so the staff link and the organizer never
+  // spend each other's budget.
+  const limited = await enforceDoor("check", id, access.actor);
   if (limited) return limited;
 
   let body: { code?: string };

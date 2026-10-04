@@ -25,7 +25,23 @@ export const QUOTAS = {
   createSale: { limit: 30, windowSeconds: 60 * 60 },
   /** Each one can hit Horizon three times; the buy screen polls a handful of times. */
   confirmSale: { limit: 60, windowSeconds: 60 * 60 },
-  refundSale: { limit: 30, windowSeconds: 60 * 60 },
+  /**
+   * Taking the right to pay a reservation (POST /api/sales/:id/pay): once per
+   * purchase, plus the tabs that lose it. Writes a row, calls nothing external.
+   */
+  payStart: { limit: 60, windowSeconds: 60 * 60 },
+  /**
+   * A refund is three calls that must not eat each other's quota: starting it
+   * (claim + a Horizon look), handing the claim back, and recording it. Each
+   * has its own bucket, sized for an organizer refunding in bulk.
+   */
+  refundStart: { limit: 120, windowSeconds: 60 * 60 },
+  /**
+   * Recording a refund that already left (verifying it on Horizon). Its own,
+   * generous bucket: money has moved by the time this is called, and it must
+   * not be refused because plans were browsed or an earlier refund retried.
+   */
+  refundRecord: { limit: 600, windowSeconds: 60 * 60 },
   /** Giving a held seat back: once per abandoned checkout, so a few a day is already a lot. */
   releaseSale: { limit: 60, windowSeconds: 60 * 60 },
   /**
@@ -46,20 +62,42 @@ export const QUOTAS = {
   /** Rotating a door link is a once-in-a-while act. */
   doorLink: { limit: 10, windowSeconds: 60 * 60 },
   /**
-   * Per event, and one bucket per step: a check-in is two calls (peek, then
-   * spend), and a single shared budget of 900 meant ~450 people an hour
-   * before the door locked itself. The ceilings sit far above what a real
-   * door does (a person a second is already a stampede) and far below what
-   * guessing an 8-character door code would need.
+   * The door has two buckets per step and per event. A check-in is two calls
+   * (peek, then spend), each with its own budget, and the ceilings sit far
+   * above what a real door does (a person a second is already a stampede)
+   * and far below what guessing an 8-character door code would need.
+   *
+   * - `doorCheckActor` / `doorActor`: per event AND per actor (the organizer's
+   *   address, or `staff` for whoever holds the door link). Where the
+   *   day-to-day limit lives: a staff token that burns its budget never
+   *   locks the organizer out of their own door. 7200 peeks and 3600
+   *   check-ins an hour from one actor is two a second, which a door with
+   *   several scanners behind one link does not reach.
+   * - `doorCheck` / `door`: per event, the backstop over every actor
+   *   together. Sized as the sum of the actor budgets, so no single actor
+   *   can starve another one; it only bites if the number of actors ever
+   *   grows (more than one live link, say).
+   *
+   * Use {@link enforceDoor}, which charges both.
    */
-  doorCheck: { limit: 3600, windowSeconds: 60 * 60 },
-  door: { limit: 1800, windowSeconds: 60 * 60 },
+  doorCheckActor: { limit: 7200, windowSeconds: 60 * 60 },
+  doorActor: { limit: 3600, windowSeconds: 60 * 60 },
+  doorCheck: { limit: 14400, windowSeconds: 60 * 60 },
+  door: { limit: 7200, windowSeconds: 60 * 60 },
   /**
    * Per IP and event, for WRONG tries at a private event's access code (page
    * or photo); a right code never counts, so a crowd behind one carrier IP
    * opening the shared link doesn't lock itself out. Six characters out of 31
    * is ~887 million codes; at 60 misses an hour from one address that is
    * unreachable. Past the ceiling no code is checked from that address.
+   *
+   * The check (`isOverLimit`) and the count (`consume`) are two statements,
+   * not one: requests that arrive together all pass the check before any of
+   * them counts. Accepted on purpose: the excess is bounded by how many
+   * requests are in flight at once (one carrier IP, one event), a few dozen
+   * at the very most, and not by anything an attacker can keep growing,
+   * since each later request sees the counter already past the ceiling. What
+   * is not allowed to change is that only WRONG tries count.
    */
   accessCode: { limit: 60, windowSeconds: 60 * 60 },
   sweep: { limit: 60, windowSeconds: 60 * 60 },
@@ -143,6 +181,22 @@ export async function isOverLimit(name: QuotaName, subject: string): Promise<Rat
     console.error(`[rate-limit] ${name}:${subject} check failed open: ${err instanceof Error ? err.message : err}`);
     return { ok: true };
   }
+}
+
+/**
+ * The door's two budgets for one call (see `doorCheckActor` in {@link QUOTAS}):
+ * the actor's own, then the event's. The actor's goes first, so a caller that
+ * is already over its own budget does not also spend the event's. `actor` is
+ * what `requireDoorAccess` returned: the organizer's address, or `staff`.
+ */
+export async function enforceDoor(
+  step: "check" | "checkin",
+  eventId: string,
+  actor: string
+): Promise<Response | null> {
+  const [actorQuota, eventQuota] = step === "check" ? (["doorCheckActor", "doorCheck"] as const) : (["doorActor", "door"] as const);
+  const context = { event: eventId };
+  return (await enforce(actorQuota, `${eventId}:${actor}`, context)) ?? (await enforce(eventQuota, eventId, context));
 }
 
 /**
