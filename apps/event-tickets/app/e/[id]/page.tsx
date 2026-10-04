@@ -13,7 +13,6 @@ import { googleCalendarUrl, mapsLinks } from "@/lib/event-links";
 import {
   contactHref,
   formatAmount,
-  formatEventDateTime,
   formatEventDay,
   formatEventTime,
   salesClosed,
@@ -28,8 +27,10 @@ import { canView, normalizeAccessCode } from "@/lib/visibility";
 import { AppShell } from "@/components/AppShell";
 import { BuyButton } from "@/components/BuyButton";
 import { Card } from "@/components/ui/Card";
-import { Icon } from "@/components/ui/Icon";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import { IconTile } from "@/components/ui/ListRow";
+import { PassMark } from "@/components/ui/PassMark";
+import { EventTintStyle } from "@/components/EventTintStyle";
 
 type EventRow = {
   id: string;
@@ -106,8 +107,8 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
 /** A private event, asked for without its code (or with a wrong one). */
 function AccessGate({ t, tried, limited = false }: { t: Dict; tried: boolean; limited?: boolean }) {
   return (
-    <AppShell title={t.gate.title}>
-      <Card className="flex flex-col gap-4">
+    <AppShell tone="poster" title={t.gate.title}>
+      <Card className="flex max-w-md flex-col gap-4">
         <p className="text-sm leading-6 text-muted">{t.gate.body}</p>
         {/* A plain GET form: the code rides in the URL, the same link an organizer shares. */}
         <form method="get" className="flex flex-col gap-3">
@@ -119,7 +120,7 @@ function AccessGate({ t, tried, limited = false }: { t: Dict; tried: boolean; li
               autoComplete="off"
               autoCapitalize="characters"
               maxLength={16}
-              className="w-full rounded-2xl border border-transparent bg-field px-4 py-3 font-mono text-base uppercase tracking-[0.3em] focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+              className="min-h-12 w-full rounded-2xl border border-transparent bg-field px-4 py-3 font-mono text-base uppercase tracking-[0.3em] focus:border-primary"
             />
           </label>
           {(tried || limited) && (
@@ -129,7 +130,7 @@ function AccessGate({ t, tried, limited = false }: { t: Dict; tried: boolean; li
           )}
           <button
             type="submit"
-            className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
+            className="min-h-11 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
           >
             {t.gate.submit}
           </button>
@@ -147,10 +148,47 @@ function OrganizerContact({ contact, t }: { contact: string; t: Dict }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex w-fit items-center gap-1 truncate text-xs font-semibold text-primary underline"
+      className="flex min-h-11 w-fit items-center gap-1 truncate text-xs font-semibold text-primary-text underline"
     >
       {t.event.contactLink(contact)} <Icon name="external" size={11} />
     </a>
+  );
+}
+
+/** A small outlined button for an action that leaves the page (a map, a calendar): 44px tall. */
+const actionLink =
+  "inline-flex min-h-11 items-center gap-1.5 rounded-full bg-background px-4 text-sm font-semibold text-primary-text ring-1 ring-foreground/15 transition-colors hover:bg-surface-hover";
+
+/** One fact about the event (when, where, who's going): an icon tile, the fact, and the actions that go with it. */
+function Fact({
+  icon,
+  title,
+  subtitle,
+  label,
+  children,
+}: {
+  icon: IconName;
+  title: string;
+  subtitle?: string | null;
+  /** Names the group of actions for a screen reader. */
+  label?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex gap-3.5 p-4 sm:p-5">
+      <IconTile icon={icon} tone="soft" />
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <p className="font-bold leading-snug first-letter:uppercase">{title}</p>
+          {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
+        </div>
+        {children && (
+          <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+            {children}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -158,6 +196,11 @@ function OrganizerContact({ contact, t }: { contact: string; t: Dict }) {
  * Public event page: no login, link-only. Anyone with the URL sees the
  * event, every ticket tier with its own price and remaining seats, and
  * whatever name/contact the organizer chose to publish.
+ *
+ * Poster first: the photo is the biggest thing on the page and the page takes
+ * its tint from it (the event's accent, lib/accent.ts). On a phone the poster
+ * comes first and everything stacks under it; from `lg` the poster stays put
+ * on the left while the facts and the tickets scroll on the right.
  */
 export default async function PublicEventPage({ params, searchParams }: PageProps<"/e/[id]">) {
   const { id } = await params;
@@ -228,176 +271,201 @@ export default async function PublicEventPage({ params, searchParams }: PageProp
   const soldOut = !anySeats && heldOverall === 0;
   const onlyHeld = !anySeats && heldOverall > 0;
   const buyable = !closed && !soldOut && !onlyHeld;
+  // The city under the place, unless the place already says it ("Teatro de La Paz, La Paz").
+  const cityNote =
+    event.city && !event.place.toLocaleLowerCase().includes(event.city.toLocaleLowerCase()) ? event.city : null;
+  const priceText = priceLabel(t, locale, range.minDecimal, range.maxDecimal);
 
   return (
-    <AppShell
-      hero={
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <span className="w-fit rounded-full bg-background px-3 py-1 text-xs font-semibold text-primary-text shadow-sm">
-              {priceLabel(t, locale, range.minDecimal, range.maxDecimal)}
-            </span>
-            <h1 className="text-[1.75rem] font-extrabold leading-tight tracking-tight">{event.name}</h1>
-          </div>
-          {/* The two facts people come for, as the band's light stat cards. */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1.5 rounded-2xl bg-background px-3.5 py-3 text-foreground shadow-sm">
-              <Icon name="calendar" size={18} className="text-primary-text" />
-              <span className="text-sm font-semibold leading-5 first-letter:uppercase">
-                {formatEventDateTime(event.datetime_utc, locale)}
-              </span>
+    <AppShell tone="poster" accent={accentVars}>
+      {/* The page's own wash reaches the footer too (a bare `body` would show a seam). */}
+      <EventTintStyle accent={event.accent} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:gap-12">
+        {/* The poster, as the organizer framed it (4:5). On a desktop it stays in view while the rest scrolls. */}
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          {imageVersion ? (
+            <div className="relative mx-auto aspect-[4/5] w-full max-w-md overflow-hidden rounded-3xl bg-surface shadow-[0_24px_60px_-24px_var(--tint-edge)] ring-1 ring-foreground/10 lg:max-w-none">
+              <Image
+                src={eventImagePath(event.id, imageVersion, accessCode)}
+                alt={t.eventImage.alt(event.name)}
+                fill
+                priority
+                unoptimized
+                sizes="(min-width: 1024px) 24rem, (min-width: 448px) 28rem, 100vw"
+                className="object-cover"
+              />
             </div>
-            <div className="flex flex-col gap-1.5 rounded-2xl bg-background px-3.5 py-3 text-foreground shadow-sm">
-              <Icon name="pin" size={18} className="text-primary-text" />
-              <span className="text-sm font-semibold leading-5">{event.place}</span>
+          ) : (
+            // No photo: the brand band and the bear, a banner on a phone and a poster-shaped panel on a desktop.
+            <div className="flex aspect-[16/9] w-full items-center justify-center rounded-3xl bg-band shadow-md lg:aspect-[4/5]">
+              <PassMark size={96} variant="band" />
             </div>
-          </div>
-        </div>
-      }
-    >
-      {imageVersion && (
-        // The poster, as the organizer framed it: 4:5, the full width of a phone.
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl bg-surface shadow-md">
-          <Image
-            src={eventImagePath(event.id, imageVersion, accessCode)}
-            alt={t.eventImage.alt(event.name)}
-            fill
-            priority
-            unoptimized
-            sizes="(min-width: 1024px) 32rem, 100vw"
-            className="object-cover"
-          />
-        </div>
-      )}
-
-      {/* Doors, attendees, maps and calendar: plain data and links, laid out by the screen's design. */}
-      <div style={accentVars ?? undefined}>
-      <Card className="flex flex-col gap-3 p-5">
-        {(doorsLine || attendees !== null) && (
-          <p className="text-sm font-medium">
-            {[doorsLine, attendees !== null ? t.event.attendees(attendees) : null].filter(Boolean).join(" · ")}
-          </p>
-        )}
-        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-primary">
-          <span className="text-muted">{t.event.openInMaps}</span>
-          <a href={maps.google} target="_blank" rel="noopener noreferrer" className="underline">{t.event.googleMaps}</a>
-          <a href={maps.apple} target="_blank" rel="noopener noreferrer" className="underline">{t.event.appleMaps}</a>
-          <a href={maps.waze} target="_blank" rel="noopener noreferrer" className="underline">{t.event.waze}</a>
-        </p>
-        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-primary">
-          <span className="text-muted">{t.event.addToCalendar}</span>
-          {googleCalendar && (
-            <a href={googleCalendar} target="_blank" rel="noopener noreferrer" className="underline">{t.event.googleCalendar}</a>
           )}
-          <a href={icsHref} className="underline">{t.event.downloadIcs}</a>
-        </p>
-      </Card>
-      </div>
+        </div>
 
-      {/* Only when there's something to say: date and place already live in the band. */}
-      {(event.description || event.organizer_name || event.organizer_contact || !buyable) && (
-        <Card className="flex flex-col gap-5">
-          {event.description && <p className="text-sm leading-6 text-muted">{event.description}</p>}
-
-          {(event.organizer_name || event.organizer_contact) && (
-            <div className="flex items-center gap-3 text-sm">
-              <IconTile icon="users" tone="soft" size={40} />
-              <span className="flex min-w-0 flex-col">
-                <span className="font-medium">
-                  {t.event.organizedBy(event.organizer_name || t.event.organizerFallback)}
+        <div className="flex min-w-0 flex-col gap-5">
+          <header className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-background px-3 py-1.5 text-xs font-bold text-foreground shadow-sm ring-1 ring-foreground/10">
+                {priceText}
+              </span>
+              {event.city && (
+                <span className="flex items-center gap-1 rounded-full bg-background/70 px-3 py-1.5 text-xs font-semibold text-tint-text ring-1 ring-foreground/10">
+                  <Icon name="pin" size={12} /> {event.city}
                 </span>
-                {event.organizer_contact && <OrganizerContact contact={event.organizer_contact} t={t} />}
-              </span>
+              )}
             </div>
-          )}
+            <h1 className="text-[1.9rem] font-extrabold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+              {event.name}
+            </h1>
+            {buyable && (
+              <a
+                href="#entradas"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 text-base font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary-hover active:scale-[0.98] lg:hidden"
+              >
+                <Icon name="ticket" size={18} />
+                {t.event.seeTickets}
+              </a>
+            )}
+          </header>
 
-          {closed && (
-            <div className="rounded-xl bg-surface px-4 py-3 text-center text-sm font-semibold text-muted">
-              {t.event.closed}
-            </div>
-          )}
-          {!closed && soldOut && (
-            <div className="rounded-xl bg-error-light px-4 py-3 text-center text-sm font-semibold text-error">
-              {t.event.soldOut}
-            </div>
-          )}
-          {!closed && onlyHeld && (
-            <div className="flex flex-col gap-1 rounded-xl border border-warning-border bg-warning-light px-4 py-3 text-sm leading-6">
-              <span className="font-semibold text-warning">{t.hold.heldSeats(heldOverall)}</span>
-              <span className="text-muted">{t.hold.retryLater}</span>
-            </div>
-          )}
-        </Card>
-      )}
+          {/* When and where, with what to do about each. */}
+          <Card className="flex flex-col divide-y divide-border p-0">
+            <Fact
+              icon="calendar"
+              title={formatEventDay(event.datetime_utc, locale)}
+              subtitle={[formatEventTime(event.datetime_utc, locale), doorsLine].filter(Boolean).join(" · ")}
+              label={t.event.addToCalendar}
+            >
+              {googleCalendar && (
+                <a href={googleCalendar} target="_blank" rel="noopener noreferrer" className={actionLink}>
+                  <Icon name="calendar" size={15} /> {t.event.googleCalendar}
+                </a>
+              )}
+              <a href={icsHref} className={actionLink}>
+                <Icon name="share" size={15} /> {t.event.downloadIcs}
+              </a>
+            </Fact>
+            <Fact icon="pin" title={event.place} subtitle={cityNote} label={t.event.openInMaps}>
+              <a href={maps.google} target="_blank" rel="noopener noreferrer" className={actionLink}>
+                {t.event.googleMaps} <Icon name="external" size={13} />
+              </a>
+              <a href={maps.waze} target="_blank" rel="noopener noreferrer" className={actionLink}>
+                {t.event.waze} <Icon name="external" size={13} />
+              </a>
+              <a href={maps.apple} target="_blank" rel="noopener noreferrer" className={actionLink}>
+                {t.event.appleMaps} <Icon name="external" size={13} />
+              </a>
+            </Fact>
+            {attendees !== null && <Fact icon="users" title={t.event.attendees(attendees)} />}
+          </Card>
 
-      {buyable && (
-        <section className="flex flex-col gap-3">
-          <h2 className="px-1 text-sm font-bold">
-            {types.length > 1 ? t.tiers.choose : t.tiers.sectionTitle}
-          </h2>
-          {types.map((type) => {
-            const remaining = Math.max(0, type.capacity - type.reserved);
-            const held = Math.max(0, type.reserved - type.paid);
-            return (
-              <Card key={type.id} className="flex flex-col gap-4 p-5">
-                <div className="flex items-center gap-3.5">
-                  <IconTile icon="ticket" tone={remaining > 0 ? "strong" : "soft"} />
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-semibold">{type.name}</h3>
-                    <p className={`text-xs font-medium ${remaining > 0 ? "text-primary-text" : "text-muted"}`}>
-                      {remaining > 0
-                        ? t.tiers.remaining(remaining)
-                        : held > 0
-                          ? `${t.tiers.held}: ${held}`
-                          : t.tiers.soldOut}
-                    </p>
-                  </div>
-                  <span className="shrink-0 border-l border-tile-soft pl-3 text-right font-mono text-lg font-bold">
-                    {isFreePrice(type.priceDecimal) ? (
-                      <span className="font-sans text-base text-success">{t.tiers.free}</span>
+          {/* Tickets: one card per tier. The anchor is where "Ver entradas" lands. */}
+          <section id="entradas" className="flex scroll-mt-6 flex-col gap-3">
+            <h2 className="px-1 text-lg font-bold tracking-tight">
+              {types.length > 1 ? t.tiers.choose : t.tiers.sectionTitle}
+            </h2>
+
+            {closed && (
+              <div className="rounded-2xl bg-background px-4 py-3 text-center text-sm font-semibold text-muted ring-1 ring-foreground/10">
+                {t.event.closed}
+              </div>
+            )}
+            {!closed && soldOut && (
+              <div className="rounded-2xl bg-error-light px-4 py-3 text-center text-sm font-semibold text-error">
+                {t.event.soldOut}
+              </div>
+            )}
+            {!closed && onlyHeld && (
+              <div className="flex flex-col gap-1 rounded-2xl border border-warning-border bg-warning-light px-4 py-3 text-sm leading-6">
+                <span className="font-semibold text-warning">{t.hold.heldSeats(heldOverall)}</span>
+                <span className="text-muted">{t.hold.retryLater}</span>
+              </div>
+            )}
+
+            {buyable &&
+              types.map((type) => {
+                const remaining = Math.max(0, type.capacity - type.reserved);
+                const held = Math.max(0, type.reserved - type.paid);
+                return (
+                  <Card key={type.id} className="flex flex-col gap-4 p-4 sm:p-5">
+                    <div className="flex items-center gap-3.5">
+                      <IconTile icon="ticket" tone={remaining > 0 ? "strong" : "soft"} />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate font-semibold">{type.name}</h3>
+                        <p className={`text-xs font-medium ${remaining > 0 ? "text-primary-text" : "text-muted"}`}>
+                          {remaining > 0
+                            ? t.tiers.remaining(remaining)
+                            : held > 0
+                              ? `${t.tiers.held}: ${held}`
+                              : t.tiers.soldOut}
+                        </p>
+                      </div>
+                      <span className="shrink-0 border-l border-tile-soft pl-3 text-right font-mono text-lg font-bold">
+                        {isFreePrice(type.priceDecimal) ? (
+                          <span className="font-sans text-base text-success">{t.tiers.free}</span>
+                        ) : (
+                          <>
+                            {formatAmount(type.priceDecimal, locale)}
+                            <span className="block font-sans text-xs font-medium text-muted">USDC</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    {remaining > 0 ? (
+                      <BuyButton
+                        eventId={event.id}
+                        eventName={event.name}
+                        ticketTypeId={type.id}
+                        ticketTypeName={type.name}
+                        priceDecimal={type.priceDecimal}
+                        accessCode={accessCode}
+                      />
                     ) : (
-                      <>
-                        {formatAmount(type.priceDecimal, locale)}
-                        <span className="block font-sans text-[11px] font-medium text-muted">USDC</span>
-                      </>
+                      <p className="rounded-xl bg-surface px-3 py-2 text-center text-xs font-semibold text-muted">
+                        {held > 0 ? t.hold.heldSeats(held) : t.tiers.soldOut}
+                      </p>
                     )}
+                  </Card>
+                );
+              })}
+          </section>
+
+          {(event.description || event.organizer_name || event.organizer_contact) && (
+            <Card className="flex flex-col gap-5">
+              <h2 className="text-lg font-bold tracking-tight">{t.event.aboutTitle}</h2>
+              {event.description && <p className="whitespace-pre-line text-sm leading-6 text-muted">{event.description}</p>}
+              {(event.organizer_name || event.organizer_contact) && (
+                <div className="flex items-center gap-3 text-sm">
+                  <IconTile icon="users" tone="soft" size={40} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-medium">
+                      {t.event.organizedBy(event.organizer_name || t.event.organizerFallback)}
+                    </span>
+                    {event.organizer_contact && <OrganizerContact contact={event.organizer_contact} t={t} />}
                   </span>
                 </div>
-                {remaining > 0 ? (
-                  <BuyButton
-                    eventId={event.id}
-                    eventName={event.name}
-                    ticketTypeId={type.id}
-                    ticketTypeName={type.name}
-                    priceDecimal={type.priceDecimal}
-                    accessCode={accessCode}
-                  />
-                ) : (
-                  <p className="rounded-xl bg-surface px-3 py-2 text-center text-xs font-semibold text-muted">
-                    {held > 0 ? t.hold.heldSeats(held) : t.tiers.soldOut}
-                  </p>
-                )}
-              </Card>
-            );
-          })}
-        </section>
-      )}
+              )}
+            </Card>
+          )}
 
-      {buyable && (
-        <Card className="flex flex-col gap-3 p-5">
-          <h2 className="text-sm font-bold">{t.event.firstTimeTitle}</h2>
-          <ol className="flex flex-col gap-2 text-sm text-muted">
-            {t.event.firstTimeSteps.map((step, index) => (
-              <li key={step} className="flex gap-2">
-                <span className="font-bold text-primary">{index + 1}.</span> {step}
-              </li>
-            ))}
-          </ol>
-          <Link href="/como-funciona" className="text-sm font-semibold text-primary underline">
-            {t.event.fullGuide}
-          </Link>
-        </Card>
-      )}
+          {buyable && (
+            <Card className="flex flex-col gap-3 p-5">
+              <h2 className="text-sm font-bold">{t.event.firstTimeTitle}</h2>
+              <ol className="flex flex-col gap-2 text-sm text-muted">
+                {t.event.firstTimeSteps.map((step, index) => (
+                  <li key={step} className="flex gap-2">
+                    <span className="font-bold text-primary-text">{index + 1}.</span> {step}
+                  </li>
+                ))}
+              </ol>
+              <Link href="/como-funciona" className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-primary-text underline">
+                {t.event.fullGuide}
+              </Link>
+            </Card>
+          )}
+        </div>
+      </div>
     </AppShell>
   );
 }

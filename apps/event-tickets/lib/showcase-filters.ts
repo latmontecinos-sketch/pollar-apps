@@ -60,3 +60,23 @@ export function whenWindow(when: ShowcaseWhen, now: Date): { from: string; to: s
   const daysLeftIncludingToday = weekday === 0 ? 1 : 8 - weekday; // Mon=7 … Sat=2, Sun=1
   return { from, to: addLaPazDays(dayStart, daysLeftIncludingToday).toISOString() };
 }
+
+/**
+ * The showcase URL for a filter state, for the chips' links: defaults leave
+ * the query string (no city, "all" times), so the unfiltered page is just
+ * `/app`. The city is encoded, never trusted: it is whatever `normalizeCity`
+ * produced from a query string or from the database.
+ */
+export function showcaseHref(
+  current: { city: string | null; when: ShowcaseWhen },
+  change: { city?: string | null; when?: ShowcaseWhen },
+  base = "/app"
+): string {
+  const city = change.city === undefined ? current.city : change.city;
+  const when = change.when ?? current.when;
+  const params = new URLSearchParams();
+  if (city) params.set("city", city);
+  if (when !== "all") params.set("when", when);
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
+}

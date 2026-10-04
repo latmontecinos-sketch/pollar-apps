@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { EventShowcase } from "@/components/EventShowcase";
+import { EventShowcase, type ActiveFilters } from "@/components/EventShowcase";
 import { BalanceCard } from "@/components/BalanceCard";
 import { buyerSteps, GuideSteps } from "@/components/GuideSteps";
 import { LoadError } from "@/components/LoadError";
@@ -26,39 +26,42 @@ import type { AppMode } from "@/lib/app-mode";
 import { formatAmount, salesClosed } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { decimalToStroops, stroopsToDecimal } from "@/lib/money";
-import type { PublicEvent } from "@/lib/public-events";
+import type { PublicEvent, ShowcaseCity } from "@/lib/public-events";
 
-/** Signed out, inside the app: what's on first, then a short way in. */
-function SignedOut({ events }: { events: PublicEvent[] }) {
+/** What the server read for the showcase: the (filtered) events, the cities for the chips, and the active filters. */
+type ShowcaseData = { events: PublicEvent[]; cities: ShowcaseCity[]; filters: ActiveFilters };
+
+/**
+ * Signed out, inside the app: the public showcase, poster first (no band: the
+ * posters carry the color), with a short way in above and below it.
+ */
+function SignedOut({ events, cities, filters }: ShowcaseData) {
   const t = useT();
   return (
     <AppShell
+      tone="poster"
       hero={
-        <section className="flex flex-col items-center gap-4 pt-2 text-center">
-          <PassLogo size={96} variant="band" wordmark={false} />
-          <h1 className="text-3xl font-extrabold leading-tight tracking-tight">
+        <section className="flex flex-col gap-3 md:max-w-2xl">
+          <h1 className="text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
             {t.landing.titleLine1}
-            <span className="block text-band-foreground/80">{t.landing.titleLine2}</span>
+            <span className="block text-primary-text">{t.landing.titleLine2}</span>
           </h1>
+          <p className="text-base leading-7 text-muted">{t.landing.subtitle}</p>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <LoginButton label={t.landing.cta} className="px-6 text-base" />
+            <Link
+              href="/como-funciona"
+              className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold text-primary-text transition-colors hover:bg-primary-light"
+            >
+              {t.landing.seeHow}
+            </Link>
+          </div>
         </section>
       }
     >
-      <EventShowcase events={events} />
+      <EventShowcase events={events} cities={cities} filters={filters} />
 
-      <div className="flex flex-col items-center gap-3 pt-2 text-center">
-        <p className="max-w-sm text-base leading-7 text-muted">{t.landing.subtitle}</p>
-        <div className="flex w-full max-w-xs flex-col gap-2">
-          <LoginButton label={t.landing.cta} className="w-full py-3.5 text-base" />
-          <Link
-            href="/como-funciona"
-            className="rounded-full py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-light"
-          >
-            {t.landing.seeHow}
-          </Link>
-        </div>
-      </div>
-
-      <Card className="flex flex-col gap-5">
+      <Card className="mt-4 flex flex-col gap-5">
         <h2 className="text-lg font-bold tracking-tight">{t.landing.stepsTitle}</h2>
         <GuideSteps steps={buyerSteps(t).slice(0, 4)} />
       </Card>
@@ -204,7 +207,7 @@ const bandPill =
  * Looking-for-events mode: balance on the band; then the welcome gift, the
  * showcase of public events, and the tickets already bought.
  */
-function ExploreHome({ events, onMode }: { events: PublicEvent[]; onMode: (mode: AppMode) => void }) {
+function ExploreHome({ events, cities, filters, onMode }: ShowcaseData & { onMode: (mode: AppMode) => void }) {
   const { balance, isLoading } = useBalance();
   const [receiveOpen, setReceiveOpen] = useState(false);
   const t = useT();
@@ -248,7 +251,7 @@ function ExploreHome({ events, onMode }: { events: PublicEvent[]; onMode: (mode:
         </div>
       )}
 
-      <EventShowcase events={events} />
+      <EventShowcase events={events} cities={cities} filters={filters} />
 
       <h2 className="px-1 pt-2 text-lg font-bold tracking-tight">{t.showcase.myArea}</h2>
       <nav className="flex flex-col gap-1">
@@ -284,11 +287,11 @@ function ExploreHome({ events, onMode }: { events: PublicEvent[]; onMode: (mode:
  * mode chooser the first time, then the home of the chosen mode — looking
  * for events or organizing them — with a switch between the two.
  */
-export function AppHome({ events, initialMode }: { events: PublicEvent[]; initialMode: AppMode | null }) {
+export function AppHome({ events, cities, filters, initialMode }: ShowcaseData & { initialMode: AppMode | null }) {
   const { user } = usePollarAuth();
   const [mode, setMode] = useAppMode(initialMode);
 
-  if (!user) return <SignedOut events={events} />;
+  if (!user) return <SignedOut events={events} cities={cities} filters={filters} />;
   if (!mode) return <ModeChooser onChoose={setMode} />;
-  return mode === "organize" ? <OrganizerHome onMode={setMode} /> : <ExploreHome events={events} onMode={setMode} />;
+  return mode === "organize" ? <OrganizerHome onMode={setMode} /> : <ExploreHome events={events} cities={cities} filters={filters} onMode={setMode} />;
 }

@@ -31,7 +31,7 @@ export function BalanceCard() {
 
   return (
     <section className="flex flex-col gap-1">
-      <div className="flex items-center gap-2 text-sm font-medium text-band-foreground/80">
+      <div className="flex items-center gap-2 text-sm font-medium text-band-foreground/90">
         <Icon name="wallet" size={16} />
         <span>{t.home.balanceLabel}</span>
         <button
@@ -39,7 +39,7 @@ export function BalanceCard() {
           disabled={isLoading}
           aria-label={t.account.refresh}
           title={t.account.refresh}
-          className="ml-auto rounded-full px-2 py-0.5 text-xs font-semibold text-band-foreground/80 transition-colors hover:bg-band-foreground/15 hover:text-band-foreground disabled:opacity-50"
+          className="ml-auto flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-band-foreground/90 transition-colors hover:bg-band-foreground/15 hover:text-band-foreground disabled:opacity-50"
         >
           {t.account.refresh}
         </button>
@@ -52,7 +52,7 @@ export function BalanceCard() {
       ) : (
         <p className="font-mono text-[2.6rem] font-semibold leading-tight tabular-nums tracking-tight" title={balance ?? undefined}>
           {formatAmount(balance, locale)}
-          <span className="ml-2 font-sans text-lg font-medium text-band-foreground/75">{currency}</span>
+          <span className="ml-2 font-sans text-lg font-medium text-band-foreground/85">{currency}</span>
         </p>
       )}
     </section>

@@ -199,7 +199,7 @@ export default function SalesPage({
                   </div>
                 </Card>
               ))}
-              <p className="px-1 pt-1 text-xs leading-5 text-muted-light">{t.sales.legend}</p>
+              <p className="px-1 pt-1 text-xs leading-5 text-muted">{t.sales.legend}</p>
             </div>
           )}
         </>

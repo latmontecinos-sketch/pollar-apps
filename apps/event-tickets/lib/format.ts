@@ -155,3 +155,20 @@ export function formatEventTime(isoUtc: string, locale: Locale): string {
     minute: "2-digit",
   }).format(date);
 }
+
+/**
+ * The day number and the short month of an event ("24" and "oct"), for the
+ * date block on a ticket. In La Paz time like every event date, so an event
+ * at 23:30 on the 31st reads as the 31st for a reader anywhere.
+ */
+export function eventDayParts(isoUtc: string, locale: Locale): { day: string; month: string } {
+  const date = new Date(isoUtc);
+  if (Number.isNaN(date.getTime())) return { day: "", month: "" };
+  const parts = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
+    timeZone: BUSINESS_TIMEZONE,
+    day: "numeric",
+    month: "short",
+  }).formatToParts(date);
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return { day: pick("day"), month: pick("month").replace(/\.$/, "") };
+}

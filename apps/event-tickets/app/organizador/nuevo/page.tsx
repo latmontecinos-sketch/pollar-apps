@@ -432,7 +432,7 @@ export default function CreateEventPage() {
                       type="button"
                       onClick={() => setTiers((current) => current.filter((_, i) => i !== index))}
                       aria-label={t.tiers.removeType}
-                      className="mb-1 flex h-10 w-10 items-center justify-center rounded-xl border border-border text-muted transition-colors hover:border-error-border hover:text-error"
+                      className="mb-1 flex h-11 w-11 items-center justify-center rounded-xl border border-border text-muted transition-colors hover:border-error-border hover:text-error"
                     >
                       <Icon name="x" size={16} />
                     </button>

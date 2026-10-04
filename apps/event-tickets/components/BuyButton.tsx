@@ -16,6 +16,7 @@ import { formatAmount } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
 import { decimalToStroops } from "@/lib/money";
+import { BuyConfirm } from "@/components/BuyConfirm";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { LoginButton } from "@/components/LoginButton";
@@ -533,7 +534,7 @@ export function BuyButton({
         </p>
         <Link
           href="/mis-pases"
-          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
+          className="inline-flex min-h-11 items-center rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
         >
           {t.buy.seeTickets}
         </Link>
@@ -553,6 +554,10 @@ export function BuyButton({
         <Button disabled loading className="w-full py-3">
           {label}
         </Button>
+        <p className="flex items-center justify-center gap-1.5 text-center text-xs font-medium text-accent-text">
+          <Icon name="clock" size={13} className="shrink-0" />
+          {t.buy.holdTitle(t.hold.minutes)}
+        </p>
         <p className="text-center text-xs text-muted">{t.buy.dontClose}</p>
       </div>
     );
@@ -575,7 +580,7 @@ export function BuyButton({
         >
           {t.buy.verifyAgain}
         </Button>
-        <Link href="/mis-pases" className="text-center text-xs font-semibold text-primary underline">
+        <Link href="/mis-pases" className="flex min-h-11 items-center justify-center text-center text-xs font-semibold text-primary underline">
           {t.buy.verifyLater}
         </Link>
       </div>
@@ -586,7 +591,7 @@ export function BuyButton({
     return (
       <div className="flex flex-col gap-2 rounded-2xl border border-error-border bg-error-light p-4 text-sm leading-6 text-error">
         <p>{state.message}</p>
-        <Link href="/mis-pases" className="font-semibold underline">
+        <Link href="/mis-pases" className="inline-flex min-h-11 items-center font-semibold underline">
           {t.buy.seeDetail}
         </Link>
       </div>
@@ -624,29 +629,13 @@ export function BuyButton({
 
   if (state.step === "confirm") {
     return (
-      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4">
-        <p className="text-sm font-semibold">{t.buy.confirmTitle}</p>
-        <dl className="flex flex-col gap-1.5 text-sm">
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">{t.buy.confirmTicket}</dt>
-            <dd className="text-right font-medium">
-              {eventName}
-              <span className="block text-xs text-muted">{ticketTypeName}</span>
-            </dd>
-          </div>
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted">{t.buy.confirmTotal}</dt>
-            <dd className="font-mono font-semibold">{formatAmount(priceDecimal, locale)} USDC</dd>
-          </div>
-        </dl>
-        <p className="text-xs leading-5 text-muted">{t.buy.confirmNote}</p>
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" onClick={() => setState({ step: "idle" })}>
-            {t.common.cancel}
-          </Button>
-          <Button onClick={() => void buy()}>{t.buy.pay}</Button>
-        </div>
-      </div>
+      <BuyConfirm
+        eventName={eventName}
+        ticketTypeName={ticketTypeName}
+        priceDecimal={priceDecimal}
+        onCancel={() => setState({ step: "idle" })}
+        onPay={() => void buy()}
+      />
     );
   }
 
@@ -708,12 +697,12 @@ export function BuyButton({
             </Button>
             <Link
               href="/como-funciona#usdc"
-              className="flex items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-center text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
+              className="flex min-h-11 items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-center text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
             >
               {t.buy.getUsdc}
             </Link>
           </div>
-          <button onClick={() => void refresh()} className="text-xs font-semibold text-primary underline">
+          <button onClick={() => void refresh()} className="flex min-h-11 items-center justify-center text-xs font-semibold text-primary underline">
             {t.buy.refreshBalance}
           </button>
         </div>

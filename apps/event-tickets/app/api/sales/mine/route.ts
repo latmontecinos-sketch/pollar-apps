@@ -17,6 +17,8 @@ type Row = {
   event_name: string;
   datetime_utc: string;
   place: string;
+  city: string | null;
+  doors_open_utc: string | null;
   ticket_type_name: string | null;
   ticket_code: string | null;
   door_code: string | null;
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
     sql: `SELECT sales.id, sales.status, sales.amount_stroops, sales.created_at, sales.expires_at_utc,
                  sales.tx_hash, sales.refund_tx_hash,
                  events.id AS event_id, events.name AS event_name,
-                 events.datetime_utc, events.place, ticket_types.name AS ticket_type_name,
+                 events.datetime_utc, events.place, events.city, events.doors_open_utc, ticket_types.name AS ticket_type_name,
                  tickets.code AS ticket_code, tickets.door_code, tickets.used_at
           FROM sales
           JOIN events ON events.id = sales.event_id
@@ -65,6 +67,9 @@ export async function GET(request: Request) {
       name: row.event_name,
       datetimeUtc: row.datetime_utc,
       place: row.place,
+      // For the ticket's calendar link (components/CalendarLinks.tsx).
+      city: row.city,
+      doorsOpenUtc: row.doors_open_utc,
     },
     ticketTypeName: row.ticket_type_name,
     ticket: row.ticket_code

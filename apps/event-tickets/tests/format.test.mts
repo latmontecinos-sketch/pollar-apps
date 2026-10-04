@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   contactHref,
+  eventDayParts,
   formatAmount,
   formatEventDateTime,
   formatEventDay,
@@ -82,4 +83,11 @@ test("the link preview says the day and the time apart, in La Paz", () => {
   assert.match(formatEventDay(iso, "en"), /^Saturday, October 24$/);
   // ICU puts a narrow no-break space before "PM"; \s covers it and a plain one.
   assert.match(formatEventTime(iso, "en"), /^7:00\sPM$/);
+});
+
+test("a ticket's date block uses the La Paz day and a short month", () => {
+  // 02:30 UTC on 1 Nov is still 22:30 on 31 Oct in La Paz.
+  assert.deepEqual(eventDayParts("2026-11-01T02:30:00.000Z", "es"), { day: "31", month: "oct" });
+  assert.deepEqual(eventDayParts("2026-11-01T02:30:00.000Z", "en"), { day: "31", month: "Oct" });
+  assert.deepEqual(eventDayParts("not a date", "es"), { day: "", month: "" });
 });

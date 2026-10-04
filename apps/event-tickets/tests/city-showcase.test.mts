@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { after, before, test } from "node:test";
+import { createClient } from "@libsql/client";
 
 const DB_FILE = `test-city-showcase-${randomUUID()}.db`;
 process.env.DATABASE_URL = `file:./${DB_FILE}`;
@@ -207,8 +208,17 @@ test("the city list counts public upcoming events per city, never private or pas
 });
 
 test("the index serves the city filter and the city list (the plans the CLAUDE.md rule 8 asks for)", async () => {
-  const plan = async (sql: string, args: (string | number)[]) =>
-    (await db.execute({ sql: `EXPLAIN QUERY PLAN ${sql}`, args })).rows.map((row) => String(row.detail)).join(" | ");
+  // Its own connection, closed after each plan: an EXPLAIN on the shared one
+  // leaves a read open that the next write transaction waits out as SQLITE_BUSY
+  // (same as tests/showcase.test.mts).
+  const plan = async (sql: string, args: (string | number)[]) => {
+    const probe = createClient({ url: `file:./${DB_FILE}` });
+    try {
+      return (await probe.execute({ sql: `EXPLAIN QUERY PLAN ${sql}`, args })).rows.map((row) => String(row.detail)).join(" | ");
+    } finally {
+      probe.close();
+    }
+  };
   const filtered = await plan(
     `SELECT e.id FROM events e
      WHERE e.visibility = 'public' AND e.datetime_utc >= ? AND e.datetime_utc < ? AND e.city = ?

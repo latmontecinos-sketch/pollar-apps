@@ -22,7 +22,7 @@ export function Input({ label, error, className = "", ...rest }: InputProps) {
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
-        className={`w-full rounded-2xl border bg-field px-4 py-3 text-sm text-foreground placeholder:text-muted-light focus:bg-background focus:outline-none focus:ring-2 transition-shadow ${
+        className={`w-full rounded-2xl border bg-field px-4 py-3 text-sm text-foreground placeholder:text-muted focus:bg-background focus:outline-none focus:ring-2 transition-shadow ${
           error
             ? "border-error-border focus:ring-error/30"
             : "border-transparent focus:border-primary focus:ring-primary/25"

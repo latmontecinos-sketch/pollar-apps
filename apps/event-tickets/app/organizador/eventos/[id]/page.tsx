@@ -76,7 +76,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
     <div className="flex flex-col gap-0.5 rounded-xl bg-surface p-3">
       <span className="text-xs text-muted">{label}</span>
       <span className="font-mono text-lg font-semibold">{value}</span>
-      {hint && <span className="text-[11px] leading-4 text-muted-light">{hint}</span>}
+      {hint && <span className="text-xs leading-4 text-muted">{hint}</span>}
     </div>
   );
 }

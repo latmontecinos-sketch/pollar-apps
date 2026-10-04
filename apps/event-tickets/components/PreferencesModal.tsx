@@ -33,7 +33,7 @@ function Segmented<T extends string>({
             type="button"
             aria-pressed={value === option.id}
             onClick={() => onChange(option.id)}
-            className={`rounded-xl px-2 py-2.5 text-sm font-semibold transition-colors ${
+            className={`min-h-11 rounded-xl px-2 py-2.5 text-sm font-semibold transition-colors ${
               value === option.id
                 ? "bg-background text-primary shadow-sm"
                 : "text-muted hover:text-foreground"

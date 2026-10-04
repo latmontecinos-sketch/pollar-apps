@@ -47,9 +47,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <ThemeProvider initial={theme}>
             <PollarAppProvider>{children}</PollarAppProvider>
           </ThemeProvider>
-          <footer className="px-4 pb-6 pt-2 text-center text-xs leading-5 text-muted-light">
+          <footer className="px-4 pb-6 pt-2 text-center text-xs leading-5 text-muted">
             {IS_MAINNET ? t.footer.disclaimerLive : t.footer.disclaimer}{" "}
-            <Link href="/como-funciona" className="underline hover:text-primary">
+            <Link href="/como-funciona" className="inline-flex min-h-11 items-center underline hover:text-primary">
               {t.footer.howItWorks}
             </Link>
             {" · "}

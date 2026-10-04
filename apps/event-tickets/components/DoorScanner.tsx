@@ -5,10 +5,12 @@ import QrScanner from "qr-scanner";
 import { formatEventDateTime, formatTimestamp } from "@/lib/format";
 import { useLocale, useT } from "@/lib/i18n/client";
 import { apiErrorMessage } from "@/lib/i18n/errors";
+import { DoorResult, doorButtonPrimary, doorButtonSecondary } from "@/components/DoorResult";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
+import { Spinner } from "@/components/ui/Spinner";
 
 type CheckResult =
   | { result: "VALID"; doorCode: string }
@@ -20,13 +22,6 @@ type Feedback = { kind: "VALID" | "USED" | "UNKNOWN" | "ERROR"; title: string; d
 
 /** Scanned, not yet spent: the door decides whether this person goes in. */
 type Review = { code: string; doorCode: string };
-
-const FEEDBACK_STYLES: Record<Feedback["kind"], string> = {
-  VALID: "border-success-border bg-success-light text-success",
-  USED: "border-error-border bg-error-light text-error",
-  UNKNOWN: "border-error-border bg-error-light text-error",
-  ERROR: "border-warning-border bg-warning-light text-warning",
-};
 
 /** How long a result stays on screen before the door is "ready" for the next person. */
 const FEEDBACK_MS = 4000;
@@ -259,72 +254,48 @@ export function DoorScanner({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface px-4 py-3">
+      <div className="flex items-center justify-between gap-3 rounded-3xl bg-background px-5 py-4 shadow-sm ring-1 ring-foreground/10">
         <div className="min-w-0">
-          <p className="text-xs text-muted">{t.door.validatingFor}</p>
-          <p className="truncate font-semibold">{event?.name ?? "…"}</p>
+          <p className="text-xs font-medium text-muted">{t.door.validatingFor}</p>
+          <p className="truncate text-lg font-bold">{event?.name ?? "…"}</p>
           {event && (
             <p className="truncate text-xs text-muted first-letter:uppercase">
               {formatEventDateTime(event.datetimeUtc, locale)}
             </p>
           )}
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-xs text-muted">{t.door.checkedIn}</p>
-          <p className="font-mono text-lg font-semibold">
-            {event ? `${event.checkedIn} / ${event.paid}` : "…"}
+        <div className="shrink-0 rounded-2xl bg-primary-light px-4 py-2 text-right">
+          <p className="text-xs font-medium text-muted">{t.door.checkedIn}</p>
+          <p className="font-mono text-3xl font-extrabold leading-tight tabular-nums text-primary-text">
+            {event ? `${event.checkedIn}/${event.paid}` : "…"}
           </p>
         </div>
       </div>
 
       <div className="relative">
-        <Card className="overflow-hidden p-0">
-          <video ref={videoRef} className="aspect-square w-full bg-foreground object-cover" muted playsInline />
-        </Card>
+        {/* Portrait on a phone, so the result that covers it has room for a big title, the code and two big buttons. */}
+        <div className="overflow-hidden rounded-3xl bg-foreground shadow-sm">
+          <video ref={videoRef} className="aspect-[3/4] w-full object-cover sm:aspect-square" muted playsInline />
+        </div>
 
         {review && (
-          <div className="pollar-rise absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-success-border bg-success-light p-6 text-center">
-            <span className="pollar-pop flex h-16 w-16 items-center justify-center rounded-full bg-background text-success">
-              <Icon name="check" size={36} strokeWidth={3} />
-            </span>
-            <p className="text-2xl font-extrabold tracking-tight text-success">{t.checkin.reviewTitle}</p>
-            <p className="text-sm font-medium text-foreground">{t.checkin.reviewBody}</p>
-            <p className="font-mono text-lg font-bold tracking-[0.2em] text-foreground">
-              {review.doorCode}
-            </p>
-            <div className="mt-1 grid w-full max-w-xs grid-cols-2 gap-2">
-              <Button variant="secondary" onClick={clearReview} disabled={approving}>
-                {t.checkin.reject}
-              </Button>
-              <Button loading={approving} onClick={() => void approve(review.code)}>
-                {t.checkin.approve}
-              </Button>
-            </div>
-          </div>
+          <DoorResult kind="REVIEW" title={t.checkin.reviewTitle} detail={t.checkin.reviewBody} doorCode={review.doorCode}>
+            <button type="button" onClick={() => void approve(review.code)} disabled={approving} className={doorButtonPrimary}>
+              {approving && <Spinner size={22} className="mr-2" />}
+              {t.checkin.approve}
+            </button>
+            <button type="button" onClick={clearReview} disabled={approving} className={doorButtonSecondary}>
+              {t.checkin.reject}
+            </button>
+          </DoorResult>
         )}
 
         {!review && feedback && (
-          <div
-            role="status"
-            aria-live="assertive"
-            className={`absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 p-6 text-center ${FEEDBACK_STYLES[feedback.kind]}`}
-          >
-            <span className="pollar-pop flex h-20 w-20 items-center justify-center rounded-full bg-background">
-              <Icon
-                name={feedback.kind === "VALID" ? "check" : feedback.kind === "ERROR" ? "alert" : "x"}
-                size={44}
-                strokeWidth={3}
-              />
-            </span>
-            <p className="text-3xl font-extrabold tracking-tight">{feedback.title}</p>
-            <p className="max-w-xs text-sm font-medium text-foreground">{feedback.detail}</p>
-            <button
-              onClick={() => setFeedback(null)}
-              className="mt-2 rounded-xl bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-sm"
-            >
+          <DoorResult kind={feedback.kind} title={feedback.title} detail={feedback.detail}>
+            <button type="button" onClick={() => setFeedback(null)} className={doorButtonPrimary}>
               {t.door.next}
             </button>
-          </div>
+          </DoorResult>
         )}
       </div>
 

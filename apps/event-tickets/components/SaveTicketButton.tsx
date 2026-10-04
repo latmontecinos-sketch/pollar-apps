@@ -68,7 +68,7 @@ export function SaveTicketButton({
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = primary;
       ctx.fillRect(0, 0, canvas.width, 96);
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = token("--primary-foreground", "#ffffff");
       ctx.font = "bold 34px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("Pollar Pass", canvas.width / 2, 60);

@@ -1,9 +1,16 @@
 @import "tailwindcss";
 
+/* estilo: mezcla (finwise v2 en el lado del organizador, "poster first" en vitrina y evento) — rediseño 2026-10-04 */
+
 /*
- * Pollar design tokens. Every color in the app derives from these.
- * Light-first, like pollar.xyz (the brand look is white + Pollar blue).
- * Dark mode is opt-in: set <html data-theme="dark"> to enable it.
+ * Pollar Pass design tokens. Every color in the app derives from these.
+ * The palette is the logo's: Pollar blue for actions and the brand band, and
+ * the amber of the ticket the bear holds for highlights ("Hoy", few seats).
+ * Light-first. Dark mode is automatic (prefers-color-scheme) or pinned with
+ * <html data-theme="dark|light">; both blocks below carry the same tokens.
+ *
+ * Contrast (WCAG AA, 4.5:1 for text) is checked pair by pair; the pairs that
+ * the previous palette missed are called out where they were fixed.
  */
 :root {
   color-scheme: light;
@@ -20,37 +27,65 @@
   --surface-hover: #f1f5f9;
   --border: #e5e7eb;
 
-  --muted: #6b7280;
+  /* Secondary text: 5.5:1 on the sheet, 5.0 on the nav (the old #6b7280 gave 4.49 and 4.08). */
+  --muted: #5b6472;
+  /* Decorative only (chevrons, disabled hints). Never for text that must be read. */
   --muted-light: #9ca3af;
 
-  --error: #dc2626;
+  /* Error as text: 5.9:1 on its tinted box (the old red gave 4.41). */
+  --error: #b91c1c;
   --error-light: #fef2f2;
   --error-border: #fecaca;
 
-  --success: #16a34a;
+  /* Success as text: 4.8:1 on its tinted box (the old green gave 3.15). */
+  --success: #15803d;
   --success-light: #f0fdf4;
   --success-border: #bbf7d0;
 
-  --warning: #d97706;
+  /* Warning as text: 4.8:1 on its tinted box (the old amber gave 3.07). */
+  --warning: #b45309;
   --warning-light: #fffbeb;
   --warning-border: #fde68a;
+
+  /*
+   * Status as a solid fill with its own text color, for what must be read at arm's
+   * length (the door's results). White on these reaches 5:1 and better.
+   */
+  --success-solid: #15803d;
+  --on-success: #ffffff;
+  --error-solid: #b91c1c;
+  --on-error: #ffffff;
+  --warning-solid: #b45309;
+  --on-warning: #ffffff;
+
+  /*
+   * The ticket amber as a UI accent: a fill with dark text (8:1), and as text
+   * on light surfaces (6:1). Used sparingly: "Hoy", few seats left, a highlight.
+   */
+  --accent: #ffb020;
+  --accent-foreground: #3a2300;
+  --accent-soft: #fff3d6;
+  --accent-text: #8a5200;
 
   /* Pollar Pass mark (components/ui/PassMark.tsx): the white bear, its outline (the app blue, so it follows the theme) and its eye. */
   --mark-body: #ffffff;
   --mark-line: var(--primary);
   --mark-eye: #0b3a8c;
-  /* The amber of the ticket the bear holds: graphics, and "Pass" on the band (3.6:1 on the light band, 7.6:1 on the dark one; the wordmark is large bold text, so 3:1 is the bar). */
+  /* The amber of the ticket the bear holds: graphics, and "Pass" on the band (4.7:1 on the light band, 7.6:1 on the dark one). */
   --ticket: #ffb020;
-  /* "Pass" on a light surface: the logo amber, darkened until large bold text reaches 3.2:1 on the sheet (#e08e00 gives 2.6:1). Dark theme goes back to the bright amber. */
-  --pass-text: #c77700;
+  /* "Pass" on a light surface: the logo amber, darkened to 4.1:1 or better even on an event's tinted page (the old #c77700 gave 2.8:1 there). Dark theme goes back to the bright amber. */
+  --pass-text: #9a5600;
 
+  /* Keyboard focus: a 3px ring, 6.5:1 on white; on the band it flips to the band's own white (see `.bg-band`). */
+  --focus: #005db4;
 
   /*
    * App shell (components/AppShell.tsx): a brand band on top, the content on
    * a lighter sheet that overlaps it, and a floating bottom nav. The icon
-   * tiles are three steps of the same brand blue, soft → strong.
+   * tiles are three steps of the same brand blue, soft → strong. The band is a
+   * little deeper than the action blue so the logo's blue outline reads on it.
    */
-  --band: #005db4;
+  --band: #0a4a94;
   --band-foreground: #ffffff;
   --sheet: #f2f7fc;
   --nav: #e2edf8;
@@ -60,8 +95,7 @@
   --tile-mid: #3a86d4;
   --tile-strong: #005db4;
   --tile-foreground: #ffffff;
-  /* The brand blue as small text: primary on light, lifted on dark, where
-   * #1668c1 on near-black is too dim for an xs line. */
+  /* The brand blue as small text: primary on light, lifted on dark. */
   --primary-text: #005db4;
   /* Text over a photo, whatever its colors: a dark scrim and light type, both themes. */
   --scrim: #000000;
@@ -72,6 +106,10 @@
  * Dark palette, applied two ways: automatically when the device asks for
  * dark (unless the reader pinned light), and explicitly when they chose
  * dark in Preferences. Both blocks carry the same tokens.
+ *
+ * Dark buttons are a lifted blue with dark text: white on the old #1668c1
+ * failed as a link (3.5:1) and as a hovered button (4.0:1), and no single
+ * blue gives white text AND readable text on the near-black page.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -80,10 +118,10 @@
     --background: #0a0e14;
     --foreground: #eef2f6;
 
-    --primary: #1668c1;
-    --primary-hover: #2f81d6;
+    --primary: #4c9be8;
+    --primary-hover: #6aaef0;
     --primary-light: #0e1d33;
-    --primary-foreground: #ffffff;
+    --primary-foreground: #06182e;
 
     --surface: #111823;
     --surface-hover: #18202e;
@@ -104,6 +142,20 @@
     --warning-light: #291d05;
     --warning-border: #57420f;
 
+    /* Status as a solid fill (door results): bright fills with dark text on the dark theme. */
+    --success-solid: #4ade80;
+    --on-success: #052e16;
+    --error-solid: #f87171;
+    --on-error: #2a0a0a;
+    --warning-solid: #fbbf24;
+    --on-warning: #2a1a00;
+
+    --accent: #ffb020;
+    --accent-foreground: #2a1a00;
+    --accent-soft: #2b1f06;
+    --accent-text: #ffc457;
+
+    --focus: #8cc0f5;
 
     --band: #0c2d52;
     --band-foreground: #eef2f6;
@@ -126,11 +178,10 @@
   --background: #0a0e14;
   --foreground: #eef2f6;
 
-  /* Same blue family; hover goes lighter on dark. White stays readable on both. */
-  --primary: #1668c1;
-  --primary-hover: #2f81d6;
+  --primary: #4c9be8;
+  --primary-hover: #6aaef0;
   --primary-light: #0e1d33;
-  --primary-foreground: #ffffff;
+  --primary-foreground: #06182e;
 
   --surface: #111823;
   --surface-hover: #18202e;
@@ -151,6 +202,20 @@
   --warning-light: #291d05;
   --warning-border: #57420f;
 
+  /* Status as a solid fill (door results): bright fills with dark text on the dark theme. */
+  --success-solid: #4ade80;
+  --on-success: #052e16;
+  --error-solid: #f87171;
+  --on-error: #2a0a0a;
+  --warning-solid: #fbbf24;
+  --on-warning: #2a1a00;
+
+  --accent: #ffb020;
+  --accent-foreground: #2a1a00;
+  --accent-soft: #2b1f06;
+  --accent-text: #ffc457;
+
+  --focus: #8cc0f5;
 
   /* A deeper band on dark: the light one's full blue would glare. */
   --band: #0c2d52;
@@ -189,6 +254,16 @@
   --color-warning: var(--warning);
   --color-warning-light: var(--warning-light);
   --color-warning-border: var(--warning-border);
+  --color-success-solid: var(--success-solid);
+  --color-on-success: var(--on-success);
+  --color-error-solid: var(--error-solid);
+  --color-on-error: var(--on-error);
+  --color-warning-solid: var(--warning-solid);
+  --color-on-warning: var(--on-warning);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
   --color-band: var(--band);
   --color-band-foreground: var(--band-foreground);
   --color-sheet: var(--sheet);
@@ -207,8 +282,64 @@
   --color-mark-eye: var(--mark-eye);
   --color-scrim: var(--scrim);
   --color-on-scrim: var(--on-scrim);
+  --color-tint: var(--tint);
+  --color-tint-text: var(--tint-text);
+  --color-tint-edge: var(--tint-edge);
   --font-sans: var(--font-poppins);
   --font-mono: var(--font-geist-mono);
+}
+
+/*
+ * The event's own color ("poster first": the page is tinted with the poster).
+ * A wrapper with class `event-tint` that also carries the inline variables of
+ * accentStyle() (lib/accent.ts) gets, per theme:
+ *   --tint       a soft wash of the poster's color: the page background
+ *   --tint-text  a version of it that reads as text (4.5:1 on the page and on the wash)
+ *   --tint-edge  the poster's color itself: borders and glows, never small text
+ * Without an accent every one of them falls back to the app's own tokens.
+ */
+.event-tint {
+  --tint: var(--event-accent-soft-light, var(--sheet));
+  --tint-text: var(--event-accent-text-light, var(--primary-text));
+  --tint-edge: var(--event-accent, var(--primary));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .event-tint {
+    --tint: var(--event-accent-soft-dark, var(--sheet));
+    --tint-text: var(--event-accent-text-dark, var(--primary-text));
+  }
+}
+:root[data-theme="dark"] .event-tint {
+  --tint: var(--event-accent-soft-dark, var(--sheet));
+  --tint-text: var(--event-accent-text-dark, var(--primary-text));
+}
+
+html {
+  /* In-page jumps (the "Entradas" button) glide, unless the reader asked for less motion. */
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Keyboard focus, everywhere: a 3px ring offset from the element, never just
+ * the browser's 1px default. Unlayered on purpose, so it also wins over the
+ * `focus:outline-none` that inputs carry. On the brand band the ring is the
+ * band's own light color, since a blue ring would vanish on blue.
+ */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.bg-band :focus-visible {
+  outline-color: var(--band-foreground);
+}
+/* A dialog opened from the band is a white sheet again: back to the normal ring. */
+.pollar-modal :focus-visible {
+  outline-color: var(--focus);
 }
 
 body {

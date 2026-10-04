@@ -25,8 +25,8 @@ export function Segmented<T extends string>({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(option.value)}
-            className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-              active ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground/75 hover:text-primary"
+            className={`flex min-h-11 flex-1 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+              active ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground/80 hover:text-primary"
             }`}
           >
             {option.label}

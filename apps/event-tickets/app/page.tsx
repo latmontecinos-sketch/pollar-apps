@@ -69,7 +69,7 @@ export default async function ProductPage() {
                 {t.landing.seeHow}
               </Link>
             </div>
-            <p className="text-xs text-band-foreground/70">
+            <p className="text-xs text-band-foreground/85">
               {IS_MAINNET ? t.product.heroNoteLive : t.product.heroNote}
             </p>
           </div>

@@ -21,10 +21,13 @@ export function AppHeader({
   title,
   subtitle,
   back,
+  tone = "band",
 }: {
   title?: string;
   subtitle?: string;
   back?: { href: string; label: string };
+  /** "poster": the header sits on a plain page, not on the brand band. */
+  tone?: "band" | "poster";
 }) {
   const { user } = usePollarAuth();
   const t = useT();
@@ -38,8 +41,12 @@ export function AppHeader({
             <Icon name="back" size={18} />
           </Link>
         ) : (
-          <Link href="/app" aria-label={t.common.home} className="flex min-w-0 items-center gap-2">
-            <PassLogo size={30} variant="band" wordmarkClassName={user ? "max-[400px]:hidden" : ""} />
+          <Link href="/app" aria-label={t.common.home} className="flex min-h-11 min-w-0 items-center gap-2">
+            <PassLogo
+              size={30}
+              variant={tone === "poster" ? "color" : "band"}
+              wordmarkClassName={user ? "max-[400px]:hidden" : ""}
+            />
           </Link>
         )}
         <div className="flex shrink-0 items-center gap-2">
@@ -61,7 +68,9 @@ export function AppHeader({
       {title && (
         <div className="flex flex-col gap-1">
           <h1 className="text-[1.65rem] font-bold leading-tight tracking-tight">{title}</h1>
-          {subtitle && <p className="text-sm text-band-foreground/80">{subtitle}</p>}
+          {subtitle && (
+            <p className={tone === "poster" ? "text-sm text-muted" : "text-sm text-band-foreground/85"}>{subtitle}</p>
+          )}
         </div>
       )}
       <PreferencesModal open={preferencesOpen} onClose={() => setPreferencesOpen(false)} />
