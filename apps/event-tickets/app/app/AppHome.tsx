@@ -205,7 +205,8 @@ const bandPill =
 
 /**
  * Looking-for-events mode: balance on the band; then the welcome gift, the
- * showcase of public events, and the tickets already bought.
+ * showcase of public events. Tickets, the poster scanner and help live in the
+ * bottom nav and the header.
  */
 function ExploreHome({ events, cities, filters, onMode }: ShowcaseData & { onMode: (mode: AppMode) => void }) {
   const { balance, isLoading } = useBalance();
@@ -252,30 +253,6 @@ function ExploreHome({ events, cities, filters, onMode }: ShowcaseData & { onMod
       )}
 
       <EventShowcase events={events} cities={cities} filters={filters} />
-
-      <h2 className="px-1 pt-2 text-lg font-bold tracking-tight">{t.showcase.myArea}</h2>
-      <nav className="flex flex-col gap-1">
-        <ListRow
-          href="/mis-pases"
-          icon="ticket"
-          tone="strong"
-          title={t.home.ticketsTile}
-          subtitle={t.home.ticketsTileBody}
-        />
-        <ListRow href="/escanear" icon="scan" tone="mid" title={t.scan.open} subtitle={t.scan.body} />
-      </nav>
-
-      <Link
-        href="/como-funciona"
-        className="flex items-center gap-3 rounded-3xl border border-dashed border-tile-soft p-4 text-sm transition-colors hover:border-primary/40 hover:bg-background"
-      >
-        <Icon name="help" size={20} className="text-primary-text" />
-        <span className="flex-1">
-          <span className="font-semibold">{t.home.firstTimeStrong}</span>{" "}
-          <span className="text-muted">{t.home.firstTimeBody}</span>
-        </span>
-        <Icon name="chevron" size={18} className="text-muted-light" />
-      </Link>
 
       <ReceiveModal open={receiveOpen} onClose={() => setReceiveOpen(false)} />
     </AppShell>

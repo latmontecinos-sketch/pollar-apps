@@ -23,6 +23,7 @@ const ITEMS: Record<AppMode, Item[]> = {
   explore: [
     { href: "/app", icon: "home", label: "home" },
     { href: "/mis-pases", icon: "ticket", label: "tickets" },
+    { href: "/escanear", icon: "scan", label: "scan" },
   ],
   organize: [
     { href: "/app", icon: "home", label: "home" },
